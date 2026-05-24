@@ -7,7 +7,7 @@
 #define MAX_ADDR ((1 << MAX_ADDR_LEN) - 1)
 #define NUM_REG 8
 #define MAX_NUM_STEPS 8
-#define NUM_INSTRUCTIONS 16 
+#define NUM_INSTRUCTIONS 16
 
 // ucode[instruction][step][imm][reg0][reg1]
 uint16_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG];
@@ -22,6 +22,14 @@ uint16_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG];
   (bus_out | (addr_out << 4) | (bus_write << 6) | (other << 10))
 
 typedef uint16_t step_t;
+
+typedef struct {
+  uint32_t step;
+  uint32_t reg0;
+  uint32_t imm;
+  uint32_t instruction;
+  uint32_t reg1;
+} split_addr_t;
 
 typedef struct {
   step_t write;
@@ -50,7 +58,7 @@ const register_t Z   = {.write = create_step(0, 0, 5, 0), .bout = create_step(5,
 const register_t MEM = {.write = create_step(0, 0, 8, 0), .bout = create_step(8, 0, 0, 0)};
 const register_t IR  = {.write = create_step(0, 0, 13, 0), .bout = create_step(0, 0, 0, 0)};
 const register_t IR2 = {.write = create_step(0, 0, 14, 0), .bout = create_step(11, 0, 0, 0)};
-const register_t FLAG= {.write = create_step(0, 0, 0, 0), .bout = create_step(10, 0, 0, 0)};
+const register_t FLAG= {.write = create_step(0, 0, 15, 0), .bout = create_step(10, 0, 0, 0)};
 
 const register_t dummy_reg = {.write = create_step(0, 0, 0, 0), .bout = create_step(0, 0, 0, 0)};
 // clang-format on
@@ -83,6 +91,7 @@ const step_t PC_FLAG_DIRECT = create_step(0, 0, 0, 0);
 const step_t PC_FLAG_ZERO = create_step(0, 0, 0, 5);
 const step_t PC_FLAG_EQ = create_step(0, 0, 0, 6);
 const step_t PC_FLAG_CARRY = create_step(0, 0, 0, 7);
+const step_t PC_FLAG_DUMMY = create_step(0, 0, 0, 0);
 
 const addr_register_t SP = {
     .aout = create_step(0, 3, 0, 0),
@@ -148,6 +157,8 @@ const uint16_t load_address_procedure[5] = {
 // TODO: determine?
 const uint16_t reset = create_step(15, 0, 0, 0);
 const uint16_t halt = create_step(14, 0, 0, 0);
+
+const uint16_t error = 0xffff;
 
 // clang-format off
 
@@ -245,114 +256,122 @@ const uint16_t lda_template[MAX_NUM_STEPS] = {
 };
 
 // JNZ reg -> PC = MAR if reg != 0 else NOP
-// WARN: should check if dummy reg is A!!!
 const uint16_t jnz_template_reg[MAX_NUM_STEPS] = {
 	universal_step_0,
 	A.write | dummy_reg.bout | PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
-    SP.lo.bout | PC.lo.write | PC_FLAG_ZERO,
-    SP.hi.bout | PC.hi.write | PC_FLAG_ZERO,
+	FLAG.write, // need to write to flag after a has been written to
+    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
+    MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
+	reset, reset, reset
+};
+
+// can save instruction if A is already loaded
+const uint16_t jnz_template_reg_A[MAX_NUM_STEPS] = {
+	universal_step_0,
+	FLAG.write | PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
+    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
+    MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
 	reset, reset, reset, reset
 };
 
 // jump if equal flag is carry flag is true
-const uint16_t jmp_carry_template[MAX_NUM_STEPS] = {
-	universal_step_0,
-	PC.inc, // pc cnt in case jump doesn't happen
-    SP.lo.bout | PC.lo.write | PC_FLAG_CARRY,
-    SP.hi.bout | PC.hi.write | PC_FLAG_CARRY,
-	reset, reset, reset, reset
+const uint16_t jmp_imm16_template[MAX_NUM_STEPS] = {
+	load_address_procedure[0],
+	load_address_procedure[1],
+	load_address_procedure[2],
+	load_address_procedure[3],
+	load_address_procedure[4],
+	PC.inc, // pc cnt
+    MAR.lo.bout | PC.lo.write | PC_FLAG_DUMMY, // load from mar into pc if flag
+    MAR.hi.bout | PC.hi.write | PC_FLAG_DUMMY, // load from mar into pc if flag
 };
 
 // jump if equal flag is true
-const uint16_t jmp_equal_template[MAX_NUM_STEPS] = {
+const uint16_t jmp_mar_template[MAX_NUM_STEPS] = {
 	universal_step_0,
 	PC.inc, // pc cnt in case jump doesn't happen
-    SP.lo.bout | PC.lo.write | PC_FLAG_EQ,
-    SP.hi.bout | PC.hi.write | PC_FLAG_EQ,
+    MAR.lo.bout | PC.lo.write | PC_FLAG_DUMMY,
+    MAR.hi.bout | PC.hi.write | PC_FLAG_DUMMY,
 	reset, reset, reset, reset
-};
-
-// unconditional jump
-const uint16_t jmp_direct_template[MAX_NUM_STEPS] = {
-	universal_step_0,
-    SP.lo.bout | PC.lo.write | PC_FLAG_DIRECT, // no need for pc cnt since its unconditional
-    SP.hi.bout | PC.hi.write | PC_FLAG_DIRECT,
-	reset, reset, reset, reset, reset
 };
 
 // clang-format on
 
-void mw_instruction(int step, int instruction, int imm, int reg0, int reg1) {
-  uint16_t *curr = &ucode[instruction][step][imm][reg0][reg1];
-  if (imm == 0) {
-    *curr = mw_template_reg[step];
+uint16_t *get_ucode_ptr(const split_addr_t *instruction) {
+  return &ucode[instruction->instruction][instruction->step][instruction->imm]
+               [instruction->reg0][instruction->reg1];
+}
 
-    if (step == 3) {
-      *curr |= reg_bout(reg1);
-      *curr |= reg_write(reg0);
+void mw_instruction(const split_addr_t *instruction) {
+  uint16_t *curr = get_ucode_ptr(instruction);
+  if (instruction->imm == 0) {
+    *curr = mw_template_reg[instruction->step];
+
+    if (instruction->step == 3) {
+      *curr |= reg_bout(instruction->reg1);
+      *curr |= reg_write(instruction->reg0);
     }
   } else {
     // have to populate reg1
-    *curr = mw_template_imm[step];
+    *curr = mw_template_imm[instruction->step];
 
-    if (step == 2) {
-      *curr |= reg_write(reg0);
+    if (instruction->step == 2) {
+      *curr |= reg_write(instruction->reg0);
     }
   }
 }
 
-void lw_instruction(int step, int instruction, int imm, int reg0, int reg1) {
-  // reg1 does not matter in any case
-  uint16_t *curr = &ucode[instruction][step][imm][reg0][reg1];
-  if (imm == 0) {
-    *curr = lw_template_mar[step];
+void lw_instruction(const split_addr_t *instruction) {
+  uint16_t *curr = get_ucode_ptr(instruction);
 
-    if (step == 1) {
-      *curr |= reg_write(reg0);
+  if (instruction->imm == 0) {
+    *curr = lw_template_mar[instruction->step];
+
+    if (instruction->step == 1) {
+      *curr |= reg_write(instruction->reg0);
     }
   } else {
-    *curr = lw_template_imm[step];
+    *curr = lw_template_imm[instruction->step];
 
-    if (step == 5) {
-      *curr |= reg_write(reg0);
+    if (instruction->step == 5) {
+      *curr |= reg_write(instruction->reg0);
     }
   }
 }
 
-void sw_instruction(int step, int instruction, int imm, int reg0, int reg1) {
-  // reg1 does not matter in any case
-  uint16_t *curr = &ucode[instruction][step][imm][reg0][reg1];
-  if (imm == 0) {
-    *curr = sw_template_mar[step];
+void sw_instruction(const split_addr_t *instruction) {
+  uint16_t *curr = get_ucode_ptr(instruction);
+  if (instruction->imm == 0) {
+    *curr = sw_template_mar[instruction->step];
 
-    if (step == 1) {
-      *curr |= reg_bout(reg0);
+    if (instruction->step == 1) {
+      *curr |= reg_bout(instruction->reg0);
     }
   } else {
-    *curr = sw_template_imm[step];
+    *curr = sw_template_imm[instruction->step];
 
-    if (step == 5) {
-      *curr |= reg_bout(reg0);
+    if (instruction->step == 5) {
+      *curr |= reg_bout(instruction->reg0);
     }
   }
 }
 
-void push_instruction(int step, int instruction, int imm, int reg0, int reg1) {
-  // reg1 does not matter in any case
-  uint16_t *curr = &ucode[instruction][step][imm][reg0][reg1];
-  if (imm == 0) {
-    *curr = push_template_reg[step];
+void push_instruction(const split_addr_t *instruction) {
+  uint16_t *curr = get_ucode_ptr(instruction);
 
-    if (step == 1) {
-      *curr |= reg_bout(reg0);
+  if (instruction->imm == 0) {
+    *curr = push_template_reg[instruction->step];
+
+    if (instruction->step == 1) {
+      *curr |= reg_bout(instruction->reg0);
     }
   } else {
-    *curr = push_template_imm[step];
+    *curr = push_template_imm[instruction->step];
   }
 }
 
-void pop_instruction(int step, int instruction, int imm, int reg0, int reg1) {
-  if (imm == 1) {
+void pop_instruction(const split_addr_t *instruction) {
+  if (instruction->imm == 1) {
     // TODO:
     // technically unused combination, could use as extra instruction
     // maybe make this the lda instruction instead with variations to free up
@@ -360,12 +379,12 @@ void pop_instruction(int step, int instruction, int imm, int reg0, int reg1) {
   }
 
   // reg1 does not matter in any case
-  uint16_t *curr = &ucode[instruction][step][imm][reg0][reg1];
+  uint16_t *curr = get_ucode_ptr(instruction);
 
-  *curr = pop_template[step];
+  *curr = pop_template[instruction->step];
 
-  if (step == 1) {
-    *curr |= reg_bout(reg0);
+  if (instruction->step == 1) {
+    *curr |= reg_bout(instruction->reg0);
   }
 }
 
@@ -373,49 +392,71 @@ void pop_instruction(int step, int instruction, int imm, int reg0, int reg1) {
 // instruction, could utilize for math?
 // could utilize to load direct to SP or PC in one instruction (instruction +
 // imm16)
-void lda_instruction(int step, int instruction, int imm, int reg0, int reg1) {
-  if (imm == 1) {
+void lda_instruction(const split_addr_t *instruction) {
+  if (instruction->imm == 1) {
     // TODO:
     // technically unused combination, could use as extra instruction
   }
   // reg0 and reg1 don't matter
 
-  uint16_t *curr = &ucode[instruction][step][imm][reg0][reg1];
+  uint16_t *curr = get_ucode_ptr(instruction);
 
-  *curr = lda_template[step];
+  *curr = lda_template[instruction->step];
 }
 
-void jmp_instruction(int step, int instruction, int imm, int reg0, int reg1) {
+void jmp_instruction(const split_addr_t *instruction) {
   // reg1 does not matter in any case
-  uint16_t *curr = &ucode[instruction][step][imm][reg0][reg1];
-  if (imm == 0) {
-    // jump if reg != 0
-    *curr = jnz_template_reg[step];
-
-    if (step == 1) {
-      if (reg0 == 0) {
-        // writing and reading into A, only perform increase
-        *curr = PC.inc;
-      } else {
-        // writing to A from reg0
-        *curr |= reg_bout(reg0);
+  uint16_t *curr = get_ucode_ptr(instruction);
+  // jump if reg != 0
+  if (instruction->imm == 0) {
+    // special case -> can save step if already A
+    if (int_to_reg(instruction->reg0) == &A) {
+      *curr = jnz_template_reg_A[instruction->step];
+    } else {
+      // general case -> writing to A from reg0
+      *curr = jnz_template_reg[instruction->step];
+      if (instruction->step == 1) {
+        *curr |= reg_bout(instruction->reg0);
       }
     }
   } else {
-    // can use reg bits to jump based on flags
-    if (reg0 == 0) {
-      *curr = jmp_carry_template[step];
-    } else if (reg0 == 1) {
-      *curr = jmp_equal_template[step];
-    } else if (reg0 == 2) {
-      *curr = jmp_direct_template[step];
+    // TODO: if error states get added, 0b11 state should become invalid?
+    // imm = 1
+    // we can ignore the imm bit and create a new bit layout for the 3 reg bits:
+    //
+    // 1st and 2nd bit determine type of jump:
+    // 0b00 -> unconditional jump
+    // 0b01 -> if carry jump
+    // 0b10 -> if equal jump
+    // 0b11 -> ununsed, defaults to unconditional jump
+    // 3rd bit: 0 = MAR address, 1 = imm16 address
+    //
+    // here we can use the reg bits to determine what type of jump
+
+    uint32_t flag_idx = instruction->reg0 & 0b011;
+    int using_imm16_flag = instruction->reg0 & 0b100;
+    const static uint16_t idx_to_flag[] = {PC_FLAG_DIRECT, PC_FLAG_CARRY,
+                                           PC_FLAG_EQ, PC_FLAG_DIRECT};
+    uint16_t flag_step_bits = idx_to_flag[flag_idx];
+
+    // TODO: unconditional jump could save one step by skipping pc cnt
+    if (using_imm16_flag) {
+      // imm16 address
+      *curr = jmp_imm16_template[instruction->step];
+      if (instruction->step == 6 || instruction->step == 7) {
+        *curr |= flag_step_bits;
+      }
+    } else {
+      // using mar address
+      *curr = jmp_mar_template[instruction->step];
+      if (instruction->step == 2 || instruction->step == 3) {
+        *curr |= flag_step_bits;
+      }
     }
-    // defaults to direct jump
-    *curr = jmp_direct_template[step];
   }
 }
 
-typedef void (*instruction_func)(int, int, int, int, int);
+typedef void (*instruction_func)(const split_addr_t *);
 
 instruction_func instructions_table[16] = {
     mw_instruction,           lw_instruction,
@@ -428,22 +469,28 @@ instruction_func instructions_table[16] = {
     (instruction_func)(NULL), (instruction_func)(NULL),
 };
 
-void process_address(int addr) {
+void addr_to_instruction(int addr, split_addr_t *instruction_ptr) {
   // clang-format off
-  int step        = (addr & 0b00000000000111);
-  int instruction = (addr & 0b00000001111000) >> 3;
-  int imm         = (addr & 0b00000010000000) >> 7;
-  int reg0        = (addr & 0b00011100000000) >> 8;
-  int reg1        = (addr & 0b11100000000000) >> 11;
+  //                              |r1|   ir   |stp|
+  instruction_ptr->step         = (addr & 0b00000000000111);
+  instruction_ptr->reg0         = (addr & 0b00000000111000) >> 3;
+  instruction_ptr->imm          = (addr & 0b00000001000000) >> 6;
+  instruction_ptr->instruction  = (addr & 0b00011110000000) >> 7;
+  instruction_ptr->reg1         = (addr & 0b11100000000000) >> 11;
   // clang-format on
+}
+
+void process_address(int addr) {
+  split_addr_t instruction;
+  addr_to_instruction(addr, &instruction);
 
   // move word
-  instruction_func istr_func = instructions_table[instruction];
+  instruction_func istr_func = instructions_table[instruction.instruction];
   if (istr_func != (instruction_func)NULL) {
-    istr_func(step, instruction, imm, reg0, reg1);
+    istr_func(&instruction);
   } else {
-    // TODO: could add error istr of some sort that triggers in unreachable
-    // cases, maybe sets register a to an error code and halts
+    uint16_t *curr = get_ucode_ptr(&instruction);
+    *curr = error;
   }
 }
 
@@ -454,17 +501,13 @@ void populate_ucode() {
 }
 
 uint16_t getInstruction(int addr) {
-  int step = (addr & 0b00000000000111);
-  int instruction = (addr & 0b00000001111000) >> 3;
-  int imm = (addr & 0b00000010000000) >> 7;
-  int reg0 = (addr & 0b00011100000000) >> 8;
-  int reg1 = (addr & 0b11100000000000) >> 11;
-  // printf("%d %d %d %d %d\n", step, instruction, imm, reg0, reg1);
-
-  return ucode[instruction][step][imm][reg0][reg1];
+  split_addr_t instruction;
+  addr_to_instruction(addr, &instruction);
+  return *get_ucode_ptr(&instruction);
 }
 
 void write_ucode_logism() {
+  printf("v3.0 hex words plain\n");
   for (int addr = 0; addr <= MAX_ADDR; addr++) {
     printf("%04X", getInstruction(addr));
     if (addr % 16 == 15) {

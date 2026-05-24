@@ -1,0 +1,60 @@
+#subruledef register
+{
+    a => 0b000
+    b => 0b001
+    x => 0b010
+	y => 0b011
+	z => 0b100
+	mar_lo => 0b101
+	mar_hi => 0b110
+}
+
+
+#ruledef
+{
+	; move r0 = r1
+    move {r0: register}, {r1: register} => 0x0 @ 0b0 @ r0 @ r1 @ 0x00000
+	; move r0 = imm8
+    move {r0: register}, {imm: i8} => 0x0 @ 0b1 @ r0 @ imm
+	
+	; load
+	; load reg0 = [MAR]
+    load {r0: register} => 0x1 @ 0b0 @ r0 @ imm
+	; load reg0 = [imm16]
+    load {r0: register}, {address: u16} => 0x1 @ 0b1 @ r0 @ address
+	
+	; jumping based on register
+    jnz  {r0: register} => 0x6 @ 0b0 @ r0
+	
+	;; jumps using mar address
+	; unconditional jump
+	jmp => 0x6 @ 0b1 @ 0b0 0b00
+	; jump if carry flag is set
+	jc  => 0x6 @ 0b1 @ 0b0 @ 0b01
+	; jump if eq flag is set
+	jeq => 0x6 @ 0b1 @ 0b0 @ 0b10
+	
+	;; jumps using imm16 address
+	; unconditional jump
+	jmp {address: i16} => 0x6 @ 0b1 @ 0b1 @ 0b00 @ address
+	; jump if carry flag is set
+	jc  {address: i16} => 0x6 @ 0b1 @ 0b1 @ 0b01 @ address
+	; jump if eq flag is set
+	jeq {address: i16} => 0x6 @ 0b1 @ 0b1 @ 0b10 @ address
+	
+	
+}
+
+
+
+multiply3x4:
+    move a, 0x67
+    ;load b, 3
+    ;load x, 4
+    
+   ; .loop:
+    ;    add r1, r2
+     ;   sub r3, 1
+      ;  jnz .loop
+    
+    ;ret
