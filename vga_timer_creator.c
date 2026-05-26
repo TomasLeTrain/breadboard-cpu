@@ -37,18 +37,13 @@ const int ver_front_porch_addr = ver_visible_area_dur;
 const int ver_sync_pulse_addr = ver_front_porch_addr + ver_front_porch_dur;
 const int ver_back_porch_addr = ver_sync_pulse_addr + ver_sync_pulse_dur;
 
-// const uint8_t BIT_RESET = 0b10000000;
-// const uint8_t BIT_VSYNC = 0b01000000;
-// const uint8_t BIT_HSYNC = 0b00100000;
-// const uint8_t BIT_HRESET = 0b00010000;
-
 const uint8_t BIT_NVRESET = 0b00000001;
-const uint8_t BIT_VSYNC = 0b00000010;
-const uint8_t BIT_HSYNC = 0b00000100;
-const uint8_t BIT_NHRESET = 0b00001000;
+const uint8_t BIT_VSYNC = 0b01000000;
+const uint8_t BIT_HSYNC = 0b00100000;
+const uint8_t BIT_NHRESET = 0b10000000;
 
 const uint8_t BIT_DRAWING = 0;
-const uint8_t BIT_NOT_DRAWING = BIT_NVRESET | BIT_NHRESET | 0b10000000;
+const uint8_t BIT_NOT_DRAWING = BIT_NVRESET | BIT_NHRESET | 0b00000100;
 
 FILE *file_ptr;
 char **image_data;
@@ -72,7 +67,10 @@ void readImageBin() {
 // 2 bit blue, 3 green, 2 red
 uint8_t makeColor(uint32_t blue, uint32_t green, uint32_t red) {
   // makes sure drawing bit not accidentally set
-  return (0b01111111) & (red | (green << 2) | (blue << 5));
+  red = red & 0b11;
+  green = green & 0b111;
+  blue = blue & 0b11;
+  return (0b01111111) & (red | (green << 3) | (blue << 6));
 }
 
 // NOTE: assumes getColor is only called when there is actually color data
@@ -93,8 +91,10 @@ uint8_t getInstruction(int addr) {
   uint32_t hor_count = addr & 0b000000011111111;
   uint32_t ver_count = (addr & 0b111111100000000) >> 8;
 
-  int hor_end = hor_count == hor_whole_line_dur;
-  int ver_end = ver_count == ver_whole_line_dur;
+  // done with >= in case the circuit ends up in an invalid address it gets auto
+  // reset could happen at powerup if registers have random values
+  int hor_end = hor_count >= hor_whole_line_dur;
+  int ver_end = ver_count >= ver_whole_line_dur;
 
   // inside drawing area
   if (hor_count < hor_visible_area_dur && ver_count < ver_visible_area_dur) {
