@@ -8,42 +8,66 @@
 #define MAX_ADDR_LEN 15
 #define MAX_ADDR ((1 << MAX_ADDR_LEN) - 1)
 
-const int hor_scale_down_factor = 4;
-const int ver_scale_down_factor = 4;
+// mask that excludes lower 2 bits
+const int VIDEO_BITS_MASK = ~(0b11);
 
-const int hor_visible_area_dur = 640 / hor_scale_down_factor;
-const int hor_front_porch_dur = 16 / hor_scale_down_factor;
-const int hor_sync_pulse_dur = 96 / hor_scale_down_factor;
-const int hor_back_porch_dur = 48 / hor_scale_down_factor;
-// 800 with factor = 1
-const int hor_whole_line_dur = hor_visible_area_dur + hor_front_porch_dur +
-                               hor_sync_pulse_dur + hor_back_porch_dur;
+// horizontal timings
+const int actual_hor_visible_area_dur = 640;
+const int actual_hor_front_porch_dur = 16;
+const int actual_hor_sync_pulse_dur = 96;
+const int actual_hor_back_porch_dur = 48;
+// 640 (inclusive)
+const int actual_hor_front_porch_addr = actual_hor_visible_area_dur;
+// 656 (inclusive)
+const int actual_hor_sync_pulse_addr =
+    actual_hor_front_porch_addr + actual_hor_front_porch_dur;
+// 752 (inclusive)
+const int actual_hor_back_porch_addr =
+    actual_hor_sync_pulse_addr + actual_hor_sync_pulse_dur;
+// 800 (inclusive)
+const int actual_hor_whole_line_addr =
+    actual_hor_back_porch_addr + actual_hor_back_porch_dur;
 
-const int hor_front_porch_addr = hor_visible_area_dur;
-const int hor_sync_pulse_addr = hor_front_porch_addr + hor_front_porch_dur;
-const int hor_back_porch_addr = hor_sync_pulse_addr + hor_sync_pulse_dur;
+// vertical timings
+const int actual_ver_visible_area_dur = 400;
+const int actual_ver_front_porch_dur = 12;
+const int actual_ver_sync_pulse_dur = 2;
+const int actual_ver_back_porch_dur = 35;
+// 400 (inclusive) - right after visible area
+const int actual_ver_front_porch_addr = actual_ver_visible_area_dur;
+// 412 (inclusive) - 12 lines after drawing ended
+const int actual_ver_sync_pulse_addr =
+    actual_ver_front_porch_addr + actual_ver_front_porch_dur;
+// 414 (inclusive) - 2 lines after pulse started
+const int actual_ver_back_porch_addr =
+    actual_ver_sync_pulse_addr + actual_ver_sync_pulse_dur;
+// 449 (inclusive)
+const int actual_ver_whole_line_addr =
+    actual_ver_back_porch_addr + actual_ver_back_porch_dur;
 
-const int ver_visible_area_dur = 400 / hor_scale_down_factor;
-const int ver_front_porch_dur = 12 / hor_scale_down_factor;
-// rounded up from 2
-const int ver_sync_pulse_dur = 4 / hor_scale_down_factor;
-// taken down to 33 because of the rounding
-const int ver_back_porch_dur = 33 / hor_scale_down_factor;
-// 449 with factor = 1
-const int ver_whole_line_dur = hor_visible_area_dur + hor_front_porch_dur +
-                               hor_sync_pulse_dur + hor_back_porch_dur;
+const int hor_front_porch_addr = actual_hor_front_porch_addr & VIDEO_BITS_MASK;
+const int hor_sync_pulse_addr = actual_hor_sync_pulse_addr & VIDEO_BITS_MASK;
+const int hor_back_porch_addr = actual_hor_back_porch_addr & VIDEO_BITS_MASK;
+const int hor_whole_line_addr = actual_hor_whole_line_addr & VIDEO_BITS_MASK;
 
-const int ver_front_porch_addr = ver_visible_area_dur;
-const int ver_sync_pulse_addr = ver_front_porch_addr + ver_front_porch_dur;
-const int ver_back_porch_addr = ver_sync_pulse_addr + ver_sync_pulse_dur;
+const int ver_front_porch_addr = actual_ver_front_porch_addr & VIDEO_BITS_MASK;
+const int ver_sync_pulse_addr = actual_ver_sync_pulse_addr & VIDEO_BITS_MASK;
+const int ver_back_porch_addr = actual_ver_back_porch_addr & VIDEO_BITS_MASK;
+const int ver_whole_line_addr = actual_ver_whole_line_addr & VIDEO_BITS_MASK;
 
-const uint8_t BIT_NVRESET = 0b00000001;
-const uint8_t BIT_VSYNC = 0b01000000;
-const uint8_t BIT_HSYNC = 0b00100000;
-const uint8_t BIT_NHRESET = 0b10000000;
+// clang-format off
+const uint8_t BIT_NVRESET = 0b00100000;
+const uint8_t BIT_NVSYNC  = 0b01000000;
+const uint8_t BIT_NHSYNC  = 0b10000000;
+const uint8_t BIT_NHRESET = 0b00000001;
+// clang-format on
+
+const uint8_t DRAWING_BIT = 0b00000100;
+const uint8_t NO_DRAWING_MASK = ~DRAWING_BIT;
 
 const uint8_t BIT_DRAWING = 0;
-const uint8_t BIT_NOT_DRAWING = BIT_NVRESET | BIT_NHRESET | 0b00000100;
+const uint8_t BIT_NOT_DRAWING =
+    BIT_NVRESET | BIT_NHRESET | BIT_NVSYNC | BIT_NHSYNC | DRAWING_BIT;
 
 FILE *file_ptr;
 char **image_data;
@@ -70,7 +94,7 @@ uint8_t makeColor(uint32_t blue, uint32_t green, uint32_t red) {
   red = red & 0b11;
   green = green & 0b111;
   blue = blue & 0b11;
-  return (0b01111111) & (red | (green << 3) | (blue << 6));
+  return NO_DRAWING_MASK & (red | (blue << 3) | (green << 5));
 }
 
 // NOTE: assumes getColor is only called when there is actually color data
@@ -82,25 +106,32 @@ uint8_t getColor(int addr) {
   uint8_t curr_pixel = image_data[ver_count][hor_count];
 
   // make sure drawing bit is not set
-  curr_pixel &= (0b01111111);
+  curr_pixel &= NO_DRAWING_MASK;
   return curr_pixel;
-  // return makeColor(hor_count, ver_count, 0);
 }
 
 uint8_t getInstruction(int addr) {
-  uint32_t hor_count = addr & 0b000000011111111;
-  uint32_t ver_count = (addr & 0b111111100000000) >> 8;
+  uint32_t raw_hor_count = (addr & 0b000000011111111);
+  uint32_t raw_ver_count = (addr & 0b111111100000000) >> 8;
+
+  // multiplied to be able to compare with actual counts
+  uint32_t hor_count = raw_hor_count << 2;
+  uint32_t ver_count = raw_ver_count << 2;
 
   // done with >= in case the circuit ends up in an invalid address it gets auto
-  // reset could happen at powerup if registers have random values
-  int hor_end = hor_count >= hor_whole_line_dur;
-  int ver_end = ver_count >= ver_whole_line_dur;
+  // reset. could happen at powerup if registers have random values
+  int hor_end = hor_count >= hor_whole_line_addr;
+  int ver_end = ver_count >= ver_whole_line_addr;
 
   // inside drawing area
-  if (hor_count < hor_visible_area_dur && ver_count < ver_visible_area_dur) {
+  if (hor_count < hor_front_porch_addr && ver_count < ver_front_porch_addr) {
     return BIT_DRAWING | getColor(addr);
   }
 
+  // NOTE: should actually only be checking ver_end, but by checking hor_end as
+  // well we indavertently get more accurate timings (vertical resets on 449
+  // lines, not 448, but by checking the end of line 448 we effectively reset on
+  // line 449)
   if (hor_end && ver_end) {
     return BIT_NOT_DRAWING & (~BIT_NVRESET);
   }
@@ -112,13 +143,24 @@ uint8_t getInstruction(int addr) {
   // might need to send both
   uint8_t result = BIT_NOT_DRAWING;
 
-  if (ver_count >= ver_sync_pulse_addr && ver_count < ver_back_porch_addr) {
-    // do vsync pulse
-    result |= BIT_VSYNC;
+  // ver count is equal in higher bits, guaranteed
+  if (ver_count == ver_sync_pulse_addr) {
+    result &= ~BIT_NVSYNC;
   }
+  // this case is also guaranteed (case where whole address is within pulse)
+  if (ver_count >= ver_sync_pulse_addr && ver_count < ver_back_porch_addr) {
+    result &= ~BIT_NVSYNC;
+  }
+  // ver count is equal in higher bits, possibility of overlap
+  if ((ver_count == ver_back_porch_addr) &&
+      // check if lower bits of back porch are 0, if not then some overlap
+      ((ver_back_porch_addr & 0b11) != 0)) {
+    result &= ~BIT_NVSYNC;
+  }
+
+  // horizontal pulse has evenly divisible timings, simple check
   if (hor_count >= hor_sync_pulse_addr && hor_count < hor_back_porch_addr) {
-    // do hsync pulse
-    result |= BIT_HSYNC;
+    result &= ~BIT_NHSYNC;
   }
 
   return result;
@@ -136,7 +178,21 @@ void write_ucode_logism() {
   }
 }
 
+void write_binary_image() {
+  FILE *fptr;
+  // Open a file in append mode
+  fptr = fopen("vga_rom.bin", "wb");
+
+  for (int addr = 0; addr <= MAX_ADDR; addr++) {
+    uint8_t curr = getInstruction(addr);
+    fputc(curr, fptr);
+  }
+  // Close the file
+  fclose(fptr);
+}
+
 int main() {
   readImageBin();
   write_ucode_logism();
+  write_binary_image();
 }

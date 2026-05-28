@@ -35,10 +35,10 @@ int main() {
   // total division needed is 16
   static const double div = 16.0;
 
-  static const uint8_t led_pin = 1;
+  static const uint8_t output_pin = 21;
   PIO pio = pio0;
   uint8_t sm = pio_claim_unused_sm(pio, true);
   uint8_t offset = pio_add_program(pio, &squarewave_fast_program);
-  clk_program_init(pio, sm, offset, led_pin, div);
+  clk_program_init(pio, sm, offset, output_pin, div);
   pio_sm_set_enabled(pio, sm, true);
 }

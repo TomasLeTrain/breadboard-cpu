@@ -19,15 +19,15 @@ out = Image.merge("RGB", (r, g, b))
 
 pixels = image.load()
 
+DRAWING_BIT = 0b00000100
+NO_DRAWING_MASK = ~DRAWING_BIT
 
 def makePixel(red,green,blue):
-    red = round(red / 85)
-    green = round(green / 36)
-    blue = round(blue / 85)
-    # return (0b01111111) & (red | (green << 2) | (blue << 4))
-    return (0b01111111) & (red | (green << 2) | (blue << 5))
-    # return red
-    # return green << 2
+    red = int(round(red / 85)) & 0b11
+    green = int(round(green / 36)) & 0b111
+    blue = int(round(blue / 85)) & 0b11
+
+    return NO_DRAWING_MASK & (red | (blue << 3) | (green << 5))
 
 for y in range(ver_res):
     for x in range(hor_res):
