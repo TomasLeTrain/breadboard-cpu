@@ -120,8 +120,10 @@ uint8_t getInstruction(int addr) {
 
   // done with >= in case the circuit ends up in an invalid address it gets auto
   // reset. could happen at powerup if registers have random values
-  int hor_end = hor_count >= hor_whole_line_addr;
-  int ver_end = ver_count >= ver_whole_line_addr;
+  // NOTE: reset gets done one clock cycle after, so we must output reset one
+  // cycle before actual reset
+  int hor_end = hor_count >= hor_whole_line_addr - 4;
+  int ver_end = ver_count >= ver_whole_line_addr - 4;
 
   // inside drawing area
   if (hor_count < hor_front_porch_addr && ver_count < ver_front_porch_addr) {
@@ -133,7 +135,7 @@ uint8_t getInstruction(int addr) {
   // lines, not 448, but by checking the end of line 448 we effectively reset on
   // line 449)
   if (hor_end && ver_end) {
-    return BIT_NOT_DRAWING & (~BIT_NVRESET);
+    return (BIT_NOT_DRAWING & (~BIT_NVRESET)) & (~BIT_NHRESET);
   }
 
   if (hor_end) {
