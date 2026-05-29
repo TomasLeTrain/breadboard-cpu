@@ -1,10 +1,10 @@
 from PIL import Image
 
 
-ver_res = 100
-hor_res = 160
+ver_res = 480 // 4
+hor_res = 640 // 4
 
-image = Image.open("finch.png").convert("RGB")
+image = Image.open("finch2.png").convert("RGB")
 out_file = open("finch.bin", "wb")
 
 rb_lut = [85 * round(i * (3.0 / 255.0)) for i in range(256)]

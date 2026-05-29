@@ -93,7 +93,7 @@ void loop() {
   curr_event.hsync = digitalRead(HSYNC) == LOW;
   curr_event.vreset = digitalRead(VRESET) == LOW;
   curr_event.hreset = digitalRead(HRESET) == LOW;
-
+  
   if(eventChanged()){
     printCurrent();
     last_event = curr_event;

@@ -29,19 +29,19 @@ const int actual_hor_whole_line_addr =
     actual_hor_back_porch_addr + actual_hor_back_porch_dur;
 
 // vertical timings
-const int actual_ver_visible_area_dur = 400;
-const int actual_ver_front_porch_dur = 12;
+const int actual_ver_visible_area_dur = 480;
+const int actual_ver_front_porch_dur = 10;
 const int actual_ver_sync_pulse_dur = 2;
-const int actual_ver_back_porch_dur = 35;
-// 400 (inclusive) - right after visible area
+const int actual_ver_back_porch_dur = 33;
+// 480 (inclusive) - right after visible area
 const int actual_ver_front_porch_addr = actual_ver_visible_area_dur;
-// 412 (inclusive) - 12 lines after drawing ended
+// 490 (inclusive) - 12 lines after drawing ended
 const int actual_ver_sync_pulse_addr =
     actual_ver_front_porch_addr + actual_ver_front_porch_dur;
-// 414 (inclusive) - 2 lines after pulse started
+// 492 (inclusive) - 2 lines after pulse started
 const int actual_ver_back_porch_addr =
     actual_ver_sync_pulse_addr + actual_ver_sync_pulse_dur;
-// 449 (inclusive)
+// 525 (inclusive)
 const int actual_ver_whole_line_addr =
     actual_ver_back_porch_addr + actual_ver_back_porch_dur;
 
@@ -56,8 +56,9 @@ const int ver_back_porch_addr = actual_ver_back_porch_addr & VIDEO_BITS_MASK;
 const int ver_whole_line_addr = actual_ver_whole_line_addr & VIDEO_BITS_MASK;
 
 // clang-format off
-const uint8_t BIT_NVRESET = 0b00100000;
-const uint8_t BIT_NVSYNC  = 0b01000000;
+// const uint8_t BIT_NVRESET = 0b00100000;
+// const uint8_t BIT_NVSYNC  = 0b01000000;
+const uint8_t BIT_VSYNC   = 0b01000000;
 const uint8_t BIT_NHSYNC  = 0b10000000;
 const uint8_t BIT_NHRESET = 0b00000001;
 // clang-format on
@@ -66,8 +67,10 @@ const uint8_t DRAWING_BIT = 0b00000100;
 const uint8_t NO_DRAWING_MASK = ~DRAWING_BIT;
 
 const uint8_t BIT_DRAWING = 0;
+// const uint8_t BIT_NOT_DRAWING =
+//     BIT_NVRESET | BIT_NHRESET | BIT_NVSYNC | BIT_NHSYNC | DRAWING_BIT;
 const uint8_t BIT_NOT_DRAWING =
-    BIT_NVRESET | BIT_NHRESET | BIT_NVSYNC | BIT_NHSYNC | DRAWING_BIT;
+    BIT_NHRESET | BIT_NHSYNC | DRAWING_BIT;
 
 FILE *file_ptr;
 char **image_data;
@@ -79,7 +82,9 @@ void readImageBin() {
     fclose(file_ptr);
     return;
   }
-  int r = 100, c = 160;
+
+  int r = actual_ver_visible_area_dur / 4, c = actual_hor_visible_area_dur / 4;
+
   image_data = (char **)malloc(r * sizeof(char *));
   for (int i = 0; i < r; i++) {
     image_data[i] = (char *)malloc(c * sizeof(char));
@@ -123,41 +128,39 @@ uint8_t getInstruction(int addr) {
   // NOTE: reset gets done one clock cycle after, so we must output reset one
   // cycle before actual reset
   int hor_end = hor_count >= hor_whole_line_addr - 4;
-  int ver_end = ver_count >= ver_whole_line_addr - 4;
+  // int ver_end = ver_count >= ver_whole_line_addr;
 
   // inside drawing area
   if (hor_count < hor_front_porch_addr && ver_count < ver_front_porch_addr) {
     return BIT_DRAWING | getColor(addr);
   }
 
-  // NOTE: should actually only be checking ver_end, but by checking hor_end as
-  // well we indavertently get more accurate timings (vertical resets on 449
-  // lines, not 448, but by checking the end of line 448 we effectively reset on
-  // line 449)
-  if (hor_end && ver_end) {
-    return (BIT_NOT_DRAWING & (~BIT_NVRESET)) & (~BIT_NHRESET);
-  }
-
-  if (hor_end) {
-    return BIT_NOT_DRAWING & (~BIT_NHRESET);
-  }
-
   // might need to send both
   uint8_t result = BIT_NOT_DRAWING;
 
+  // if (ver_end) {
+  //   // reset both
+  //   result &= (~BIT_NVRESET);
+  //   // result &= (~BIT_NHRESET);
+  // }
+
+  if (hor_end) {
+    result &= (~BIT_NHRESET);
+  }
+
   // ver count is equal in higher bits, guaranteed
   if (ver_count == ver_sync_pulse_addr) {
-    result &= ~BIT_NVSYNC;
+    result |= BIT_VSYNC;
   }
   // this case is also guaranteed (case where whole address is within pulse)
   if (ver_count >= ver_sync_pulse_addr && ver_count < ver_back_porch_addr) {
-    result &= ~BIT_NVSYNC;
+    result |= BIT_VSYNC;
   }
   // ver count is equal in higher bits, possibility of overlap
   if ((ver_count == ver_back_porch_addr) &&
       // check if lower bits of back porch are 0, if not then some overlap
-      ((ver_back_porch_addr & 0b11) != 0)) {
-    result &= ~BIT_NVSYNC;
+      ((actual_ver_back_porch_addr & 0b11) != 0)) {
+    result |= BIT_VSYNC;
   }
 
   // horizontal pulse has evenly divisible timings, simple check
