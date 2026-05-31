@@ -8,11 +8,11 @@
 % c-sdk {
 
 // Helper function (for use in C program) to initialize this PIO program
-void clk_program_init(PIO pio, uint sm, uint offset, uint pin, float div) {
+void squarewave_clk_init(PIO pio, uint sm, uint offset, uint pin, float div) {
 
     // Sets up state machine and wrap target. This function is automatically
     // generated in clk.pio.h.
-    pio_sm_config c = clk_program_get_default_config(offset);
+    pio_sm_config c = squarewave_fast_program_get_default_config(offset);
 
     // Allow PIO to control GPIO pin (as output)
     pio_gpio_init(pio, pin);

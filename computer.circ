@@ -12607,6 +12607,9 @@ d 29 9 29 29 2e 36 52
       <a name="appearance" val="NewPins"/>
       <a name="radix" val="10unsigned"/>
     </comp>
+    <comp lib="0" loc="(1390,1950)" name="Probe">
+      <a name="appearance" val="NewPins"/>
+    </comp>
     <comp lib="0" loc="(1400,1690)" name="Constant"/>
     <comp lib="0" loc="(1400,1720)" name="Tunnel">
       <a name="facing" val="east"/>
@@ -12691,15 +12694,15 @@ d 29 9 29 29 2e 36 52
       <a name="label" val="Y"/>
       <a name="width" val="10"/>
     </comp>
-    <comp lib="0" loc="(1700,1710)" name="Probe">
-      <a name="appearance" val="NewPins"/>
-      <a name="radix" val="10unsigned"/>
-    </comp>
     <comp lib="0" loc="(1710,1620)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="CLK1"/>
     </comp>
     <comp lib="0" loc="(1710,1750)" name="Probe">
+      <a name="appearance" val="NewPins"/>
+      <a name="radix" val="10unsigned"/>
+    </comp>
+    <comp lib="0" loc="(1710,1810)" name="Probe">
       <a name="appearance" val="NewPins"/>
       <a name="radix" val="10unsigned"/>
     </comp>
@@ -15486,13 +15489,13 @@ aa 92 aa 92 8a b2 8a b2
     <comp lib="9" loc="(1040,715)" name="Text">
       <a name="text" val="blue"/>
     </comp>
-    <comp lib="9" loc="(1082,1297)" name="Text">
+    <comp lib="9" loc="(1080,1295)" name="Text">
       <a name="text" val="nHRST"/>
     </comp>
     <comp lib="9" loc="(1100,930)" name="Text">
       <a name="text" val="VSYNC"/>
     </comp>
-    <comp lib="9" loc="(1133,1221)" name="Text">
+    <comp lib="9" loc="(1130,1220)" name="Text">
       <a name="text" val="nVRST"/>
     </comp>
     <comp lib="9" loc="(1180,960)" name="Text">
@@ -15596,11 +15599,13 @@ aa 92 aa 92 8a b2 8a b2
     <wire from="(1380,1800)" to="(1410,1800)"/>
     <wire from="(1380,580)" to="(1380,1110)"/>
     <wire from="(1390,1880)" to="(1410,1880)"/>
+    <wire from="(1390,1950)" to="(1410,1950)"/>
     <wire from="(1400,1720)" to="(1410,1720)"/>
     <wire from="(1400,640)" to="(1400,1110)"/>
     <wire from="(1400,640)" to="(1620,640)"/>
     <wire from="(1410,1700)" to="(1410,1720)"/>
     <wire from="(1410,1800)" to="(1410,1880)"/>
+    <wire from="(1410,1880)" to="(1410,1950)"/>
     <wire from="(1410,1880)" to="(1470,1880)"/>
     <wire from="(1420,1700)" to="(1420,1750)"/>
     <wire from="(1430,1680)" to="(1500,1680)"/>
@@ -15622,11 +15627,13 @@ aa 92 aa 92 8a b2 8a b2
     <wire from="(1680,800)" to="(1680,860)"/>
     <wire from="(1680,800)" to="(1780,800)"/>
     <wire from="(1680,860)" to="(1780,860)"/>
-    <wire from="(1700,1710)" to="(1710,1710)"/>
     <wire from="(1710,1620)" to="(1750,1620)"/>
-    <wire from="(1710,1690)" to="(1710,1710)"/>
+    <wire from="(1710,1690)" to="(1710,1730)"/>
     <wire from="(1710,1690)" to="(1790,1690)"/>
+    <wire from="(1710,1730)" to="(1720,1730)"/>
     <wire from="(1710,1750)" to="(1740,1750)"/>
+    <wire from="(1710,1810)" to="(1720,1810)"/>
+    <wire from="(1720,1730)" to="(1720,1810)"/>
     <wire from="(1730,1600)" to="(1740,1600)"/>
     <wire from="(1730,1630)" to="(1760,1630)"/>
     <wire from="(1740,1520)" to="(1740,1600)"/>

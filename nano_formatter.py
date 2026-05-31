@@ -2,7 +2,7 @@ from sys import stdin
 
 measurements = []
 
-range_measurements = (210,3000)
+range_measurements = (0, 5000)
 
 for line in stdin:
     try:

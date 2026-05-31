@@ -33,12 +33,13 @@ int main() {
   // 100.7MHz / 4 = 25.175 MHz -> clock required for vga
   // 25.175 / 4 = aproxx 6.3 MHz -> slower clock for vga circuit
   // total division needed is 16
-  static const double div = 16.0;
+  // static const double div = 16.0;
+  static const double div = 8.0;
 
-  static const uint8_t output_pin = 21;
+  static const uint8_t output_pin = 12;
   PIO pio = pio0;
   uint8_t sm = pio_claim_unused_sm(pio, true);
   uint8_t offset = pio_add_program(pio, &squarewave_fast_program);
-  clk_program_init(pio, sm, offset, output_pin, div);
+  squarewave_clk_init(pio, sm, offset, output_pin, div);
   pio_sm_set_enabled(pio, sm, true);
 }
