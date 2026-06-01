@@ -9,14 +9,82 @@
 #define MAX_NUM_STEPS 8
 #define NUM_INSTRUCTIONS 16
 
+/*
+clang-format off
+
+
+possible instruction additions:
+load pc0/pc1 into xxx (takes up whole instruction)
+load sp0/sp1 into xxx (takes up whole instruction)
+
+jump if video ram available
+
+
+Instructions:
+0000:
+move word: 	xxx <- yyy			| [0000 0 xxx] [yyy.....]		| MV xxx, yyy
+move word: 	xxx <- imm8			| [0000 1 xxx] [imm8    ]		| MV xxx, imm8
+
+0001:
+load word: 	xxx <- mem[mar]		| [0001 0 xxx]					| LOAD xxx
+load word: 	xxx <- mem[imm16]	| [0001 1 xxx] [imm16][imm16]	| LOAD xxx, imm16
+
+0010:
+store word:	xxx -> mem[mar]		| [0010 0 xxx]					| STR xxx
+store word:	xxx -> mem[imm16]	| [0010 1 xxx] [imm16][imm16]	| STR xxx
+
+0011:
+push:		xxx -> mem[SP],SP--	| [0011 0 xxx]					| PUSH xxx
+push:		imm8 -> mem[SP],SP--| [0011 1 000]					| PUSH imm8
+NOTE: not yet implemented:
+SP INC:							| [0011 1 001]					| INC SP
+MAR INC:						| [0011 1 010]					| INC MAR
+SP DEC:							| [0011 1 011]					| DEC SP
+MAR <- PC:						| [0011 1 100]					| LDA MAR, PC
+MAR <- SP:						| [0011 1 101]					| LDA MAR, SP
+MAR <- imm16:				 	| [0011 1 110][imm16][imm16]	| LDA MAR, imm16
+unused 1:						| [0011 1 111]					|
+
+0100:
+pop:		xxx <- mem[SP],SP++	| [0100 0 xxx]					| POP xxx
+NOTE: not yet implemented:
+
+; STORES into video memory
+; if video memory is not avaiable at any point in the instruction (meaning the instruction fails) it sets a flag?
+STORE VIDEO: VRAM[mar] <- xxx 	| [0100 1 xxx]					| 
+
+
+0101:
+NOTE: not yet implemented:
+unused full:					| [0101 xxxx]					| 
+
+
+0110:
+JNZ:		PC <- MAR: xxx != 0	| [0110 0 xxx]					| JNZ xxx
+
+JMP:		PC <- MAR			| [0110 1 000]					| JMP ; LDA PC, MAR
+JC:			PC <- MAR: CRRY FLG	| [0110 1 001]					| JC
+JEQ:		PC <- MAR: EQ FLG	| [0110 1 010]					| JEQ
+NOTE: not yet implemented:
+LDA SP:		SP <- MAR			| [0110 1 011]					| LDA SP, MAR
+
+JMP:		PC <- imm16			| [0110 1 100][imm16][imm16]	| JMP imm16 ; LDA PC, imm16
+JC:			PC <- imm16:CRRY FLG| [0110 1 101][imm16][imm16]	| JC  imm16
+JEQ:		PC <- imm16: EQ FLG	| [0110 1 110][imm16][imm16]	| JEQ imm16
+NOTE: not yet implemented:
+LDA SP:		SP <- imm16			| [0110 1 111][imm16][imm16]	| LDA SP, imm16
+
+0111:
+???
+
+1xxx:
+???
+
+clang-format on
+ */
+
 // ucode[instruction][step][imm][reg0][reg1]
 uint16_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG];
-
-// int slice_num(int n, int lo, int hi){
-// 	int low_bits_mask = (1 << lo) - 1;
-// 	int high_bits_mask = ~((1 << hi) - 1);
-// 	return n & low_bits_mask & high_bits_mask;
-// }
 
 #define create_step(bus_out, addr_out, bus_write, other)                       \
   (bus_out | (addr_out << 4) | (bus_write << 6) | (other << 10))
@@ -236,7 +304,7 @@ const uint16_t push_template_imm[MAX_NUM_STEPS] = {
 	reset, reset, reset
 };
 
-// [SP++] = imm8
+// reg0 = [SP++]
 const uint16_t pop_template[MAX_NUM_STEPS] = {
 	universal_step_0,
 	MEM.bout | SP.aout | dummy_reg.write | PC.inc, // write from [SP] into reg0, pc cnt
@@ -387,6 +455,11 @@ void pop_instruction(const split_addr_t *instruction) {
     *curr |= reg_bout(instruction->reg0);
   }
 }
+
+// lda, imm = 0, reg0[2] = 0, reg0 = x -> load imm16 x (mar/pc/sp)
+// lda, imm = 0, reg0[2] = 1, reg0 = x -> increase x (mar/pc/sp)
+// lda, imm = 1, reg0[2] = 0, reg0 = x -> decrease x (mar/pc/sp)
+// lda, imm = 1, reg0[2] = 1, reg0 = x, reg1 = y -> load x into y (uses imm8)
 
 // TODO: any combination of imm and reg0 (4 bits) is a valid different
 // instruction, could utilize for math?
