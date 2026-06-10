@@ -13,11 +13,22 @@
 clang-format off
 
 
+registers:
+- A			000: special register written to by math operations, gp register
+- B			001: holds operand for math ops, gp register
+- X			010: gp register
+- Y			011: gp register
+- Z			100: gp register
+- MAR.LO	101: low bits of MAR addr register, could use as gp register
+- MAR.HI	110: high bits of MAR addr register, could use as gp register
+- FLAGS		111: holds flags after math ops, could be gp register
+
+
 possible instruction additions:
 load pc0/pc1 into xxx (takes up whole instruction)
 load sp0/sp1 into xxx (takes up whole instruction)
 
-jump if video ram available
+jump if video ram not available
 
 
 Instructions:
