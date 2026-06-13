@@ -43,7 +43,6 @@ store word:	xxx ->mem[mar1|imm8]| [???? ? xxx] [imm8]			| STR xxx, imm8
 JNZ:		PC <- MAR: ZRO FLG	| [???? ? ???]					| JNZ
 JNZ:		PC <- imm16: ZRO FLG| [???? ? ???]					| JNZ imm16
 
-
 // NOTE: not possible to implement instruction within 8 step limit (half instruction)
 JNZ:		PC <- imm16: xxx!=0 | [0101 1 xxx]					| JNZ xxx, imm16
 
@@ -277,16 +276,17 @@ const step_t halt = create_step(14, 0, 0, 0);
 const step_t error = 0xffff;
 
 // math instructions
-const step_t ADD = create_step(0, 0, 0, 0b1000 | 0);
-const step_t ADC = create_step(0, 0, 0, 0b1000 | 1);
-const step_t SUB = create_step(0, 0, 0, 0b1000 | 2);
-const step_t SBC = create_step(0, 0, 0, 0b1000 | 3);
-const step_t NOT = create_step(0, 0, 0, 0b1000 | 4);
-const step_t XOR = create_step(0, 0, 0, 0b1000 | 5);
-const step_t OR = create_step(0, 0, 0, 0b1000 | 6);
-const step_t AND = create_step(0, 0, 0, 0b1000 | 7);
-
-const step_t MATH_OP = empty_instruction;
+// const step_t ADD = create_step(0, 0, 0, 0b1000 | 0);
+// const step_t ADC = create_step(0, 0, 0, 0b1000 | 1);
+// const step_t SUB = create_step(0, 0, 0, 0b1000 | 2);
+// const step_t SBC = create_step(0, 0, 0, 0b1000 | 3);
+// const step_t NOT = create_step(0, 0, 0, 0b1000 | 4);
+// const step_t XOR = create_step(0, 0, 0, 0b1000 | 5);
+// const step_t OR = create_step(0, 0, 0, 0b1000 | 6);
+// const step_t AND = create_step(0, 0, 0, 0b1000 | 7);
+//
+// math op is defined by 3 lsb's of instruction word, so no need to define math op
+// const step_t MATH_OP = empty_instruction;
 
 // clang-format off
 
@@ -426,7 +426,7 @@ const step_t jmp_mar_template[MAX_NUM_STEPS] = {
 
 // TODO: all math variants could have faster variants if reg0/reg1 are equal to a/b
 
-// TODO: special case if reg0 and reg1 are a and b (impossible to swap registers without intermediate)
+// TODO: special case if reg0 = b, reg1 = a (impossible to swap registers without intermediate)
 
 // reg0 = reg0 OP reg1
 const step_t math_template_reg[MAX_NUM_STEPS] = {
@@ -435,7 +435,7 @@ const step_t math_template_reg[MAX_NUM_STEPS] = {
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	dummy_reg0.bout | A.write | PC.inc, // load reg0 into a
 	dummy_reg1.bout | B.write, // load reg1 into b
-	F.bout | dummy_reg0.write | MATH_OP, // do math op, save to reg0, writes to flag reg
+	F.bout | dummy_reg0.write, // do math op, save to reg0, writes to flag reg
 	reset, reset
 };
 
@@ -444,16 +444,15 @@ const step_t math_template_imm[MAX_NUM_STEPS] = {
 	universal_step_0,
 	dummy_reg0.bout | A.write | PC.inc, // load reg0 into a first (in case reg0 = b), pc cnt
 	MEM.bout | PC.aout | B.write, // load imm into b
-	F.bout | dummy_reg0.write | MATH_OP, // do math op, save to reg0, writes to flag reg
-	PC.inc, // pc is not able to be increased until this point
-	reset, reset, reset
+	F.bout | dummy_reg0.write | PC.inc, // save F to reg0, writes to flag reg
+	reset, reset, reset, reset
 };
 
 // reg0 = ~reg0
 const step_t not_template_none[MAX_NUM_STEPS] = {
 	universal_step_0,
 	dummy_reg0.bout | A.write | PC.inc, // load reg0 into a, pc cnt
-	F.bout | dummy_reg0.write | NOT, // do math op, save to reg0, writes to flag reg
+	F.bout | dummy_reg0.write, // do math op, save to reg0, writes to flag reg
 	reset, reset, reset, reset
 };
 
@@ -463,7 +462,7 @@ const step_t not_template_reg[MAX_NUM_STEPS] = {
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	dummy_reg1.bout | A.write | PC.inc, // load reg0 into a
-	F.bout | dummy_reg0.write | NOT, // do math op, save to reg1, writes to flag reg
+	F.bout | dummy_reg0.write, // do math op, save to reg1, writes to flag reg
 	reset, reset, reset
 };
 
