@@ -17,6 +17,7 @@ notes:
 mem write to rom area results in video write
 ir2 doesn't need bout? (maybe wire flag bits to 4 msb to set flag on a math instruction with reg1 instr)
 	- would require adding additional chip, probably not worth
+	- update: some instructions require a temporary register to implement, could be worth the extra chip to implement these
 
 
 registers:
@@ -134,13 +135,13 @@ clang-format on
  */
 
 struct step_t {
-public:
+private:
   uint8_t bus_out = 0;
   uint8_t addr_out = 0;
   uint8_t bus_write = 0;
   uint8_t other = 0;
 
-  // TODO: error check that each field is within bounds
+public:
   constexpr step_t(uint8_t bus_out, uint8_t addr_out, uint8_t bus_write,
                    uint8_t other)
       : bus_out(bus_out), addr_out(addr_out), bus_write(bus_write),
@@ -166,20 +167,31 @@ public:
 
   constexpr void mergeStep(const step_t &b) {
     if (bus_out != 0 && b.bus_out != 0) {
-      std::cout << "conflict " << bus_out << " " << b.bus_out << std::endl;
+      std::cout << "bout conflict " << int(bus_out) << " " << int(b.bus_out)
+                << std::endl;
+      std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
+                << std::endl;
     }
     if (bus_write != 0 && b.bus_write != 0) {
       std::cout << "bus_write conflict " << int(bus_write) << " "
                 << int(b.bus_write) << std::endl;
-
       std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
                 << std::endl;
     }
 
-    // assert((!(bus_out != 0 && b.bus_out != 0)) && "bus_out conflict");
-    // assert((!(addr_out != 0 && b.addr_out != 0)) && "addr_out conflict");
-    // assert((!(bus_write != 0 && b.bus_write != 0)) && "bus_write conflict");
-    // assert((!(other != 0 && b.other != 0)) && "other conflict");
+    if (addr_out != 0 && b.addr_out != 0) {
+      std::cout << "bus_write conflict " << int(addr_out) << " "
+                << int(b.addr_out) << std::endl;
+      std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
+                << std::endl;
+    }
+
+    if (other != 0 && b.other != 0) {
+      std::cout << "bus_write conflict " << int(other) << " " << int(b.other)
+                << std::endl;
+      std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
+                << std::endl;
+    }
 
     bus_out |= b.bus_out;
     addr_out |= b.addr_out;
@@ -359,10 +371,12 @@ public:
   constexpr step_t getStep() const {
     step_t result = step;
     if (reg0_write && reg1_write) {
-      std::cout << "reg0/reg1 write conflict: " << reg0.name << ", " << reg1.name << std::endl;
+      std::cout << "reg0/reg1 write conflict: " << reg0.name << ", "
+                << reg1.name << std::endl;
     }
     if (reg0_bout && reg1_bout) {
-      std::cout << "reg0/reg1 bus conflict:" << reg0.name << ", " << reg1.name << std::endl;
+      std::cout << "reg0/reg1 bus conflict:" << reg0.name << ", " << reg1.name
+                << std::endl;
     }
 
     if (reg0_write)
@@ -384,8 +398,8 @@ public:
     step |= other.step;
     reg0_write = reg0_write || other.reg0_write;
     reg0_bout = reg0_bout || other.reg0_bout;
-    reg1_write = reg1_write || other.reg0_write;
-    reg1_bout = reg1_bout || other.reg0_bout;
+    reg1_write = reg1_write || other.reg1_write;
+    reg1_bout = reg1_bout || other.reg1_bout;
   }
 
   constexpr static StepCreator merge(const StepCreator &a,
@@ -653,6 +667,11 @@ void setStep(const StepCreator &step, const split_addr_t *instruction) {
   *curr = template_step.getStep();
 }
 
+void setError(const split_addr_t *instruction) {
+  step_t *curr = get_ucode_ptr(instruction);
+  *curr = error;
+}
+
 void create_instruction(const StepCreator step_template_reg[MAX_NUM_STEPS],
                         const StepCreator step_template_imm[MAX_NUM_STEPS],
                         const split_addr_t *instruction) {
@@ -675,10 +694,24 @@ void lw_instruction(const split_addr_t *instruction) {
 }
 
 void sw_instruction(const split_addr_t *instruction) {
+  if (std::string name = intToRegister(instruction->reg0).name;
+      name == "MAR_lo" || name == "MAR_hi") {
+    // can't implement loading to either mar with this instruction, makes more
+    // sense to do so with lda
+    setError(instruction);
+    return;
+  }
   create_instruction(sw_template_mar, sw_template_imm, instruction);
 }
 
 void push_instruction(const split_addr_t *instruction) {
+  if (std::string name = intToRegister(instruction->reg0).name;
+      name == "MAR_lo" || name == "MAR_hi") {
+    // can't implement since bus is taken
+    setError(instruction);
+    return;
+  }
+
   create_instruction(push_template_reg, push_template_imm, instruction);
 }
 
@@ -735,10 +768,10 @@ void not_instruction(const split_addr_t *instruction) {
 using instruction_func = std::function<void(const split_addr_t *)>;
 
 instruction_func instructions_table[16] = {
-    mw_instruction,   lw_instruction,   //
-    sw_instruction,   push_instruction, //
-    pop_instruction,  lda_instruction,  //
-    jmp_instruction,  nullptr,          //
+    mw_instruction,   lw_instruction,   // 0, 1
+    sw_instruction,   push_instruction, // 2, 3
+    pop_instruction,  lda_instruction,  // 4, 5
+    jmp_instruction,  nullptr,          // 6, 7
     math_instruction, math_instruction, // add, adc
     math_instruction, math_instruction, // sub, sbc
     not_instruction,  math_instruction, // not, xor
@@ -765,13 +798,19 @@ void process_address(int addr) {
   if (istr_func) {
     istr_func(&instruction);
   } else {
-    step_t *curr = get_ucode_ptr(&instruction);
-    *curr = error;
+    setError(&instruction);
   }
 }
 
 void populate_ucode() {
   for (int addr = 0; addr <= MAX_ADDR; addr++) {
+    // split_addr_t instruction;
+    // addr_to_instruction(addr, &instruction);
+    // std::cout << "step/reg0/imm/istr/reg1 " << int(instruction.step) << " "
+    //           << int(instruction.reg0) << " " << int(instruction.imm) << " "
+    //           << int(instruction.instruction) << " " << int(instruction.reg1)
+    //           << std::endl;
+
     process_address(addr);
   }
 }
@@ -785,18 +824,17 @@ step_t getInstruction(int addr) {
 void write_ucode_logism() {
   printf("v3.0 hex words plain\n");
   for (int addr = 0; addr <= MAX_ADDR; addr++) {
-    std::cout << addr << std::endl;
     uint16_t curr = getInstruction(addr).getRomData();
-    // printf("%04X", curr);
-    // if (addr % 16 == 15) {
-    //   printf("\n");
-    // } else {
-    //   printf(" ");
-    // }
+    printf("%04X", curr);
+    if (addr % 16 == 15) {
+      printf("\n");
+    } else {
+      printf(" ");
+    }
   }
 }
 
 int main() {
   populate_ucode();
-  write_ucode_logism();
+  // write_ucode_logism();
 }
