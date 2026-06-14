@@ -14,11 +14,9 @@
 clang-format off
 
 notes:
-mem write to rom area results in video write
-ir2 doesn't need bout? (maybe wire flag bits to 4 msb to set flag on a math instruction with reg1 instr)
-	- would require adding additional chip, probably not worth
-	- update: some instructions require a temporary register to implement, could be worth the extra chip to implement these
-
+ir2 doesn't need bout?
+- would require adding additional chip
+- some instructions require a temporary register to implement, could be worth the extra chip to implement these
 
 registers:
 - A			000: special register written to by math operations, gp register
@@ -28,105 +26,112 @@ registers:
 - Z			100: gp register
 - MAR.LO	101: low bits of MAR addr register, could use as gp register
 - MAR.HI	110: high bits of MAR addr register, could use as gp register
-- FLAGS		111: holds flags after math ops, could be gp register
+- FLAGS		111: holds 4 bits of flags after math ops (or whatever gets written to it)
 
 
-possible instruction additions:
-keyboard into xxx (takes up half instruction)
-halt (one instruction)
-CMP xxx and yyy/imm8 - same as sub but does not save result (full instruction)
-update flags register with alu values (one instruction)
-
-// store word in current mar page (half instruction)
-store word:	xxx ->mem[mar1|imm8]| [???? ? xxx] [imm8]			| STR xxx, imm8
-
-// two instructions
-JNZ:		PC <- MAR: ZRO FLG	| [???? ? ???]					| JNZ
-JNZ:		PC <- imm16: ZRO FLG| [???? ? ???]					| JNZ imm16
-
-// NOTE: not possible to implement instruction within 8 step limit (half instruction)
-JNZ:		PC <- imm16: xxx!=0 | [0101 1 xxx]					| JNZ xxx, imm16
+possible instruction additions
 
 
 Instructions:
+NOTE: DONE
 0000:
 move word: 	xxx <- yyy			| [0000 0 xxx] [yyy.....]		| MV xxx, yyy
 move word: 	xxx <- imm8			| [0000 1 xxx] [imm8    ]		| MV xxx, imm8
 
+NOTE: DONE
 0001:
-load word: 	xxx <- mem[mar]		| [0001 0 xxx]					| LOAD xxx
-load word: 	xxx <- mem[imm16]	| [0001 1 xxx] [imm16][imm16]	| LOAD xxx, imm16
+CMP: 	a=xxx,b=yyy,flg udpate	| [0001 0 xxx]					| CMP xxx, yyy
+CMP: 	a=xxx,b=imm8,flg udpate | [0001 1 xxx][imm8]			| CMP xxx, imm8
 
+NOTE: DONE
 0010:
 store word:	xxx -> mem[mar]		| [0010 0 xxx]					| STR xxx
 store word:	xxx -> mem[imm16]	| [0010 1 xxx] [imm16][imm16]	| STR xxx, imm16
 
+NOTE: DONE
 0011:
 push:		xxx -> mem[SP],SP--	| [0011 0 xxx]					| PUSH xxx
 push:		imm8 -> mem[SP],SP--| [0011 1 000]					| PUSH imm8 // overrides A reg
-
-NOTE: not yet implemented:
 SP INC:							| [0011 1 001]					| INC SP
 MAR INC:						| [0011 1 010]					| INC MAR
 SP DEC:							| [0011 1 011]					| DEC SP
 MAR <- PC:						| [0011 1 100]					| LDA MAR, PC
 MAR <- SP:						| [0011 1 101]					| LDA MAR, SP
 MAR <- imm16:				 	| [0011 1 110][imm16][imm16]	| LDA MAR, imm16
-unused 1:						| [0011 1 111]					|
+SP <- imm16						| [0011 1 111][imm16][imm16]	| LDA SP, imm16
 
+NOTE: DONE
 0100:
 pop:		xxx <- mem[SP],SP++	| [0100 0 xxx]					| POP xxx
-NOTE: not yet implemented:
-unused half:					| [0100 1 xxx]					|
+LDA SP:		SP <- MAR			| [0101 1 011]					| LDA SP, MAR (one instruction)
+update flag reg:				| [0100 1 001]					| SET FLAG
+nop:							| [0100 1 010]					| NOP
+unused:							| [0100 1 011]					|
+unused:							| [0100 1 100]					|
+unused:							| [0100 1 101]					|
+unused:							| [0100 1 110]					|
+halt:							| [0100 1 111]					| HALT
 
+NOTE: DONE
 0101:
 JNZ:		PC <- MAR: xxx != 0	| [0101 0 xxx]					| JNZ xxx
 
 JMP:		PC <- MAR			| [0101 1 000]					| JMP ; LDA PC, MAR
 JC:			PC <- MAR: CRRY FLG	| [0101 1 001]					| JC
 JEQ:		PC <- MAR: EQ FLG	| [0101 1 010]					| JEQ
-NOTE: not yet implemented:
-LDA SP:		SP <- MAR			| [0101 1 011]					| LDA SP, MAR
+JNZ:		PC <- MAR: ZRO FLG	| [0101 1 011]					| JNZ
 
 JMP:		PC <- imm16			| [0101 1 100][imm16][imm16]	| JMP imm16 ; LDA PC, imm16
 JC:			PC <- imm16:CRRY FLG| [0101 1 101][imm16][imm16]	| JC  imm16
 JEQ:		PC <- imm16: EQ FLG	| [0101 1 110][imm16][imm16]	| JEQ imm16
-NOTE: not yet implemented:
-LDA SP:		SP <- imm16			| [0101 1 111][imm16][imm16]	| LDA SP, imm16
+JNZ:		PC <- imm16: ZRO FLG| [0101 1 111]					| JNZ imm16
 
+NOTE: DONE
 0110:
-???
+keyb input:	xxx <- KEYB			| [0110 0 xxx]					| KEYB xxx
+unused half:					| [0110 1 xxx]					|
+
+NOTE: DONE
 0111:
-???
+load word: 	xxx <- mem[mar]		| [0001 0 xxx]					| LOAD xxx
+load word: 	xxx <- mem[imm16]	| [0001 1 xxx] [imm16][imm16]	| LOAD xxx, imm16
 
+NOTE: DONE
 1000:
-add no carry:	xxx <- xxx + yyy	| [1000 0 xxx][yyy.....]	| ADD xxx, yyy 
-add no carry:	xxx <- xxx + imm8	| [1000 1 xxx][imm8]		| ADD xxx, imm8
+sub carry on:	xxx <- xxx + yyy	| [1001 0 xxx][yyy.....]	| SUB xxx, yyy 
+sub carry on:	xxx <- xxx + imm8	| [1001 1 xxx][imm8]		| SUB xxx, imm8
 
+NOTE: DONE
 1001: 
-sub no carry:	xxx <- xxx + yyy	| [1001 0 xxx][yyy.....]	| SUB xxx, yyy 
-sub no carry:	xxx <- xxx + imm8	| [1001 1 xxx][imm8]		| SUB xxx, imm8
-
-1010:
-add flg crry:	xxx <- xxx + yyy	| [1010 0 xxx][yyy.....]	| ADC xxx, yyy 
-add flg crry:	xxx <- xxx + imm8	| [1010 1 xxx][imm8]		| ADC xxx, imm8
-
-1011:
 sub flg crry:	xxx <- xxx - yyy	| [1011 0 xxx][yyy.....]	| SBC xxx, yyy 
 sub flg crry:	xxx <- xxx - imm8	| [1011 1 xxx][imm8]		| SBC xxx, imm8
 
+NOTE: DONE
+1010:
+add no carry:	xxx <- xxx + yyy	| [1000 0 xxx][yyy.....]	| ADD xxx, yyy 
+add no carry:	xxx <- xxx + imm8	| [1000 1 xxx][imm8]		| ADD xxx, imm8
+
+NOTE: DONE
+1011:
+add flg crry:	xxx <- xxx + yyy	| [1010 0 xxx][yyy.....]	| ADC xxx, yyy 
+add flg crry:	xxx <- xxx + imm8	| [1010 1 xxx][imm8]		| ADC xxx, imm8
+
+NOTE: DONE
 1100:
 not:			xxx <- ~xxx			| [1100 0 xxx]				| NOT xxx
 not:			xxx <- ~yyy			| [1100 1 xxx]				| NOT xxx, yyy
 
+NOTE: DONE
 1101:
 xor:			xxx <- xxx ^ yyy	| [1101 0 xxx][yyy.....]	| XOR xxx, yyy 
 xor:			xxx <- xxx ^ imm8	| [1101 1 xxx][imm8]		| XOR xxx, imm8
 
+NOTE: DONE
 1110:
 or:				xxx <- xxx | yyy	| [1110 0 xxx][yyy.....]	| OR xxx, yyy 
 or:				xxx <- xxx | imm8	| [1110 1 xxx][imm8]		| OR xxx, imm8
 
+NOTE: DONE
 1111:
 and:			xxx <- xxx & yyy	| [1111 0 xxx][yyy.....]	| AND xxx, yyy 
 and:			xxx <- xxx & imm8	| [1111 1 xxx][imm8]		| AND xxx, imm8
@@ -200,8 +205,6 @@ public:
   }
 
   constexpr uint16_t getRomData() const {
-    // TODO: mask after shifting to ensure no conflicts/ error check that each
-    // field is within bounds
     uint32_t result = 0;
     result |= bus_out;
     result |= static_cast<uint32_t>(addr_out) << 4;
@@ -259,19 +262,22 @@ step_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG];
 // clang-format off
 constexpr step_t empty_instruction{};
 
+
 constexpr reg_t A   = {.write = step_t(0, 0, 1, 0), .bout = step_t(1, 0, 0, 0), .name = "A"};
 constexpr reg_t B   = {.write = step_t(0, 0, 2, 0), .bout = step_t(2, 0, 0, 0), .name = "B"};
 constexpr reg_t X   = {.write = step_t(0, 0, 3, 0), .bout = step_t(3, 0, 0, 0), .name = "X"};
 constexpr reg_t Y   = {.write = step_t(0, 0, 4, 0), .bout = step_t(4, 0, 0, 0), .name = "Y"};
 constexpr reg_t Z   = {.write = step_t(0, 0, 5, 0), .bout = step_t(5, 0, 0, 0), .name = "Z"};
 // also requires putting some addr register on the abus
-constexpr reg_t MEM = {.write = step_t(0, 0, 8, 0),  .bout = step_t(8, 0, 0, 0), .name = "MEM"};
+constexpr reg_t MEM = {.write = step_t(0, 0, 8, 0),  .bout = step_t(8, 0, 0, 0),.name = "MEM"};
 constexpr reg_t IR  = {.write = step_t(0, 0, 13, 0), .bout = empty_instruction, .name = "IR"};
 
-constexpr reg_t F   = {.write = empty_instruction,   .bout = step_t(9, 0, 0, 0), .name = "F"};
+constexpr reg_t F   = {.write = empty_instruction,   .bout = step_t(9, 0, 0, 0),.name = "F"};
 
 constexpr reg_t IR2 = {.write = step_t(0, 0, 14, 0), .bout = empty_instruction, .name = "IR2"};
-constexpr reg_t FLAG= {.write = step_t(0, 0, 15, 0), .bout = step_t(10, 0, 0, 0), .name = "FLAG"};
+constexpr reg_t FLAG= {.write = step_t(0, 0, 15, 0), .bout = step_t(10, 0, 0, 0),.name = "FLAG"};
+// TODO: determine
+constexpr reg_t KEYB  = {.write = step_t(0, 0, 0, 0), .bout = step_t(0, 0, 0, 0), .name = "KEYB"};
 
 constexpr addr_register_t MAR = {
     .aout = step_t(0, 2, 0, 0),
@@ -370,6 +376,9 @@ public:
 
   constexpr step_t getStep() const {
     step_t result = step;
+    // TODO: see if reg0/1 write and bout are on at same time, could turn into
+    // nop?
+
     if (reg0_write && reg1_write) {
       std::cout << "reg0/reg1 write conflict: " << reg0.name << ", "
                 << reg1.name << std::endl;
@@ -456,7 +465,7 @@ const step_t universal_step_1 = PC.inc;
 // WARN: MUST PERFORM PC CNT AFTER
 const step_t load_address_procedure[5] = {
     universal_step_0,
-    universal_step_1,
+    PC.inc,
     MEM.bout | PC.aout | MAR.lo.write, // write first part of address to mar lo
     PC.inc,                            // pc cnt
     MEM.bout | PC.aout | MAR.hi.write, // write second part of address to mar hi
@@ -515,6 +524,7 @@ const StepCreator sw_template_mar[MAX_NUM_STEPS] = {
 	reset, reset, reset, reset, reset, reset
 };
 
+
 // reg = [imm16]
 const StepCreator sw_template_imm[MAX_NUM_STEPS] = {
 	load_address_procedure[0],
@@ -526,7 +536,6 @@ const StepCreator sw_template_imm[MAX_NUM_STEPS] = {
 	reset, reset
 };
 
-
 // [SP--] = reg
 const StepCreator push_template_reg[MAX_NUM_STEPS] = {
 	universal_step_0,
@@ -536,7 +545,7 @@ const StepCreator push_template_reg[MAX_NUM_STEPS] = {
 };
 
 // [SP--] = imm8, overrides A reg
-const StepCreator push_template_imm[MAX_NUM_STEPS] = {
+const StepCreator push_template_imm8[MAX_NUM_STEPS] = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | A.write, // write into IR2
@@ -554,7 +563,7 @@ const StepCreator pop_template[MAX_NUM_STEPS] = {
 };
 
 // MAR = imm16
-const StepCreator lda_template[MAX_NUM_STEPS] = {
+const StepCreator mar_template_imm16[MAX_NUM_STEPS] = {
 	load_address_procedure[0],
 	load_address_procedure[1],
 	load_address_procedure[2],
@@ -605,7 +614,6 @@ const StepCreator jmp_mar_template[MAX_NUM_STEPS] = {
 };
 
 // TODO: all math variants could have faster variants if reg0/reg1 are equal to a/b
-
 // TODO: special case if reg0 = b, reg1 = a (impossible to swap registers without intermediate)
 
 // reg0 = reg0 OP reg1
@@ -644,6 +652,120 @@ const StepCreator not_template_reg[MAX_NUM_STEPS] = {
 	reg1_bout | A.write | PC.inc, // load reg0 into a
 	F.bout | reg0_write, // do math op, save to reg1, writes to flag reg
 	reset, reset, reset
+};
+
+
+// SP dec
+const StepCreator sp_dec_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	PC.inc, // pc cnt
+	SP.dec, // decrement sp
+	reset, reset, reset, reset, reset
+};
+
+// SP inc
+const StepCreator sp_inc_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	PC.inc, // pc cnt
+	SP.inc, // increment sp
+	reset, reset, reset, reset, reset
+};
+
+
+// MAR inc
+const StepCreator mar_inc_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	PC.inc, // pc cnt
+	MAR.inc, // increment mar
+	reset, reset, reset, reset, reset
+};
+
+// MAR <- PC
+const StepCreator pc_to_mar_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	universal_step_1,
+	PC.lo.bout | MAR.lo.write,
+	PC.hi.bout | MAR.hi.write,
+	reset, reset, reset, reset
+};
+
+// MAR <- SP
+const StepCreator sp_to_mar_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	universal_step_1,
+	SP.lo.bout | MAR.lo.write,
+	SP.hi.bout | MAR.hi.write,
+	reset, reset, reset, reset
+};
+
+// SP <- MAR
+const StepCreator mar_to_sp_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	universal_step_1,
+	MAR.lo.bout | SP.lo.write,
+	MAR.hi.bout | SP.hi.write,
+	reset, reset, reset, reset
+};
+
+// SP <- imm16
+const StepCreator sp_template_imm16[MAX_NUM_STEPS] = {
+    universal_step_0,
+    PC.inc,
+    MEM.bout | PC.aout | SP.lo.write, // write first part of address to sp lo
+    PC.inc,                            // pc cnt
+    MEM.bout | PC.aout | SP.hi.write, // write second part of address to sp hi
+    PC.inc,
+	reset, reset,
+};
+
+
+// reg0 = reg0 OP reg1
+const StepCreator cmp_template_reg[MAX_NUM_STEPS] = {
+	universal_step_0,
+	universal_step_1,
+	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
+	reg0_bout | A.write | PC.inc, // load reg0 into a
+	reg1_bout | B.write, // load reg1 into b
+	F.bout, // do math op, writes to flag reg
+	reset, reset
+};
+
+// reg0 = reg0 OP reg1
+const StepCreator cmp_template_imm[MAX_NUM_STEPS] = {
+	universal_step_0,
+	reg0_bout | A.write | PC.inc, // load reg0 into a first (in case reg0 = b), pc cnt
+	MEM.bout | PC.aout | B.write, // load imm into b
+	F.bout | PC.inc, // writes to flag reg
+	reset, reset, reset, reset
+};
+
+// reg0 = keyboard input
+const StepCreator keyboard_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	KEYB.bout | reg0_write | PC.inc,
+	reset, reset, reset, reset, reset, reset
+};
+
+
+// reg0 = keyboard input
+const StepCreator update_flag_register_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	F.bout | PC.inc, // write flag register, pc cnt
+	reset, reset, reset, reset, reset, reset
+};
+
+
+const StepCreator halt_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	halt,
+	reset, reset, reset, reset, reset, reset
+};
+
+
+const StepCreator nop_template[MAX_NUM_STEPS] = {
+	universal_step_0,
+	PC.inc,
+	reset, reset, reset, reset, reset, reset
 };
 
 // clang-format on
@@ -704,23 +826,49 @@ void sw_instruction(const split_addr_t *instruction) {
   create_instruction(sw_template_mar, sw_template_imm, instruction);
 }
 
-void push_instruction(const split_addr_t *instruction) {
-  if (std::string name = intToRegister(instruction->reg0).name;
-      name == "MAR_lo" || name == "MAR_hi") {
-    // can't implement since bus is taken
-    setError(instruction);
-    return;
-  }
+void push_special_instruction(const split_addr_t *instruction) {
 
-  create_instruction(push_template_reg, push_template_imm, instruction);
+  if (instruction->imm == 1) {
+    // imm push takes one instruction, the other possible 7 are used for special
+    // functions
+
+    const StepCreator *templates[8] = {
+        push_template_imm8, // push imm8
+        sp_inc_template,    mar_inc_template,   sp_dec_template,
+        pc_to_mar_template, sp_to_mar_template, mar_template_imm16,
+        sp_template_imm16,
+    };
+
+    create_instruction(templates[instruction->reg0], instruction);
+  } else {
+    if (std::string name = intToRegister(instruction->reg0).name;
+        name == "MAR_lo" || name == "MAR_hi") {
+      // can't implement since bus is taken
+      setError(instruction);
+      return;
+    }
+    create_instruction(push_template_reg, instruction);
+  }
 }
 
 void pop_instruction(const split_addr_t *instruction) {
-  create_instruction(pop_template, instruction);
-}
+  if (instruction->imm == 0) {
+    create_instruction(pop_template, instruction);
+  } else {
+    // more special purpose instructions
+    const StepCreator *templates[8] = {
+        mar_to_sp_template, // push imm8
+        update_flag_register_template,
+        nop_template,
+        nop_template,
+        nop_template,
+        nop_template,
+        nop_template,
+        halt_template,
+    };
 
-void lda_instruction(const split_addr_t *instruction) {
-  create_instruction(lda_template, instruction);
+    create_instruction(templates[instruction->reg0], instruction);
+  }
 }
 
 void jmp_instruction(const split_addr_t *instruction) {
@@ -740,7 +888,7 @@ void jmp_instruction(const split_addr_t *instruction) {
     uint8_t flag_idx = instruction->reg0 & 0b011;
     uint8_t using_imm16_flag = instruction->reg0 & 0b100;
     const static step_t idx_to_flag[] = {PC_FLAG_DIRECT, PC_FLAG_CARRY,
-                                         PC_FLAG_EQ, PC_FLAG_DIRECT};
+                                         PC_FLAG_EQ, PC_FLAG_ZERO};
     step_t flag_step_bits = idx_to_flag[flag_idx];
 
     // TODO: unconditional jump could save one step by skipping pc cnt
@@ -765,17 +913,25 @@ void not_instruction(const split_addr_t *instruction) {
   create_instruction(not_template_none, not_template_reg, instruction);
 }
 
+void cmp_instruction(const split_addr_t *instruction) {
+  create_instruction(cmp_template_reg, cmp_template_imm, instruction);
+}
+
+void keyb_other_instruction(const split_addr_t *instruction) {
+  create_instruction(keyboard_template, keyboard_template, instruction);
+}
+
 using instruction_func = std::function<void(const split_addr_t *)>;
 
 instruction_func instructions_table[16] = {
-    mw_instruction,   lw_instruction,   // 0, 1
-    sw_instruction,   push_instruction, // 2, 3
-    pop_instruction,  lda_instruction,  // 4, 5
-    jmp_instruction,  nullptr,          // 6, 7
-    math_instruction, math_instruction, // add, adc
-    math_instruction, math_instruction, // sub, sbc
-    not_instruction,  math_instruction, // not, xor
-    math_instruction, math_instruction, // or, and
+    mw_instruction,         cmp_instruction,          // 0, 1
+    sw_instruction,         push_special_instruction, // 2, 3
+    pop_instruction,        jmp_instruction,          // 4, 5
+    keyb_other_instruction, lw_instruction,           // 6, 7
+    math_instruction,       math_instruction,         // sub, sbc
+    math_instruction,       math_instruction,         // add, adc
+    not_instruction,        math_instruction,         // not, xor
+    math_instruction,       math_instruction,         // or, and
 };
 
 void addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
