@@ -33,22 +33,18 @@ possible instruction additions
 
 
 Instructions:
-NOTE: DONE
 0000:
 move word: 	xxx <- yyy			| [0000 0 xxx] [yyy.....]		| MV xxx, yyy
 move word: 	xxx <- imm8			| [0000 1 xxx] [imm8    ]		| MV xxx, imm8
 
-NOTE: DONE
 0001:
 CMP: 	a=xxx,b=yyy,flg udpate	| [0001 0 xxx]					| CMP xxx, yyy
 CMP: 	a=xxx,b=imm8,flg udpate | [0001 1 xxx][imm8]			| CMP xxx, imm8
 
-NOTE: DONE
 0010:
 store word:	xxx -> mem[mar]		| [0010 0 xxx]					| STR xxx
 store word:	xxx -> mem[imm16]	| [0010 1 xxx] [imm16][imm16]	| STR xxx, imm16
 
-NOTE: DONE
 0011:
 push:		xxx -> mem[SP],SP--	| [0011 0 xxx]					| PUSH xxx
 push:		imm8 -> mem[SP],SP--| [0011 1 000]					| PUSH imm8 // overrides A reg
@@ -60,7 +56,6 @@ MAR <- SP:						| [0011 1 101]					| LDA MAR, SP
 MAR <- imm16:				 	| [0011 1 110][imm16][imm16]	| LDA MAR, imm16
 SP <- imm16						| [0011 1 111][imm16][imm16]	| LDA SP, imm16
 
-NOTE: DONE
 0100:
 pop:		xxx <- mem[SP],SP++	| [0100 0 xxx]					| POP xxx
 LDA SP:		SP <- MAR			| [0101 1 011]					| LDA SP, MAR (one instruction)
@@ -72,7 +67,6 @@ unused:							| [0100 1 101]					|
 unused:							| [0100 1 110]					|
 halt:							| [0100 1 111]					| HALT
 
-NOTE: DONE
 0101:
 JNZ:		PC <- MAR: xxx != 0	| [0101 0 xxx]					| JNZ xxx
 
@@ -86,52 +80,42 @@ JC:			PC <- imm16:CRRY FLG| [0101 1 101][imm16][imm16]	| JC  imm16
 JEQ:		PC <- imm16: EQ FLG	| [0101 1 110][imm16][imm16]	| JEQ imm16
 JNZ:		PC <- imm16: ZRO FLG| [0101 1 111]					| JNZ imm16
 
-NOTE: DONE
 0110:
 keyb input:	xxx <- KEYB			| [0110 0 xxx]					| KEYB xxx
 unused half:					| [0110 1 xxx]					|
 
-NOTE: DONE
 0111:
 load word: 	xxx <- mem[mar]		| [0001 0 xxx]					| LOAD xxx
 load word: 	xxx <- mem[imm16]	| [0001 1 xxx] [imm16][imm16]	| LOAD xxx, imm16
 
-NOTE: DONE
 1000:
 sub carry on:	xxx <- xxx + yyy	| [1001 0 xxx][yyy.....]	| SUB xxx, yyy 
 sub carry on:	xxx <- xxx + imm8	| [1001 1 xxx][imm8]		| SUB xxx, imm8
 
-NOTE: DONE
 1001: 
 sub flg crry:	xxx <- xxx - yyy	| [1011 0 xxx][yyy.....]	| SBC xxx, yyy 
 sub flg crry:	xxx <- xxx - imm8	| [1011 1 xxx][imm8]		| SBC xxx, imm8
 
-NOTE: DONE
 1010:
 add no carry:	xxx <- xxx + yyy	| [1000 0 xxx][yyy.....]	| ADD xxx, yyy 
 add no carry:	xxx <- xxx + imm8	| [1000 1 xxx][imm8]		| ADD xxx, imm8
 
-NOTE: DONE
 1011:
 add flg crry:	xxx <- xxx + yyy	| [1010 0 xxx][yyy.....]	| ADC xxx, yyy 
 add flg crry:	xxx <- xxx + imm8	| [1010 1 xxx][imm8]		| ADC xxx, imm8
 
-NOTE: DONE
 1100:
 not:			xxx <- ~xxx			| [1100 0 xxx]				| NOT xxx
 not:			xxx <- ~yyy			| [1100 1 xxx]				| NOT xxx, yyy
 
-NOTE: DONE
 1101:
 xor:			xxx <- xxx ^ yyy	| [1101 0 xxx][yyy.....]	| XOR xxx, yyy 
 xor:			xxx <- xxx ^ imm8	| [1101 1 xxx][imm8]		| XOR xxx, imm8
 
-NOTE: DONE
 1110:
 or:				xxx <- xxx | yyy	| [1110 0 xxx][yyy.....]	| OR xxx, yyy 
 or:				xxx <- xxx | imm8	| [1110 1 xxx][imm8]		| OR xxx, imm8
 
-NOTE: DONE
 1111:
 and:			xxx <- xxx & yyy	| [1111 0 xxx][yyy.....]	| AND xxx, yyy 
 and:			xxx <- xxx & imm8	| [1111 1 xxx][imm8]		| AND xxx, imm8
