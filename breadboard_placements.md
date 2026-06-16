@@ -55,3 +55,72 @@ min of 1 space between chips
 - 1:  space
 - 8:  8-1 selector
 =    59 (4 left)
+
+# pc register
+- 8:  4 bit counter
+- 1:  space
+- 8:  4 bit counter
+- 1:  space
+
+- 10: octal bus buffer
+- 1:  space
+- 10: octal bus buffer
+- 1:  space
+
+- 8:  4 bit counter
+- 1:  space
+- 8:  4 bit counter
+- 1:  space
+
+=    57 (6 left)
+
+# mar register
+- 8:  4 bit counter
+- 1:  space
+- 8:  4 bit counter
+- 1:  space
+
+- 10: octal bus buffer
+- 1:  space
+- 10: octal bus buffer
+- 1:  space
+
+- 8:  4 bit counter
+- 1:  space
+- 8:  4 bit counter
+
+=    57 (6 left)
+
+# sp register
+- 8:  4 bit up/down counter
+- 1:  space
+- 8:  4 bit up/down counter
+- 1:  space
+
+- 10: octal bus buffer
+- 1:  space
+- 10: octal bus buffer
+- 1:  space
+
+- 8:  4 bit up/down counter
+- 1:  space
+- 8:  4 bit up/down counter
+
+=    57 (6 left)
+
+
+# memory stuff
+- 14: ram
+- 1:  space
+
+- 16: flash eeprom
+- 1:  space
+
+
+- 10: octal bus buffer
+- 1:  space
+- 10: octal bus buffer
+
+enough space for one gate ic
+
+=    53 (10 left)
