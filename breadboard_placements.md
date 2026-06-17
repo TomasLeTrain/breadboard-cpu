@@ -2,13 +2,59 @@ min of 1 space between chips
 63 space per breadboard
 
 # Left (rotated)
-## xyz registers - ? left
-- 10: x register
+
+# left ucode rom section, clock
+- 16: flash rom
 - 1:  space
-- 10: y register
+- 8:  step counter
 - 1:  space
-- 10: z register
-=    32 (31 left)
+
+- 20: clock 
+
+=    46 (17 left, 1 14/16 dip, 1 14 dip)
+
+# left ucode rom decoders
+- 10: ucode rom latch
+- 1:  space
+- 8:  write 1 decoder
+- 1:  space
+- 8:  read 1 decoder
+- 1:  space
+- 8:  aout decoder
+- 1:  space
+- 8:  other decoder
+
+=    46 (17 left, 1 14/16 dip, 1 14 dip)
+
+# right ucode rom section, xy regs
+- 16: flash rom
+- 1:  space
+- 10: IR reg
+- 1:  space
+- 10: IR2 reg
+
+- 1:  space
+- 10: Y reg
+- 1:  space
+- 10: Z reg
+
+=    60 (3 left)
+
+
+
+# right ucode decoders, z reg
+- 10: ucode rom latch
+- 1:  space
+
+- 8:  write decoder 0
+- 1:  space
+
+- 8:  read decoder 0
+- 1:  space
+
+- 10: z reg
+
+=   39 (24 left, 3 14-dip chips, 2 16/20-dip chips)
 
 ## clock
 ???
