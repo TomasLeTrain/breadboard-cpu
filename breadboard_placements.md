@@ -25,8 +25,12 @@ min of 1 space between chips
 - 7: zero or-gate
 - 1:  space
 - 7: and gate
-// enough space to house keyboard shift register?
-=    45 (18 left)
+- 1:  space
+
+- 10: octal bus buffer - keyboard
+- 1:  space
+- 7: shift register - keyboard
+=    64 (-1 left, would need one ic with zero space)
 
 ## alu - 2 right
 - 8:  octal bus buffer
@@ -98,15 +102,16 @@ min of 1 space between chips
 - 1:  space
 
 - 10: octal bus buffer
-- 1:  space
-- 10: octal bus buffer
+- 10: octal bus buffer (no space needed with some ic's)
 - 1:  space
 
 - 8:  4 bit up/down counter
 - 1:  space
 - 8:  4 bit up/down counter
 
-=    57 (6 left)
+- 7:  ??? gate
+
+=    63 (0 left)
 
 
 # memory stuff
