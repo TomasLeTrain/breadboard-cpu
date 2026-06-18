@@ -4,12 +4,25 @@
 #include <stdarg.h>
 #include <stdint.h>
 
-#define MAX_ADDR_LEN 14
-#define MAX_ADDR ((1 << MAX_ADDR_LEN) - 1)
-#define NUM_REG 8
-#define MAX_NUM_STEPS 8
-#define NUM_INSTRUCTIONS 16
+constexpr uint32_t IR2_NUM_BITS = 4;
+constexpr uint32_t STEP_NUM_BITS = 4;
+constexpr uint32_t ISTR_NUM_BITS = 4;
+constexpr uint32_t REG_NUM_BITS = 3;
+constexpr uint32_t ADDR_BITS = 16;
 
+// max included address
+constexpr uint32_t MAX_ADDR_INC = ((1 << ADDR_BITS) - 1);
+
+constexpr uint32_t NUM_IR2_BITS = (1 << IR2_NUM_BITS);
+constexpr uint32_t MAX_NUM_STEPS = (1 << STEP_NUM_BITS);
+constexpr uint32_t NUM_INSTRUCTIONS = (1 << ISTR_NUM_BITS);
+constexpr uint32_t NUM_REG = (1 << REG_NUM_BITS);
+
+constexpr uint32_t BUS_OUT_BITS = 4;
+constexpr uint32_t ADDR_OUT_BITS = 2;
+constexpr uint32_t BUS_WRITE_BITS = 4;
+constexpr uint32_t OTHER_BITS = 3;
+constexpr uint32_t FLAG_SELECT_BITS = 3;
 /*
 clang-format off
 
@@ -129,30 +142,37 @@ private:
   uint8_t addr_out = 0;
   uint8_t bus_write = 0;
   uint8_t other = 0;
+  uint8_t flag_select = 0;
 
 public:
   constexpr step_t(uint8_t bus_out, uint8_t addr_out, uint8_t bus_write,
-                   uint8_t other)
+                   uint8_t other, uint8_t flag_select)
       : bus_out(bus_out), addr_out(addr_out), bus_write(bus_write),
-        other(other) {
-    assert(bus_out < 16);
-    assert(addr_out < 4);
-    assert(bus_write < 16);
-    assert(other < 16);
+        other(other), flag_select(flag_select) {
+    assert(bus_out < (1 << BUS_OUT_BITS));
+    assert(addr_out < (1 << ADDR_OUT_BITS));
+    assert(bus_write < (1 << BUS_OUT_BITS));
+    assert(other < (1 << OTHER_BITS));
+    assert(flag_select < (1 << FLAG_SELECT_BITS));
   }
 
-  constexpr step_t(uint16_t data) : step_t(dataToStep(data)) {}
-  constexpr step_t() : step_t(0) {}
+  constexpr step_t(uint8_t bus_out, uint8_t addr_out, uint8_t bus_write,
+                   uint8_t other)
+      : step_t(bus_out, addr_out, bus_write, other, 0) {}
 
-  constexpr static step_t dataToStep(uint16_t data) {
-    // clang-format off
-    uint8_t bus_out   = (data & 0b0000000000001111);
-    uint8_t addr_out  = (data & 0b0000000000110000) >> 4;
-    uint8_t bus_write = (data & 0b0000001111000000) >> 6;
-    uint8_t other     = (data & 0b0011110000000000) >> 10;
-    // clang-format on
-    return step_t(bus_out, addr_out, bus_write, other);
-  }
+  constexpr step_t() : step_t(0, 0, 0, 0) {}
+
+  // constexpr step_t(uint16_t data) : step_t(dataToStep(data)) {}
+  // constexpr static step_t dataToStep(uint16_t data) {
+  //   // clang-format off
+  //   uint8_t bus_out     = (data & 0b0000000000001111);
+  //   uint8_t addr_out    = (data & 0b0000000000110000) >> 4;
+  //   uint8_t bus_write   = (data & 0b0000001111000000) >> 6;
+  //   uint8_t other       = (data & 0b0001110000000000) >> 10;
+  //   uint8_t flag_select = (data & 0b1110000000000000) >> 13;
+  //   // clang-format on
+  //   return step_t(bus_out, addr_out, bus_write, other);
+  // }
 
   constexpr void mergeStep(const step_t &b) {
     if (bus_out != 0 && b.bus_out != 0) {
@@ -182,10 +202,18 @@ public:
                 << std::endl;
     }
 
+    if (flag_select != 0 && b.flag_select != 0) {
+      std::cout << "flag_select conflict " << int(other) << " " << int(b.other)
+                << std::endl;
+      std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
+                << std::endl;
+    }
+
     bus_out |= b.bus_out;
     addr_out |= b.addr_out;
     bus_write |= b.bus_write;
     other |= b.other;
+    flag_select |= b.flag_select;
   }
 
   constexpr uint16_t getRomData() const {
@@ -194,6 +222,7 @@ public:
     result |= static_cast<uint32_t>(addr_out) << 4;
     result |= static_cast<uint32_t>(bus_write) << 6;
     result |= static_cast<uint32_t>(other) << 10;
+    result |= static_cast<uint32_t>(flag_select) << 13;
     return static_cast<uint16_t>(result);
   }
 
@@ -214,7 +243,7 @@ public:
 };
 
 typedef struct {
-  // 3 bits wide
+  // 4 bits wide
   uint8_t step;
   // 3 bits wide
   uint8_t reg0;
@@ -224,6 +253,8 @@ typedef struct {
   uint8_t instruction;
   // 3 bits wide
   uint8_t reg1;
+  // 1 bit wide
+  uint8_t ir2_extra_bits;
 } split_addr_t;
 
 typedef struct {
@@ -297,6 +328,11 @@ constexpr step_t PC_FLAG_CARRY = step_t(0, 0, 0, 7);
 // WARN: outputs into the data bus!
 constexpr step_t FLAG_WRITE_ALU = F.bout;
 
+// TODO: determine?
+constexpr step_t reset = step_t(15, 0, 0, 0);
+constexpr step_t halt = step_t(14, 0, 0, 0);
+constexpr step_t error = halt;
+
 constexpr reg_t intToRegister(uint8_t reg) {
   if (reg == 0)
     return A;
@@ -344,7 +380,8 @@ public:
         reg1_write(reg1_write), reg1_bout(reg1_bout),
         output_flags_selector(output_flags_selector) {}
 
-  constexpr StepCreator() : step(0) {}
+  // defaults to reset to avoid having to set on all the
+  constexpr StepCreator() : step(reset) {}
 
   constexpr void setRegisters(reg_t reg0, reg_t reg1) {
     this->reg0 = reg0;
@@ -428,22 +465,22 @@ constexpr StepCreator operator|(const step_t &lhs, const StepCreator &rhs) {
   return rhs | lhs;
 }
 
-const StepCreator reg0_write =
+constexpr StepCreator reg0_write =
     StepCreator(empty_instruction, true, false, false, false, false);
-const StepCreator reg0_bout =
+constexpr StepCreator reg0_bout =
     StepCreator(empty_instruction, false, true, false, false, false);
-const StepCreator reg1_write =
+constexpr StepCreator reg1_write =
     StepCreator(empty_instruction, false, false, true, false, false);
-const StepCreator reg1_bout =
+constexpr StepCreator reg1_bout =
     StepCreator(empty_instruction, false, false, false, true, false);
 
-const StepCreator output_flags_selector =
+constexpr StepCreator output_flags_selector =
     StepCreator(empty_instruction, false, false, false, false, true);
 
 // IR = [PC]
-const step_t universal_step_0 = MEM.bout | PC.aout | IR.write;
+constexpr step_t universal_step_0 = MEM.bout | PC.aout | IR.write;
 // pc cnt6
-const step_t universal_step_1 = PC.inc;
+constexpr step_t universal_step_1 = PC.inc;
 
 // start steps for any instruction that loads an imm16
 // WARN: MUST PERFORM PC CNT AFTER
@@ -455,23 +492,24 @@ const step_t load_address_procedure[5] = {
     MEM.bout | PC.aout | MAR.hi.write, // write second part of address to mar hi
 };
 
-// TODO: determine?
-const step_t reset = step_t(15, 0, 0, 0);
-const step_t halt = step_t(14, 0, 0, 0);
-
-const step_t error = 0xffff;
-
 // clang-format off
 
-// TODO: writting register to itself should be error or nop?
-// reg0 = reg1
-const StepCreator mw_template_reg[MAX_NUM_STEPS] = {
+constexpr std::array<StepCreator,MAX_NUM_STEPS> mw_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
-  	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
-	reset, reset, reset, reset
+	 	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
 };
+
+// TODO: writting register to itself should be error or nop?
+// reg0 = reg1
+// const StepCreator mw_template_reg[MAX_NUM_STEPS] = {
+// 	universal_step_0,
+// 	universal_step_1,
+// 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
+//   	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
+// 	reset, reset, reset, reset
+// };
 
 // reg = imm8
 const StepCreator mw_template_imm[MAX_NUM_STEPS] = {
@@ -773,6 +811,7 @@ void setStep(const StepCreator &step, const split_addr_t *instruction) {
   *curr = template_step.getStep();
 }
 
+// TODO: determine if will be implemented
 void setError(const split_addr_t *instruction) {
   step_t *curr = get_ucode_ptr(instruction);
   *curr = error;
@@ -791,8 +830,18 @@ void create_instruction(const StepCreator step_template_reg[MAX_NUM_STEPS],
   create_instruction(step_template, instruction);
 }
 
+void create_instruction(
+    const std::array<StepCreator, MAX_NUM_STEPS> &step_template,
+    const split_addr_t *instruction) {
+  step_t *curr = get_ucode_ptr(instruction);
+  StepCreator template_step = step_template[instruction->step];
+  template_step.setRegisters(instruction);
+  *curr = template_step.getStep();
+}
+
 void mw_instruction(const split_addr_t *instruction) {
-  create_instruction(mw_template_reg, mw_template_imm, instruction);
+  create_instruction(mw_template_reg, instruction);
+  // create_instruction(mw_template_reg, mw_template_imm, instruction);
 }
 
 void lw_instruction(const split_addr_t *instruction) {
@@ -918,15 +967,45 @@ instruction_func instructions_table[16] = {
     math_instruction,       math_instruction,         // or, and
 };
 
-void addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
+// returns 1 << y_bit if the x_bit bit of x is on
+uint32_t bitTransform(uint32_t x, uint32_t x_bit, uint32_t y_bit) {
+  return (x & (1 << x_bit)) ? (1 << y_bit) : 0;
+}
+
+void rom_addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
+  uint32_t STEP = bitTransform(addr, 13, 0) | bitTransform(addr, 14, 1) |
+                  bitTransform(addr, 15, 2) | bitTransform(addr, 16, 3);
+
+  // lower half
+  uint32_t IR = bitTransform(addr, 5, 3) | bitTransform(addr, 6, 2) |
+                bitTransform(addr, 7, 1) | bitTransform(addr, 12, 0) |
+                // upper half
+                bitTransform(addr, 8, 4) | bitTransform(addr, 9, 5) |
+                bitTransform(addr, 11, 6) | bitTransform(addr, 10, 7);
+
+  uint32_t IR2 = bitTransform(addr, 1, 3) | bitTransform(addr, 2, 2) |
+                 bitTransform(addr, 3, 1) | bitTransform(addr, 4, 0);
+
   // clang-format off
-  //                              |r1|   ir   |stp|
-  instruction_ptr->step         = (addr & 0b00000000000111);
-  instruction_ptr->reg0         = (addr & 0b00000000111000) >> 3;
-  instruction_ptr->imm          = (addr & 0b00000001000000) >> 6;
-  instruction_ptr->instruction  = (addr & 0b00011110000000) >> 7;
-  instruction_ptr->reg1         = (addr & 0b11100000000000) >> 11;
+  instruction_ptr->step           = STEP;
+  instruction_ptr->reg0           = (IR & 0b00000111);
+  instruction_ptr->imm            = (IR & 0b00001000) >> 3;
+  instruction_ptr->instruction    = (IR & 0b11110000) >> 5;
+  instruction_ptr->reg1           = (IR2 & 0b0111);
+  instruction_ptr->ir2_extra_bits = (IR2 & 0b1000) >> 3;
   // clang-format on
+}
+
+void addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
+  rom_addr_to_instruction(addr, instruction_ptr);
+  // // clang-format off
+  // //                              |r1|   ir   |stp|
+  // instruction_ptr->step         = (addr & 0b00000000000111);
+  // instruction_ptr->reg0         = (addr & 0b00000000111000) >> 3;
+  // instruction_ptr->imm          = (addr & 0b00000001000000) >> 6;
+  // instruction_ptr->instruction  = (addr & 0b00011110000000) >> 7;
+  // instruction_ptr->reg1         = (addr & 0b11100000000000) >> 11;
+  // // clang-format on
 }
 
 void process_address(int addr) {
@@ -943,7 +1022,7 @@ void process_address(int addr) {
 }
 
 void populate_ucode() {
-  for (int addr = 0; addr <= MAX_ADDR; addr++) {
+  for (int addr = 0; addr <= MAX_ADDR_INC; addr++) {
     // split_addr_t instruction;
     // addr_to_instruction(addr, &instruction);
     // std::cout << "step/reg0/imm/istr/reg1 " << int(instruction.step) << " "
@@ -963,7 +1042,7 @@ step_t getInstruction(int addr) {
 
 void write_ucode_logism() {
   printf("v3.0 hex words plain\n");
-  for (int addr = 0; addr <= MAX_ADDR; addr++) {
+  for (int addr = 0; addr <= MAX_ADDR_INC; addr++) {
     uint16_t curr = getInstruction(addr).getRomData();
     printf("%04X", curr);
     if (addr % 16 == 15) {
