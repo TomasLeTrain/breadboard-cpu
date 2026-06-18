@@ -22,8 +22,9 @@ constexpr uint32_t NUM_REG = (1 << REG_NUM_BITS);
 constexpr uint32_t BUS_OUT_BITS = 4;
 constexpr uint32_t ADDR_OUT_BITS = 2;
 constexpr uint32_t BUS_WRITE_BITS = 4;
-constexpr uint32_t OTHER_BITS = 3;
+constexpr uint32_t OTHER_BITS = 2;
 constexpr uint32_t FLAG_SELECT_BITS = 3;
+constexpr uint32_t PC_CNT_BIT = 1;
 
 /*
 clang-format off
@@ -153,10 +154,11 @@ private:
   uint8_t bus_write = 0;
   uint8_t other = 0;
   uint8_t flag_select = 0;
+  uint8_t pc_cnt = 0;
 
 public:
   constexpr step_t(uint8_t bus_out, uint8_t addr_out, uint8_t bus_write,
-                   uint8_t other, uint8_t flag_select)
+                   uint8_t other, uint8_t flag_select, uint8_t pc_cnt)
       : bus_out(bus_out), addr_out(addr_out), bus_write(bus_write),
         other(other), flag_select(flag_select) {
     assert(bus_out < (1 << BUS_OUT_BITS));
@@ -164,34 +166,31 @@ public:
     assert(bus_write < (1 << BUS_OUT_BITS));
     assert(other < (1 << OTHER_BITS));
     assert(flag_select < (1 << FLAG_SELECT_BITS));
+    assert(pc_cnt < (1 << PC_CNT_BIT));
   }
 
-  constexpr step_t(uint8_t bus_out, uint8_t addr_out, uint8_t bus_write,
-                   uint8_t other)
-      : step_t(bus_out, addr_out, bus_write, other, 0) {}
+  // constexpr step_t(uint8_t bus_out, uint8_t addr_out, uint8_t bus_write,
+  //                  uint8_t other)
+  //     : step_t(bus_out, addr_out, bus_write, other, 0) {}
 
-  constexpr step_t() : step_t(0, 0, 0, 0) {}
-
-  // constexpr step_t(uint16_t data) : step_t(dataToStep(data)) {}
-  // constexpr static step_t dataToStep(uint16_t data) {
-  //   // clang-format off
-  //   uint8_t bus_out     = (data & 0b0000000000001111);
-  //   uint8_t addr_out    = (data & 0b0000000000110000) >> 4;
-  //   uint8_t bus_write   = (data & 0b0000001111000000) >> 6;
-  //   uint8_t other       = (data & 0b0001110000000000) >> 10;
-  //   uint8_t flag_select = (data & 0b1110000000000000) >> 13;
-  //   // clang-format on
-  //   return step_t(bus_out, addr_out, bus_write, other);
-  // }
+  constexpr step_t() : step_t(0, 0, 0, 0, 0, 0) {}
 
   constexpr void mergeStep(const step_t &b) {
     if (bus_out != 0 && b.bus_out != 0) {
+      // can cause compile-time error
+      if consteval {
+        throw "bus_out conflict!";
+      }
       std::cout << "bout conflict " << int(bus_out) << " " << int(b.bus_out)
                 << std::endl;
       std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
                 << std::endl;
     }
     if (bus_write != 0 && b.bus_write != 0) {
+      // can cause compile-time error
+      if consteval {
+        throw "bus_write conflict!";
+      }
       std::cout << "bus_write conflict " << int(bus_write) << " "
                 << int(b.bus_write) << std::endl;
       std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
@@ -199,6 +198,10 @@ public:
     }
 
     if (addr_out != 0 && b.addr_out != 0) {
+      // can cause compile-time error
+      if consteval {
+        throw "addr_out conflict!";
+      }
       std::cout << "bus_write conflict " << int(addr_out) << " "
                 << int(b.addr_out) << std::endl;
       std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
@@ -206,13 +209,21 @@ public:
     }
 
     if (other != 0 && b.other != 0) {
-      std::cout << "bus_write conflict " << int(other) << " " << int(b.other)
+      // can cause compile-time error
+      if consteval {
+        throw "other conflict!";
+      }
+      std::cout << "other conflict " << int(other) << " " << int(b.other)
                 << std::endl;
       std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
                 << std::endl;
     }
 
     if (flag_select != 0 && b.flag_select != 0) {
+      // can cause compile-time error
+      if consteval {
+        throw "flag_select conflict!";
+      }
       std::cout << "flag_select conflict " << int(other) << " " << int(b.other)
                 << std::endl;
       std::cout << "this: " << getRomData() << ", b: " << b.getRomData()
@@ -267,11 +278,16 @@ typedef struct {
   uint8_t ir2_extra_bits;
 } split_addr_t;
 
-typedef struct {
+struct reg_t {
   step_t write;
   step_t bout;
   std::string name;
-} reg_t;
+};
+
+struct shift_reg_t : reg_t {
+  step_t shift_left;
+  step_t shift_right;
+};
 
 typedef struct {
   step_t aout;
@@ -284,74 +300,102 @@ typedef struct {
 // ucode[instruction][step][imm][reg0][reg1]
 step_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG];
 
-constexpr step_t bout(uint8_t bout_idx) { return step_t(bout_idx, 0, 0, 0, 0); }
-constexpr step_t aout(uint8_t aout_idx) { return step_t(0, aout_idx, 0, 0, 0); }
+constexpr step_t bout(uint8_t bout_idx) {
+  return step_t(bout_idx, 0, 0, 0, 0, 0);
+}
+constexpr step_t aout(uint8_t aout_idx) {
+  return step_t(0, aout_idx, 0, 0, 0, 0);
+}
 constexpr step_t write(uint8_t write_idx) {
-  return step_t(0, 0, write_idx, 0, 0);
+  return step_t(0, 0, write_idx, 0, 0, 0);
 }
 constexpr step_t other(uint8_t other_idx) {
-  return step_t(0, 0, 0, other_idx, 0);
+  return step_t(0, 0, 0, other_idx, 0, 0);
 }
 constexpr step_t flag_select(uint8_t flag_select_idx) {
-  return step_t(0, 0, 0, 0, flag_select_idx);
+  return step_t(0, 0, 0, 0, flag_select_idx, 0);
+}
+
+constexpr step_t pc_cnt(uint8_t pc_cnt_idx) {
+  return step_t(0, 0, 0, 0, 0, pc_cnt_idx);
 }
 
 // clang-format off
 constexpr step_t empty_instruction{};
 
-constexpr reg_t A   = {.write = write(0), .bout = step_t(1, 0, 0, 0), .name = "A"};
-constexpr reg_t B   = {.write = write(0), .bout = step_t(2, 0, 0, 0), .name = "B"};
-constexpr reg_t X   = {.write = write(0), .bout = step_t(3, 0, 0, 0), .name = "X"};
-constexpr reg_t Y   = {.write = write(0), .bout = step_t(4, 0, 0, 0), .name = "Y"};
-constexpr reg_t Z   = {.write = write(0), .bout = step_t(5, 0, 0, 0), .name = "Z"};
+constexpr reg_t A   = {.write = write(0b1000 | 0), .bout = bout(0b1000 | 0), .name = "A"};
+constexpr reg_t B   = {.write = write(0b1000 | 1), .bout = bout(0b1000 | 1), .name = "B"};
+
+constexpr shift_reg_t X = {
+	{
+	.write = write(0b1000 | 5),
+	.bout = bout(0b1000 | 5),
+	.name = "X"
+	},
+	other(3) | flag_select(0), // shift left
+	other(3) | flag_select(1)  // shift right
+};
+constexpr shift_reg_t Y = {
+	{
+	.write = write(0b1000 | 6),
+	.bout = bout(0b1000 | 6),
+	.name =  "Y"
+	},
+	other(3) | flag_select(2), // shift left
+	other(3) | flag_select(3)  // shift right
+};
+
+constexpr reg_t Z   = {.write = write(7), .bout = bout(0b1000 | 7), .name = "Z"};
+
 // also requires putting some addr register on the abus
-constexpr reg_t MEM = {.write = step_t(0, 0, 8, 0),  .bout = step_t(8, 0, 0, 0),.name = "MEM"};
-constexpr reg_t IR  = {.write = step_t(0, 0, 13, 0), .bout = empty_instruction, .name = "IR"};
+constexpr reg_t MEM = {.write = write(6), .bout = bout(1),.name = "MEM"};
 
-constexpr reg_t F   = {.write = empty_instruction,   .bout = step_t(9, 0, 0, 0),.name = "F"};
+constexpr reg_t F   = {.write = empty_instruction,   .bout = bout(0b1000 | 3),.name = "F"};
 
-constexpr reg_t IR2 = {.write = step_t(0, 0, 14, 0), .bout = empty_instruction, .name = "IR2"};
-constexpr reg_t FLAG= {.write = step_t(0, 0, 15, 0), .bout = step_t(10, 0, 0, 0),.name = "FLAG"};
-// TODO: determine
-constexpr reg_t KEYB  = {.write = step_t(0, 0, 0, 0), .bout = step_t(0, 0, 0, 0), .name = "KEYB"};
+constexpr reg_t IR  = {.write = write(0b1000 | 7), .bout = empty_instruction, .name = "IR"};
+constexpr reg_t IR2 = {.write = write(1), .bout = empty_instruction, .name = "IR2"};
+
+constexpr reg_t FLAG = {.write = write(0b1000 | 4), .bout = bout(0b1000 | 4),.name = "FLAG"};
+constexpr reg_t KEYB  = {.write = empty_instruction, .bout = bout(0b1000 | 2), .name = "KEYB"};
 
 constexpr addr_register_t MAR = {
-    .aout = step_t(0, 2, 0, 0),
-    .lo = {.write = step_t(0, 0, 6, 0), .bout = step_t(6, 2, 0, 0), .name = "MAR_lo"},
-    .hi = {.write = step_t(0, 0, 7, 0), .bout = step_t(7, 2, 0, 0), .name = "MAR_hi"},
-    .inc = step_t(0, 0, 0, 2),
+    .aout = aout(2),
+    .lo = {.write = write(5), .bout = aout(2) | bout(2), .name = "MAR_lo"},
+    .hi = {.write = write(4), .bout = aout(2) | bout(3), .name = "MAR_hi"},
+    .inc = other(2),
     .dec = empty_instruction,
 };
 
 constexpr addr_register_t PC = {
-    .aout = step_t(0, 1, 0, 0),
-    .lo = {.write = step_t(0, 0, 9, 0), .bout = step_t(6, 1, 0, 0), .name = "PC_lo"},
-    .hi = {.write = step_t(0, 0, 10, 0), .bout = step_t(7, 1, 0, 0), .name = "PC_lo"},
-    .inc = step_t(0, 0, 0, 1),
+    .aout = aout(1),
+    .lo = {.write = write(0b1000 | 3), .bout =  aout(1) | bout(2), .name = "PC_lo"},
+    .hi = {.write = write(0b1000 | 2), .bout = aout(1) | bout(3), .name = "PC_hi"},
+    .inc = pc_cnt(1),
     .dec = empty_instruction,
 };
 
 constexpr addr_register_t SP = {
-    .aout = step_t(0, 3, 0, 0),
-    .lo = {.write = step_t(0, 0, 11, 0), .bout = step_t(6, 3, 0, 0), .name = "SP_lo"},
-    .hi = {.write = step_t(0, 0, 12, 0), .bout = step_t(7, 3, 0, 0), .name = "SP_lo"},
-    .inc = step_t(0, 0, 0, 3),
-    .dec = step_t(0, 0, 0, 4),
+    .aout = aout(3),
+    .lo = {.write = write(3), .bout = aout(3) | bout(2), .name = "SP_lo"},
+    .hi = {.write = write(2), .bout = aout(3) | bout(3), .name = "SP_hi"},
+    .inc = bout(6),
+    .dec = bout(7),
 };
 // clang-format on
 
-constexpr step_t PC_FLAG_DIRECT = empty_instruction;
-constexpr step_t PC_FLAG_ZERO = step_t(0, 0, 0, 5);
-constexpr step_t PC_FLAG_EQ = step_t(0, 0, 0, 6);
-constexpr step_t PC_FLAG_CARRY = step_t(0, 0, 0, 7);
+constexpr step_t PC_FLAG_DIRECT = flag_select(0);
+constexpr step_t PC_FLAG_CARRY = flag_select(1);
+constexpr step_t PC_FLAG_EQ = flag_select(2);
+constexpr step_t PC_FLAG_ZERO = flag_select(3);
+constexpr step_t PC_FLAG_X_LEFT = flag_select(4);
+constexpr step_t PC_FLAG_X_RIGHT = flag_select(5);
 
 // writes values from alu into flag
-// WARN: outputs into the data bus!
-constexpr step_t FLAG_WRITE_ALU = F.bout;
+constexpr step_t FLAG_WRITE_ALU = other(1);
 
 // TODO: determine?
-constexpr step_t reset = step_t(15, 0, 0, 0);
-constexpr step_t halt = step_t(14, 0, 0, 0);
+constexpr step_t reset = bout(4);
+constexpr step_t halt = bout(5);
 constexpr step_t error = halt;
 
 constexpr reg_t intToRegister(uint8_t reg) {
@@ -390,9 +434,6 @@ private:
 
 public:
   constexpr StepCreator(const step_t &step) : step(step) {}
-  constexpr StepCreator(uint8_t bus_out, uint8_t addr_out, uint8_t bus_write,
-                        uint8_t other)
-      : step(bus_out, addr_out, bus_write, other) {}
 
   constexpr StepCreator(const step_t &step, bool reg0_write, bool reg0_bout,
                         bool reg1_write, bool reg1_bout,
@@ -401,8 +442,8 @@ public:
         reg1_write(reg1_write), reg1_bout(reg1_bout),
         output_flags_selector(output_flags_selector) {}
 
-  // defaults to reset to avoid having to set on all the
-  constexpr StepCreator() : step(reset) {}
+  // defaults to reset to avoid having to set on all templates
+  constexpr StepCreator() : step(halt) {}
 
   constexpr void setRegisters(reg_t reg0, reg_t reg1) {
     this->reg0 = reg0;
@@ -505,7 +546,7 @@ constexpr step_t universal_step_1 = PC.inc;
 
 // start steps for any instruction that loads an imm16
 // WARN: MUST PERFORM PC CNT AFTER
-const step_t load_address_procedure[5] = {
+constexpr step_t load_address_procedure[5] = {
     universal_step_0,
     PC.inc,
     MEM.bout | PC.aout | MAR.lo.write, // write first part of address to mar lo
@@ -513,130 +554,127 @@ const step_t load_address_procedure[5] = {
     MEM.bout | PC.aout | MAR.hi.write, // write second part of address to mar hi
 };
 
+using template_t = std::array<StepCreator, MAX_NUM_STEPS>;
+
 // clang-format off
 
-constexpr std::array<StepCreator,MAX_NUM_STEPS> mw_template_reg = {
+
+// TODO: writting register to itself should be error or nop?
+// reg0 = reg1
+constexpr template_t mw_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	 	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
+	reset,
 };
 
-// TODO: writting register to itself should be error or nop?
-// reg0 = reg1
-// const StepCreator mw_template_reg[MAX_NUM_STEPS] = {
-// 	universal_step_0,
-// 	universal_step_1,
-// 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
-//   	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
-// 	reset, reset, reset, reset
-// };
-
 // reg = imm8
-const StepCreator mw_template_imm[MAX_NUM_STEPS] = {
+constexpr template_t mw_template_imm = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | reg0_write, // write the immediate into reg0
 	PC.inc, // pc cnt
-	reset, reset, reset, reset
+	reset,
 };
 
 // reg = [MAR]
-const StepCreator lw_template_mar[MAX_NUM_STEPS] = {
+constexpr template_t lw_template_mar = {
 	universal_step_0,
 	MEM.bout | MAR.aout | reg0_write | PC.inc, // read from addr MAR into register, pc cnt
-	reset, reset, reset, reset, reset, reset
+	reset,
 };
 
 // reg = [imm16]
-const StepCreator lw_template_imm[MAX_NUM_STEPS] = {
+constexpr template_t lw_template_imm = {
 	load_address_procedure[0],
 	load_address_procedure[1],
 	load_address_procedure[2],
 	load_address_procedure[3],
 	load_address_procedure[4],
 	MEM.bout | MAR.aout | reg0_write |  PC.inc, // read from addr MAR into register, pc cnt
-	reset, reset
+	reset,
 };
 
 
 // reg = [MAR]
-const StepCreator sw_template_mar[MAX_NUM_STEPS] = {
+constexpr template_t sw_template_mar = {
 	universal_step_0,
 	MEM.write | MAR.aout | reg0_bout | PC.inc, // read from addr MAR into register, pc cnt
-	reset, reset, reset, reset, reset, reset
+	reset,
 };
 
 
 // reg = [imm16]
-const StepCreator sw_template_imm[MAX_NUM_STEPS] = {
+constexpr template_t sw_template_imm = {
 	load_address_procedure[0],
 	load_address_procedure[1],
 	load_address_procedure[2],
 	load_address_procedure[3],
 	load_address_procedure[4],
 	MEM.write | MAR.aout | reg0_bout |  PC.inc, // read from addr MAR into register, pc cnt
-	reset, reset
+	reset,
 };
 
 // [SP--] = reg
-const StepCreator push_template_reg[MAX_NUM_STEPS] = {
+constexpr template_t push_template_reg = {
 	universal_step_0,
 	MEM.write | SP.aout | reg0_bout | PC.inc, // read from reg into mem at SP addr, pc cnt
 	SP.dec,
-	reset, reset, reset, reset, reset
+	reset,
 };
 
 // [SP--] = imm8, overrides A reg
-const StepCreator push_template_imm8[MAX_NUM_STEPS] = {
+constexpr template_t push_template_imm8 = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | A.write, // write into IR2
 	MEM.write | SP.aout | A.bout | PC.inc, // read from IR2 into [SP], pc cnt
 	SP.dec, // SP--
-	reset, reset, reset
+	reset,
 };
 
 // reg0 = [SP++]
-const StepCreator pop_template[MAX_NUM_STEPS] = {
+constexpr template_t pop_template = {
 	universal_step_0,
 	MEM.bout | SP.aout | reg0_write | PC.inc, // write from [SP] into reg0, pc cnt
 	SP.inc, // SP++
-	reset, reset, reset, reset, reset
+	reset,
 };
 
 // MAR = imm16
-const StepCreator mar_template_imm16[MAX_NUM_STEPS] = {
+constexpr template_t mar_template_imm16 = {
 	load_address_procedure[0],
 	load_address_procedure[1],
 	load_address_procedure[2],
 	load_address_procedure[3],
 	load_address_procedure[4],
 	PC.inc, // pc cnt
-	reset,reset
+	reset,
 };
 
 // JNZ reg -> PC = MAR if reg != 0 else NOP
-const StepCreator jnz_template_reg[MAX_NUM_STEPS] = {
+constexpr template_t jnz_template_reg = {
 	universal_step_0,
 	A.write | reg0_bout | PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
 	FLAG_WRITE_ALU, // write zero result to flag register
     MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
     MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
-	reset, reset, reset
+	reset,
 };
 
 // can save instruction if A is already loaded
-const StepCreator jnz_template_reg_A[MAX_NUM_STEPS] = {
+constexpr template_t jnz_template_reg_A = {
 	universal_step_0,
-	FLAG_WRITE_ALU | PC.inc, // write zero result to flag register, pc cnt in case jump doesn't happens
+	FLAG_WRITE_ALU, // update flag register
+	PC.inc, // pc cnt in case jump doesn't happens
     MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
     MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
-	reset, reset, reset, reset
+	reset,
 };
 
 // jump if equal flag is carry flag is true
-const StepCreator jmp_imm16_template[MAX_NUM_STEPS] = {
+constexpr template_t jmp_imm16_template = {
 	load_address_procedure[0],
 	load_address_procedure[1],
 	load_address_procedure[2],
@@ -645,185 +683,171 @@ const StepCreator jmp_imm16_template[MAX_NUM_STEPS] = {
 	PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
     MAR.lo.bout | PC.lo.write | output_flags_selector, // load from mar into pc if flag
     MAR.hi.bout | PC.hi.write | output_flags_selector, // load from mar into pc if flag
+	reset,
 };
 
 // jump if equal flag is true
-const StepCreator jmp_mar_template[MAX_NUM_STEPS] = {
+constexpr template_t jmp_mar_template = {
 	universal_step_0,
 	PC.inc, // NOTE: pc cnt in case jump doesn't happen
     MAR.lo.bout | PC.lo.write | output_flags_selector,
     MAR.hi.bout | PC.hi.write | output_flags_selector,
-	reset, reset, reset, reset
+	reset,
 };
 
 // TODO: all math variants could have faster variants if reg0/reg1 are equal to a/b
 // TODO: special case if reg0 = b, reg1 = a (impossible to swap registers without intermediate)
 
 // reg0 = reg0 OP reg1
-const StepCreator math_template_reg[MAX_NUM_STEPS] = {
+constexpr template_t math_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	reg0_bout | A.write | PC.inc, // load reg0 into a
 	reg1_bout | B.write, // load reg1 into b
 	F.bout | reg0_write, // do math op, save to reg0, writes to flag reg
-	reset, reset
+	reset,
 };
 
 // reg0 = reg0 OP reg1
-const StepCreator math_template_imm[MAX_NUM_STEPS] = {
+constexpr template_t math_template_imm = {
 	universal_step_0,
 	reg0_bout | A.write | PC.inc, // load reg0 into a first (in case reg0 = b), pc cnt
 	MEM.bout | PC.aout | B.write, // load imm into b
 	F.bout | reg0_write | PC.inc, // save F to reg0, writes to flag reg
-	reset, reset, reset, reset
+	reset,
 };
 
 // reg0 = ~reg0
-const StepCreator not_template_none[MAX_NUM_STEPS] = {
+constexpr template_t not_template_none = {
 	universal_step_0,
 	reg0_bout | A.write | PC.inc, // load reg0 into a, pc cnt
 	F.bout | reg0_write, // do math op, save to reg0, writes to flag reg
-	reset, reset, reset, reset
+	reset,
 };
 
 // reg0 = ~reg1
-const StepCreator not_template_reg[MAX_NUM_STEPS] = {
+constexpr template_t not_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	reg1_bout | A.write | PC.inc, // load reg0 into a
 	F.bout | reg0_write, // do math op, save to reg1, writes to flag reg
-	reset, reset, reset
+	reset,
 };
 
 
 // SP dec
-const StepCreator sp_dec_template[MAX_NUM_STEPS] = {
+constexpr template_t sp_dec_template = {
 	universal_step_0,
-	PC.inc, // pc cnt
-	SP.dec, // decrement sp
-	reset, reset, reset, reset, reset
+	PC.inc | SP.dec, // decrement sp
+	reset,
 };
 
 // SP inc
-const StepCreator sp_inc_template[MAX_NUM_STEPS] = {
+constexpr template_t sp_inc_template = {
 	universal_step_0,
-	PC.inc, // pc cnt
-	SP.inc, // increment sp
-	reset, reset, reset, reset, reset
+	PC.inc | SP.inc,
+	reset,
 };
 
 
 // MAR inc
-const StepCreator mar_inc_template[MAX_NUM_STEPS] = {
+constexpr template_t mar_inc_template = {
 	universal_step_0,
-	PC.inc, // pc cnt
-	MAR.inc, // increment mar
-	reset, reset, reset, reset, reset
+	PC.inc | MAR.inc, // increment mar
+	reset,
 };
 
 // MAR <- PC
-const StepCreator pc_to_mar_template[MAX_NUM_STEPS] = {
+constexpr template_t pc_to_mar_template = {
 	universal_step_0,
 	universal_step_1,
 	PC.lo.bout | MAR.lo.write,
 	PC.hi.bout | MAR.hi.write,
-	reset, reset, reset, reset
+	reset,
 };
 
 // MAR <- SP
-const StepCreator sp_to_mar_template[MAX_NUM_STEPS] = {
+constexpr template_t sp_to_mar_template = {
 	universal_step_0,
-	universal_step_1,
-	SP.lo.bout | MAR.lo.write,
+	SP.lo.bout | MAR.lo.write | PC.inc,
 	SP.hi.bout | MAR.hi.write,
-	reset, reset, reset, reset
+	reset,
 };
 
 // SP <- MAR
-const StepCreator mar_to_sp_template[MAX_NUM_STEPS] = {
+constexpr template_t mar_to_sp_template = {
 	universal_step_0,
-	universal_step_1,
-	MAR.lo.bout | SP.lo.write,
+	MAR.lo.bout | SP.lo.write | PC.inc,
 	MAR.hi.bout | SP.hi.write,
-	reset, reset, reset, reset
+	reset,
 };
 
 // SP <- imm16
-const StepCreator sp_template_imm16[MAX_NUM_STEPS] = {
+constexpr template_t sp_template_imm16 = {
     universal_step_0,
     PC.inc,
     MEM.bout | PC.aout | SP.lo.write, // write first part of address to sp lo
     PC.inc,                            // pc cnt
     MEM.bout | PC.aout | SP.hi.write, // write second part of address to sp hi
     PC.inc,
-	reset, reset,
+	reset,
 };
 
 
 // reg0 = reg0 OP reg1
-const StepCreator cmp_template_reg[MAX_NUM_STEPS] = {
+constexpr template_t cmp_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	reg0_bout | A.write | PC.inc, // load reg0 into a
 	reg1_bout | B.write, // load reg1 into b
-	F.bout, // do math op, writes to flag reg
-	reset, reset
+	FLAG_WRITE_ALU, // writes to flag reg
+	reset,
 };
 
 // reg0 = reg0 OP reg1
-const StepCreator cmp_template_imm[MAX_NUM_STEPS] = {
+constexpr template_t cmp_template_imm = {
 	universal_step_0,
 	reg0_bout | A.write | PC.inc, // load reg0 into a first (in case reg0 = b), pc cnt
 	MEM.bout | PC.aout | B.write, // load imm into b
-	F.bout | PC.inc, // writes to flag reg
-	reset, reset, reset, reset
+	FLAG_WRITE_ALU | PC.inc,
+	reset,
 };
 
 // reg0 = keyboard input
-const StepCreator keyboard_template[MAX_NUM_STEPS] = {
+constexpr template_t keyboard_template = {
 	universal_step_0,
 	KEYB.bout | reg0_write | PC.inc,
-	reset, reset, reset, reset, reset, reset
+	reset,
 };
 
 
 // reg0 = keyboard input
-const StepCreator update_flag_register_template[MAX_NUM_STEPS] = {
+constexpr template_t update_flag_register_template = {
 	universal_step_0,
-	F.bout | PC.inc, // write flag register, pc cnt
-	reset, reset, reset, reset, reset, reset
+	FLAG_WRITE_ALU | PC.inc,
+	reset,
 };
 
 
-const StepCreator halt_template[MAX_NUM_STEPS] = {
+constexpr template_t halt_template = {
 	universal_step_0,
 	halt,
-	reset, reset, reset, reset, reset, reset
 };
 
 
-const StepCreator nop_template[MAX_NUM_STEPS] = {
+constexpr template_t nop_template = {
 	universal_step_0,
-	PC.inc,
-	reset, reset, reset, reset, reset, reset
+	universal_step_1,
+	reset,
 };
 
 // clang-format on
-
 step_t *get_ucode_ptr(const split_addr_t *instruction) {
   return &ucode[instruction->instruction][instruction->step][instruction->imm]
                [instruction->reg0][instruction->reg1];
-}
-
-void create_instruction(const StepCreator step_template[MAX_NUM_STEPS],
-                        const split_addr_t *instruction) {
-  step_t *curr = get_ucode_ptr(instruction);
-  StepCreator template_step = step_template[instruction->step];
-  template_step.setRegisters(instruction);
-  *curr = template_step.getStep();
 }
 
 void setStep(const StepCreator &step, const split_addr_t *instruction) {
@@ -838,35 +862,34 @@ void setError(const split_addr_t *instruction) {
   *curr = error;
 }
 
-void create_instruction(const StepCreator step_template_reg[MAX_NUM_STEPS],
-                        const StepCreator step_template_imm[MAX_NUM_STEPS],
+void create_instruction(const template_t *step_template,
                         const split_addr_t *instruction) {
-  const StepCreator *step_template = nullptr;
+  step_t *curr = get_ucode_ptr(instruction);
+  StepCreator template_step = step_template->at(instruction->step);
+  template_step.setRegisters(instruction);
+  *curr = template_step.getStep();
+}
+
+void create_instruction(const template_t *step_template_reg,
+                        const template_t *step_template_imm,
+                        const split_addr_t *instruction) {
+  const template_t *step_template = nullptr;
 
   if (instruction->imm == 0) {
     step_template = step_template_reg;
   } else {
     step_template = step_template_imm;
   }
+
   create_instruction(step_template, instruction);
 }
 
-void create_instruction(
-    const std::array<StepCreator, MAX_NUM_STEPS> &step_template,
-    const split_addr_t *instruction) {
-  step_t *curr = get_ucode_ptr(instruction);
-  StepCreator template_step = step_template[instruction->step];
-  template_step.setRegisters(instruction);
-  *curr = template_step.getStep();
-}
-
 void mw_instruction(const split_addr_t *instruction) {
-  create_instruction(mw_template_reg, instruction);
-  // create_instruction(mw_template_reg, mw_template_imm, instruction);
+  create_instruction(&mw_template_reg, &mw_template_imm, instruction);
 }
 
 void lw_instruction(const split_addr_t *instruction) {
-  create_instruction(lw_template_mar, lw_template_imm, instruction);
+  create_instruction(&lw_template_mar, &lw_template_imm, instruction);
 }
 
 void sw_instruction(const split_addr_t *instruction) {
@@ -877,20 +900,19 @@ void sw_instruction(const split_addr_t *instruction) {
     setError(instruction);
     return;
   }
-  create_instruction(sw_template_mar, sw_template_imm, instruction);
+  create_instruction(&sw_template_mar, &sw_template_imm, instruction);
 }
 
 void push_special_instruction(const split_addr_t *instruction) {
-
   if (instruction->imm == 1) {
-    // imm push takes one instruction, the other possible 7 are used for special
-    // functions
+    // imm push takes one instruction, the other possible 7 are used for
+    // special functions
 
-    const StepCreator *templates[8] = {
-        push_template_imm8, // push imm8
-        sp_inc_template,    mar_inc_template,   sp_dec_template,
-        pc_to_mar_template, sp_to_mar_template, mar_template_imm16,
-        sp_template_imm16,
+    const template_t *templates[8] = {
+        &push_template_imm8, // push imm8
+        &sp_inc_template,    &mar_inc_template,   &sp_dec_template,
+        &pc_to_mar_template, &sp_to_mar_template, &mar_template_imm16,
+        &sp_template_imm16,
     };
 
     create_instruction(templates[instruction->reg0], instruction);
@@ -901,24 +923,24 @@ void push_special_instruction(const split_addr_t *instruction) {
       setError(instruction);
       return;
     }
-    create_instruction(push_template_reg, instruction);
+    create_instruction(&push_template_reg, instruction);
   }
 }
 
 void pop_instruction(const split_addr_t *instruction) {
   if (instruction->imm == 0) {
-    create_instruction(pop_template, instruction);
+    create_instruction(&pop_template, instruction);
   } else {
     // more special purpose instructions
-    const StepCreator *templates[8] = {
-        mar_to_sp_template, // push imm8
-        update_flag_register_template,
-        nop_template,
-        nop_template,
-        nop_template,
-        nop_template,
-        nop_template,
-        halt_template,
+    const template_t *templates[8] = {
+        &mar_to_sp_template, // push imm8
+        &update_flag_register_template,
+        &nop_template,
+        &nop_template,
+        &nop_template,
+        &nop_template,
+        &nop_template,
+        &halt_template,
     };
 
     create_instruction(templates[instruction->reg0], instruction);
@@ -926,16 +948,16 @@ void pop_instruction(const split_addr_t *instruction) {
 }
 
 void jmp_instruction(const split_addr_t *instruction) {
-  const StepCreator *step_template = nullptr;
+  const template_t *step_template = nullptr;
 
   // jump if reg != 0
   if (instruction->imm == 0) {
     // special case -> can save step if already A
     if (instruction->reg0 == 0) {
-      step_template = jnz_template_reg_A;
+      step_template = &jnz_template_reg_A;
     } else {
       // general case -> writing to A from reg0
-      step_template = jnz_template_reg;
+      step_template = &jnz_template_reg;
     }
     create_instruction(step_template, instruction);
   } else {
@@ -947,12 +969,12 @@ void jmp_instruction(const split_addr_t *instruction) {
 
     // TODO: unconditional jump could save one step by skipping pc cnt
     if (using_imm16_flag) {
-      step_template = jmp_imm16_template;
+      step_template = &jmp_imm16_template;
     } else {
-      step_template = jmp_mar_template;
+      step_template = &jmp_mar_template;
     }
 
-    StepCreator template_step = step_template[instruction->step];
+    StepCreator template_step = step_template->at(instruction->step);
     template_step.setRegisters(instruction);
     template_step.setFlag(flag_step_bits);
     setStep(template_step, instruction);
@@ -960,19 +982,19 @@ void jmp_instruction(const split_addr_t *instruction) {
 }
 
 void math_instruction(const split_addr_t *instruction) {
-  create_instruction(math_template_reg, math_template_imm, instruction);
+  create_instruction(&math_template_reg, &math_template_imm, instruction);
 }
 
 void not_instruction(const split_addr_t *instruction) {
-  create_instruction(not_template_none, not_template_reg, instruction);
+  create_instruction(&not_template_none, &not_template_reg, instruction);
 }
 
 void cmp_instruction(const split_addr_t *instruction) {
-  create_instruction(cmp_template_reg, cmp_template_imm, instruction);
+  create_instruction(&cmp_template_reg, &cmp_template_imm, instruction);
 }
 
 void keyb_other_instruction(const split_addr_t *instruction) {
-  create_instruction(keyboard_template, keyboard_template, instruction);
+  create_instruction(&keyboard_template, &keyboard_template, instruction);
 }
 
 using instruction_func = std::function<void(const split_addr_t *)>;
@@ -1047,8 +1069,10 @@ void populate_ucode() {
     // split_addr_t instruction;
     // addr_to_instruction(addr, &instruction);
     // std::cout << "step/reg0/imm/istr/reg1 " << int(instruction.step) << " "
-    //           << int(instruction.reg0) << " " << int(instruction.imm) << " "
-    //           << int(instruction.instruction) << " " << int(instruction.reg1)
+    //           << int(instruction.reg0) << " " << int(instruction.imm) << "
+    //           "
+    //           << int(instruction.instruction) << " " <<
+    //           int(instruction.reg1)
     //           << std::endl;
 
     process_address(addr);
