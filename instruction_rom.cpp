@@ -23,6 +23,8 @@ constexpr uint32_t ADDR_OUT_BITS = 2;
 constexpr uint32_t BUS_WRITE_BITS = 4;
 constexpr uint32_t OTHER_BITS = 3;
 constexpr uint32_t FLAG_SELECT_BITS = 3;
+
+
 /*
 clang-format off
 
@@ -40,6 +42,14 @@ registers:
 - MAR.LO	101: low bits of MAR addr register, could use as gp register
 - MAR.HI	110: high bits of MAR addr register, could use as gp register
 - FLAGS		111: holds 4 bits of flags after math ops (or whatever gets written to it)
+
+every yyy has 8 unused
+4 unused, 1 half unused
+
+single unused * 16 combinations
+
+
+every unused can be a full instruction (without yyy support)
 
 
 possible instruction additions
