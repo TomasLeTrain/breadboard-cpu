@@ -8,6 +8,7 @@ constexpr uint32_t IR2_NUM_BITS = 4;
 constexpr uint32_t STEP_NUM_BITS = 4;
 constexpr uint32_t ISTR_NUM_BITS = 4;
 constexpr uint32_t REG_NUM_BITS = 3;
+// one unused address line (for now)
 constexpr uint32_t ADDR_BITS = 16;
 
 // max included address
@@ -23,7 +24,6 @@ constexpr uint32_t ADDR_OUT_BITS = 2;
 constexpr uint32_t BUS_WRITE_BITS = 4;
 constexpr uint32_t OTHER_BITS = 3;
 constexpr uint32_t FLAG_SELECT_BITS = 3;
-
 
 /*
 clang-format off
@@ -284,15 +284,26 @@ typedef struct {
 // ucode[instruction][step][imm][reg0][reg1]
 step_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG];
 
+constexpr step_t bout(uint8_t bout_idx) { return step_t(bout_idx, 0, 0, 0, 0); }
+constexpr step_t aout(uint8_t aout_idx) { return step_t(0, aout_idx, 0, 0, 0); }
+constexpr step_t write(uint8_t write_idx) {
+  return step_t(0, 0, write_idx, 0, 0);
+}
+constexpr step_t other(uint8_t other_idx) {
+  return step_t(0, 0, 0, other_idx, 0);
+}
+constexpr step_t flag_select(uint8_t flag_select_idx) {
+  return step_t(0, 0, 0, 0, flag_select_idx);
+}
+
 // clang-format off
 constexpr step_t empty_instruction{};
 
-
-constexpr reg_t A   = {.write = step_t(0, 0, 1, 0), .bout = step_t(1, 0, 0, 0), .name = "A"};
-constexpr reg_t B   = {.write = step_t(0, 0, 2, 0), .bout = step_t(2, 0, 0, 0), .name = "B"};
-constexpr reg_t X   = {.write = step_t(0, 0, 3, 0), .bout = step_t(3, 0, 0, 0), .name = "X"};
-constexpr reg_t Y   = {.write = step_t(0, 0, 4, 0), .bout = step_t(4, 0, 0, 0), .name = "Y"};
-constexpr reg_t Z   = {.write = step_t(0, 0, 5, 0), .bout = step_t(5, 0, 0, 0), .name = "Z"};
+constexpr reg_t A   = {.write = write(0), .bout = step_t(1, 0, 0, 0), .name = "A"};
+constexpr reg_t B   = {.write = write(0), .bout = step_t(2, 0, 0, 0), .name = "B"};
+constexpr reg_t X   = {.write = write(0), .bout = step_t(3, 0, 0, 0), .name = "X"};
+constexpr reg_t Y   = {.write = write(0), .bout = step_t(4, 0, 0, 0), .name = "Y"};
+constexpr reg_t Z   = {.write = write(0), .bout = step_t(5, 0, 0, 0), .name = "Z"};
 // also requires putting some addr register on the abus
 constexpr reg_t MEM = {.write = step_t(0, 0, 8, 0),  .bout = step_t(8, 0, 0, 0),.name = "MEM"};
 constexpr reg_t IR  = {.write = step_t(0, 0, 13, 0), .bout = empty_instruction, .name = "IR"};
