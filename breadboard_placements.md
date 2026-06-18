@@ -9,9 +9,15 @@ min of 1 space between chips
 - 8:  step counter
 - 1:  space
 
+- 7:  nand ic
+- 1:  space
+
+- 7:  hex inverter
+- 1:  space
+
 - 20: clock 
 
-=    46 (17 left, 1 14/16 dip, 1 14 dip)
+=    62 (1 left)
 
 # left ucode rom decoders
 - 10: ucode rom latch
@@ -24,7 +30,13 @@ min of 1 space between chips
 - 1:  space
 - 8:  other decoder
 
-=    46 (17 left, 1 14/16 dip, 1 14 dip)
+- 1:  space
+- 7:  hex inverter
+- 1:  space
+
+- 10:  rom bar led
+
+=    66 (-3 left, if ic's are small profile could fit bar led)
 
 # right ucode rom section, xy regs
 - 16: flash rom
@@ -40,8 +52,6 @@ min of 1 space between chips
 
 =    60 (3 left)
 
-
-
 # right ucode decoders, z reg
 - 10: ucode rom latch
 - 1:  space
@@ -52,14 +62,14 @@ min of 1 space between chips
 - 8:  read decoder 0
 - 1:  space
 
+- 7:  xy selector or-gate ic
+- 1:  space
 - 10: z reg
+- 1:  space
 
-=   39 (24 left, 3 14-dip chips, 2 16/20-dip chips)
+- 10:  rom bar led
 
-## clock
-???
-
-# Right
+=   58 (5 left, could maybe fit another ic)
 
 ## a register - 1 right
 - 10: octal bus buffer
@@ -73,10 +83,9 @@ min of 1 space between chips
 - 7: and gate
 - 1:  space
 
-- 10: octal bus buffer - keyboard
-- 1:  space
-- 7: shift register - keyboard
-=    64 (-1 left, would need one ic with zero space)
+- 8: shift register - keyboard
+
+= 54 (9 left, space for ic or maybe a bar led)
 
 ## alu - 2 right
 - 8:  octal bus buffer
@@ -172,6 +181,6 @@ min of 1 space between chips
 - 1:  space
 - 10: octal bus buffer
 
-enough space for one gate ic
+enough space for one gate ic or bar led
 
 =    53 (10 left)
