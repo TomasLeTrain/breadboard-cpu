@@ -1,3 +1,5 @@
+#once
+
 #subruledef register
 {
     a => 0b000
@@ -34,8 +36,8 @@
     dec sp                  => 0b00111 @ 3`3
     lda mar, pc             => 0b00111 @ 4`3
     inc mar, sp             => 0b00111 @ 5`3
-    lda mar, {address: i16} => 0b00111 @ 6`3 @ address
-    lda sp,  {address: i16} => 0b00111 @ 7`3 @ address
+    lda mar, {address: u16} => 0b00111 @ 6`3 @ address
+    lda sp,  {address: u16} => 0b00111 @ 7`3 @ address
 
     pop {r0: register} => 0b01000 @ r0
     lda sp, mar        => 0b01001 @ 0`3
@@ -56,15 +58,15 @@
 	jeq => 0b01011 @ 0b010
 	jnz => 0b01011 @ 0b011
 	
-	jmp {address: i16} => 0b01011 @ 0b100 @ address
-	jc  {address: i16} => 0b01011 @ 0b101 @ address
-	jeq {address: i16} => 0b01011 @ 0b110 @ address
-	jnz {address: i16} => 0b01011 @ 0b111 @ address
+	jmp {address: u16} => 0b01011 @ 0b100 @ address
+	jc  {address: u16} => 0b01011 @ 0b101 @ address
+	jeq {address: u16} => 0b01011 @ 0b110 @ address
+	jnz {address: u16} => 0b01011 @ 0b111 @ address
 	
 	move {r0: register}, keyb => 0b0110 @ 0b0 @ register
 
     load {r0: register}                 => 0b0111 @ 0b0 @ r0
-    load {r0: register}, {address: i16} => 0b0111 @ 0b1 @ r0 @ address
+    load {r0: register}, {address: u16} => 0b0111 @ 0b1 @ r0 @ address
 
     sbc {r0: register}, {r1: register} => 0b1000 @ 0b0 @ r0 @ 0b00000 @ r1
     sbc {r0: register}, {imm: i8}      => 0b1000 @ 0b1 @ r0 @ imm
@@ -90,28 +92,3 @@
     and {r0: register}, {r1: register} => 0b1111 @ 0b0 @ r0 @ 0b00000 @ r1
     and {r0: register}, {imm: i8}      => 0b1111 @ 0b1 @ r0 @ imm
 }
-
-; starts at address 0. sets up the system for running programs
-start:
-	
-	
-
-multiply3x4:
-    move x, 0
-    move y, 4
-	move z, 3
-
-	; load addr into mar so jnz can be called with z argument
-	lda mar, .loop
-    
-    .loop:
-        add x, y
-		sub z, 1
-        jnz z
-	
-	; move x into a to see final result
-	move a, x
-	
-	halt
-
-

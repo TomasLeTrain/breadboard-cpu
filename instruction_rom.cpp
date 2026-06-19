@@ -1178,12 +1178,20 @@ void interactive_address_lookup() {
   }
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   populate_ucode();
   write_ucode_roms_logisim();
-
   std::cout << "wrote rom images" << std::endl;
 
-  interactive_address_lookup();
-  // write_ucode_logism();
+  bool interactive_enabled = false;
+
+  for (int i = 1; i < argc; i++) {
+    if (std::string(argv[i]) == "--interactive") {
+      interactive_enabled = true;
+    }
+  }
+
+  if (interactive_enabled) {
+    interactive_address_lookup();
+  }
 }
