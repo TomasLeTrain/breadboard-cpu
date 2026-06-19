@@ -12,7 +12,9 @@
 
 #ruledef
 {
+    ; r0 = r1
     move {r0: register}, {r1: register} => 0b0000 @ 0b0 @ r0 @ 0b00000 @ r1
+	; r0 = imm8
     move {r0: register}, {imm: i8} => 0b0000 @ 0b1 @ r0 @ imm
 
 	; a = r0,b = r1, flg udpate
@@ -94,11 +96,16 @@ multiply3x4:
     move x, 0
     move y, 4
 	move z, 3
+
+	; load addr into mar so jnz can happen so it can be called with z argument
+	lda mar, .loop
     
     .loop:
         add x, y
 		sub z, 1
-        jnz .loop
+        jnz z
+	
+	; move x into a to see final result
+	move a, x
 	
 	halt
-

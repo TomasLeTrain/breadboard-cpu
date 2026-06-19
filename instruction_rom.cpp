@@ -576,9 +576,9 @@ constexpr step_t universal_step_1 = PC.inc;
 constexpr step_t load_address_procedure[5] = {
     universal_step_0,
     PC.inc,
-    MEM.bout | PC.aout | MAR.lo.write, // write first part of address to mar lo
+    MEM.bout | PC.aout | MAR.hi.write, // first byte has msb
     PC.inc,                            // pc cnt
-    MEM.bout | PC.aout | MAR.hi.write, // write second part of address to mar hi
+    MEM.bout | PC.aout | MAR.lo.write, // second byte has lsb
 };
 
 using template_t = std::array<StepCreator, MAX_NUM_STEPS>;
@@ -685,8 +685,8 @@ constexpr template_t jnz_template_reg = {
 	universal_step_0,
 	A.write | reg0_bout | PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
 	FLAG_WRITE_ALU, // write zero result to flag register
-    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
     MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
+    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
 	reset,
 };
 
@@ -694,8 +694,8 @@ constexpr template_t jnz_template_reg = {
 constexpr template_t jnz_template_reg_A = {
 	universal_step_0,
 	FLAG_WRITE_ALU | PC.inc, // update flag register
-    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
     MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
+    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
 	reset,
 };
 
@@ -707,8 +707,8 @@ constexpr template_t jmp_imm16_template = {
 	load_address_procedure[3],
 	load_address_procedure[4],
 	PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
-    MAR.lo.bout | PC.lo.write | output_flags_selector, // load from mar into pc if flag
     MAR.hi.bout | PC.hi.write | output_flags_selector, // load from mar into pc if flag
+    MAR.lo.bout | PC.lo.write | output_flags_selector, // load from mar into pc if flag
 	reset,
 };
 
@@ -716,8 +716,8 @@ constexpr template_t jmp_imm16_template = {
 constexpr template_t jmp_mar_template = {
 	universal_step_0,
 	PC.inc, // NOTE: pc cnt in case jump doesn't happen
-    MAR.lo.bout | PC.lo.write | output_flags_selector,
     MAR.hi.bout | PC.hi.write | output_flags_selector,
+    MAR.lo.bout | PC.lo.write | output_flags_selector,
 	reset,
 };
 
@@ -789,24 +789,24 @@ constexpr template_t mar_inc_template = {
 constexpr template_t pc_to_mar_template = {
 	universal_step_0,
 	universal_step_1,
-	PC.lo.bout | MAR.lo.write,
 	PC.hi.bout | MAR.hi.write,
+	PC.lo.bout | MAR.lo.write,
 	reset,
 };
 
 // MAR <- SP
 constexpr template_t sp_to_mar_template = {
 	universal_step_0,
-	SP.lo.bout | MAR.lo.write | PC.inc,
-	SP.hi.bout | MAR.hi.write,
+	SP.hi.bout | MAR.hi.write | PC.inc,
+	SP.lo.bout | MAR.lo.write,
 	reset,
 };
 
 // SP <- MAR
 constexpr template_t mar_to_sp_template = {
 	universal_step_0,
-	MAR.lo.bout | SP.lo.write | PC.inc,
-	MAR.hi.bout | SP.hi.write,
+	MAR.hi.bout | SP.hi.write | PC.inc,
+	MAR.lo.bout | SP.lo.write,
 	reset,
 };
 
@@ -814,9 +814,9 @@ constexpr template_t mar_to_sp_template = {
 constexpr template_t sp_template_imm16 = {
     universal_step_0,
     PC.inc,
-    MEM.bout | PC.aout | SP.lo.write, // write first part of address to sp lo
+    MEM.bout | PC.aout | SP.hi.write, // write first part of address to sp lo
     PC.inc,                            // pc cnt
-    MEM.bout | PC.aout | SP.hi.write, // write second part of address to sp hi
+    MEM.bout | PC.aout | SP.lo.write, // write second part of address to sp hi
     PC.inc,
 	reset,
 };
