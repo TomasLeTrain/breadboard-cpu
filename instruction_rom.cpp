@@ -239,11 +239,12 @@ public:
 
   constexpr uint16_t getRomData() const {
     uint32_t result = 0;
-    result |= bus_out;
-    result |= static_cast<uint32_t>(addr_out) << 4;
-    result |= static_cast<uint32_t>(bus_write) << 6;
-    result |= static_cast<uint32_t>(other) << 10;
-    result |= static_cast<uint32_t>(flag_select) << 13;
+    result |= bus_out; // 4 bits wide
+    result |= static_cast<uint32_t>(bus_write) << 4; // 4 bits wide
+    result |= static_cast<uint32_t>(addr_out) << 8; // 2 bits wide
+    result |= static_cast<uint32_t>(other) << 10; // 2 bits wide
+    result |= static_cast<uint32_t>(flag_select) << 12; // 3 bits wide
+    result |= static_cast<uint32_t>(pc_cnt) << 15; // 1 bit wide
     return static_cast<uint16_t>(result);
   }
 
@@ -565,7 +566,7 @@ constexpr template_t mw_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
-	 	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
+	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
 	reset,
 };
 
@@ -666,8 +667,7 @@ constexpr template_t jnz_template_reg = {
 // can save instruction if A is already loaded
 constexpr template_t jnz_template_reg_A = {
 	universal_step_0,
-	FLAG_WRITE_ALU, // update flag register
-	PC.inc, // pc cnt in case jump doesn't happens
+	FLAG_WRITE_ALU | PC.inc, // update flag register
     MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
     MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
 	reset,
@@ -705,7 +705,7 @@ constexpr template_t math_template_reg = {
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	reg0_bout | A.write | PC.inc, // load reg0 into a
 	reg1_bout | B.write, // load reg1 into b
-	F.bout | reg0_write, // do math op, save to reg0, writes to flag reg
+	F.bout | FLAG_WRITE_ALU | reg0_write, // do math op, save to reg0, writes to flag reg
 	reset,
 };
 
@@ -714,7 +714,7 @@ constexpr template_t math_template_imm = {
 	universal_step_0,
 	reg0_bout | A.write | PC.inc, // load reg0 into a first (in case reg0 = b), pc cnt
 	MEM.bout | PC.aout | B.write, // load imm into b
-	F.bout | reg0_write | PC.inc, // save F to reg0, writes to flag reg
+	F.bout | FLAG_WRITE_ALU | reg0_write | PC.inc, // save F to reg0, writes to flag reg
 	reset,
 };
 
@@ -722,7 +722,7 @@ constexpr template_t math_template_imm = {
 constexpr template_t not_template_none = {
 	universal_step_0,
 	reg0_bout | A.write | PC.inc, // load reg0 into a, pc cnt
-	F.bout | reg0_write, // do math op, save to reg0, writes to flag reg
+	F.bout | FLAG_WRITE_ALU | reg0_write, // do math op, save to reg0, writes to flag reg
 	reset,
 };
 
@@ -732,7 +732,7 @@ constexpr template_t not_template_reg = {
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	reg1_bout | A.write | PC.inc, // load reg0 into a
-	F.bout | reg0_write, // do math op, save to reg1, writes to flag reg
+	F.bout | FLAG_WRITE_ALU  | reg0_write, // do math op, save to reg1, writes to flag reg
 	reset,
 };
 
@@ -1085,20 +1085,51 @@ step_t getInstruction(int addr) {
   return *get_ucode_ptr(&instruction);
 }
 
-void write_ucode_logism() {
-  printf("v3.0 hex words plain\n");
+void write_ucode_roms_logisim() {
+  // Open a file in append mode
+  FILE *rom0 = fopen("rom0.img", "wb");
+  FILE *rom1 = fopen("rom1.img", "wb");
+
+  fprintf(rom0, "v3.0 hex words plain\n");
+  fprintf(rom1, "v3.0 hex words plain\n");
+
   for (int addr = 0; addr <= MAX_ADDR_INC; addr++) {
-    uint16_t curr = getInstruction(addr).getRomData();
-    printf("%04X", curr);
+    step_t curr = getInstruction(addr);
+    uint16_t data = curr.getRomData();
+    uint16_t rom0_data = data & 0xff;
+    uint16_t rom1_data = (data & 0xff00) >> 8;
+
+    fprintf(rom0, "%02X", rom0_data);
+    fprintf(rom1, "%02X", rom1_data);
+
     if (addr % 16 == 15) {
-      printf("\n");
+      fprintf(rom0, "\n");
+      fprintf(rom1, "\n");
     } else {
-      printf(" ");
+      fprintf(rom0, " ");
+      fprintf(rom1, " ");
     }
   }
+  // Close the file
+  fclose(rom0);
+  fclose(rom1);
 }
+
+// void write_ucode_logism() {
+//   printf("v3.0 hex words plain\n");
+//   for (int addr = 0; addr <= MAX_ADDR_INC; addr++) {
+//     uint16_t curr = getInstruction(addr).getRomData();
+//     printf("%04X", curr);
+//     if (addr % 16 == 15) {
+//       printf("\n");
+//     } else {
+//       printf(" ");
+//     }
+//   }
+// }
 
 int main() {
   populate_ucode();
+  write_ucode_roms_logisim();
   // write_ucode_logism();
 }
