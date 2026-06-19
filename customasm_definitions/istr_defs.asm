@@ -91,13 +91,17 @@
     and {r0: register}, {imm: i8}      => 0b1111 @ 0b1 @ r0 @ imm
 }
 
+; starts at address 0. sets up the system for running programs
+start:
+	
+	
 
 multiply3x4:
     move x, 0
     move y, 4
 	move z, 3
 
-	; load addr into mar so jnz can happen so it can be called with z argument
+	; load addr into mar so jnz can be called with z argument
 	lda mar, .loop
     
     .loop:
@@ -109,3 +113,5 @@ multiply3x4:
 	move a, x
 	
 	halt
+
+
