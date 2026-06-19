@@ -84,7 +84,7 @@ SP <- imm16						| [0011 1 111][imm16][imm16]	| LDA SP, imm16
 
 0100:
 pop:		xxx <- mem[SP],SP++	| [0100 0 xxx]					| POP xxx
-LDA SP:		SP <- MAR			| [0101 1 011]					| LDA SP, MAR (one instruction)
+LDA SP:		SP <- MAR			| [0101 1 000]					| LDA SP, MAR (one instruction)
 update flag reg:				| [0100 1 001]					| SET FLAG
 nop:							| [0100 1 010]					| NOP
 unused:							| [0100 1 011]					|
@@ -104,7 +104,7 @@ JNZ:		PC <- MAR: ZRO FLG	| [0101 1 011]					| JNZ
 JMP:		PC <- imm16			| [0101 1 100][imm16][imm16]	| JMP imm16 ; LDA PC, imm16
 JC:			PC <- imm16:CRRY FLG| [0101 1 101][imm16][imm16]	| JC  imm16
 JEQ:		PC <- imm16: EQ FLG	| [0101 1 110][imm16][imm16]	| JEQ imm16
-JNZ:		PC <- imm16: ZRO FLG| [0101 1 111]					| JNZ imm16
+JNZ:		PC <- imm16: ZRO FLG| [0101 1 111][imm16][imm16]    | JNZ imm16
 
 0110:
 keyb input:	xxx <- KEYB			| [0110 0 xxx]					| KEYB xxx
@@ -115,24 +115,24 @@ load word: 	xxx <- mem[mar]		| [0001 0 xxx]					| LOAD xxx
 load word: 	xxx <- mem[imm16]	| [0001 1 xxx] [imm16][imm16]	| LOAD xxx, imm16
 
 1000:
+sub flg crry:	xxx <- xxx - yyy	| [1000 0 xxx][yyy.....]	| SBC xxx, yyy 
+sub flg crry:	xxx <- xxx - imm8	| [1000 1 xxx][imm8]		| SBC xxx, imm8
+
+1001: 
 sub carry on:	xxx <- xxx + yyy	| [1001 0 xxx][yyy.....]	| SUB xxx, yyy 
 sub carry on:	xxx <- xxx + imm8	| [1001 1 xxx][imm8]		| SUB xxx, imm8
 
-1001: 
-sub flg crry:	xxx <- xxx - yyy	| [1011 0 xxx][yyy.....]	| SBC xxx, yyy 
-sub flg crry:	xxx <- xxx - imm8	| [1011 1 xxx][imm8]		| SBC xxx, imm8
-
 1010:
-add no carry:	xxx <- xxx + yyy	| [1000 0 xxx][yyy.....]	| ADD xxx, yyy 
-add no carry:	xxx <- xxx + imm8	| [1000 1 xxx][imm8]		| ADD xxx, imm8
-
-1011:
 add flg crry:	xxx <- xxx + yyy	| [1010 0 xxx][yyy.....]	| ADC xxx, yyy 
 add flg crry:	xxx <- xxx + imm8	| [1010 1 xxx][imm8]		| ADC xxx, imm8
 
+1011:
+add no carry:	xxx <- xxx + yyy	| [1000 0 xxx][yyy.....]	| ADD xxx, yyy 
+add no carry:	xxx <- xxx + imm8	| [1000 1 xxx][imm8]		| ADD xxx, imm8
+
 1100:
-not:			xxx <- ~xxx			| [1100 0 xxx]				| NOT xxx
-not:			xxx <- ~yyy			| [1100 1 xxx]				| NOT xxx, yyy
+not:			xxx <- ~yyy			| [1100 0 xxx]				| NOT xxx, yyy
+not:			xxx <- ~xxx			| [1100 1 xxx]				| NOT xxx
 
 1101:
 xor:			xxx <- xxx ^ yyy	| [1101 0 xxx][yyy.....]	| XOR xxx, yyy 
@@ -372,7 +372,7 @@ constexpr shift_reg_t Y = {
 	other(3) | flag_select(3)  // shift right
 };
 
-constexpr reg_t Z   = {.write = write(7), .bout = bout(0b1000 | 7), .name = "Z"};
+constexpr reg_t Z   = {.write = write(7), .bout = bout((0b1000 | 7)), .name = "Z"};
 
 // also requires putting some addr register on the abus
 constexpr reg_t MEM = {.write = write(6), .bout = bout(1),.name = "MEM"};
@@ -1013,7 +1013,7 @@ void math_instruction(const split_addr_t *instruction) {
 }
 
 void not_instruction(const split_addr_t *instruction) {
-  create_instruction(&not_template_none, &not_template_reg, instruction);
+  create_instruction(&not_template_reg, &not_template_none, instruction);
 }
 
 void cmp_instruction(const split_addr_t *instruction) {
@@ -1060,7 +1060,7 @@ void rom_addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
   instruction_ptr->step           = STEP;
   instruction_ptr->reg0           = (IR & 0b00000111);
   instruction_ptr->imm            = (IR & 0b00001000) >> 3;
-  instruction_ptr->instruction    = (IR & 0b11110000) >> 5;
+  instruction_ptr->instruction    = (IR & 0b11110000) >> 4;
   instruction_ptr->reg1           = (IR2 & 0b0111);
   instruction_ptr->ir2_extra_bits = (IR2 & 0b1000) >> 3;
   // clang-format on
@@ -1106,8 +1106,8 @@ step_t getInstruction(int addr) {
 
 void write_ucode_roms_logisim() {
   // Open a file in append mode
-  FILE *rom0 = fopen("rom0.img", "wb");
-  FILE *rom1 = fopen("rom1.img", "wb");
+  FILE *rom0 = fopen("rom_images/rom0.img", "wb");
+  FILE *rom1 = fopen("rom_images/rom1.img", "wb");
 
   fprintf(rom0, "v3.0 hex words plain\n");
   fprintf(rom1, "v3.0 hex words plain\n");
