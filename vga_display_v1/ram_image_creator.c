@@ -44,7 +44,6 @@ void writeCharacter(uint8_t x, uint8_t y, uint8_t character, uint8_t bg_color,
 
   uint8_t color_value = (fg_color << 4) | bg_color;
   uint8_t char_value = char_data[character][y & 0b111];
-  // uint8_t char_value = char_data[character][0];
 
   uint16_t addr = x | (y << 6);
 
@@ -53,13 +52,13 @@ void writeCharacter(uint8_t x, uint8_t y, uint8_t character, uint8_t bg_color,
 }
 
 void createTestBinary() {
-  uint8_t bg_color = 0, fg_color = 0xf;
-  uint8_t character = 254;
+  // uint8_t bg_color = 0, fg_color = 0xf;
+  // uint8_t character = 254;
 
   for (uint8_t x = 0; x < max_x; x++) {
     for (uint8_t y = 0; y < max_y; y++) {
-      // writeCharacter(x, y, x + ((y & (~0b111)) >> 3), bg_color, fg_color);
-      writeCharacter(x, y, character, bg_color, fg_color);
+      writeCharacter(x, y, x + 40 * ((y & (~0b111)) >> 3), y & 0xf, x & 0xf);
+      // writeCharacter(x, y, character, bg_color, fg_color);
     }
   }
 }
