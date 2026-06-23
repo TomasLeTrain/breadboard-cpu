@@ -171,7 +171,7 @@ uint8_t getInstruction(int addr) {
   return result;
 }
 
-void write_ucode_logism() {
+void write_image_logisim() {
   printf("v3.0 hex words plain\n");
   for (int addr = 0; addr <= MAX_ADDR; addr++) {
     printf("%02X", getInstruction(addr));
@@ -198,6 +198,6 @@ void write_binary_image() {
 
 int main() {
   readImageBin();
-  write_ucode_logism();
+  write_image_logisim();
   write_binary_image();
 }
