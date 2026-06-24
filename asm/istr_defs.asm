@@ -54,12 +54,12 @@
     jnz {r0: register} => 0b0101 @ 0b0 @ r0
 	
 	jmp => 0b01011 @ 0b000
-	jc  => 0b01011 @ 0b001
+	jnc => 0b01011 @ 0b001
 	jeq => 0b01011 @ 0b010
 	jnz => 0b01011 @ 0b011
 	
 	jmp {address: u16} => 0b01011 @ 0b100 @ address
-	jc  {address: u16} => 0b01011 @ 0b101 @ address
+	jnc {address: u16} => 0b01011 @ 0b101 @ address
 	jeq {address: u16} => 0b01011 @ 0b110 @ address
 	jnz {address: u16} => 0b01011 @ 0b111 @ address
 	

@@ -870,7 +870,7 @@ constexpr template_t vram_write_template = {
 	universal_step_0,
 	VRAM.write | MAR.aout,
 	VRAM.write | MAR.aout, // NOTE: must add register bout manually
-	PC.inc | reset,
+	PC.inc | reset, /// TODO: can add MAR.cnt
 };
 
 // clang-format on
