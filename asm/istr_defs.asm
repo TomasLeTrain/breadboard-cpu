@@ -35,7 +35,7 @@
     inc mar                 => 0b00111 @ 2`3
     dec sp                  => 0b00111 @ 3`3
     lda mar, pc             => 0b00111 @ 4`3
-    inc mar, sp             => 0b00111 @ 5`3
+    lda mar, sp             => 0b00111 @ 5`3
     lda mar, {address: u16} => 0b00111 @ 6`3 @ address
     lda sp,  {address: u16} => 0b00111 @ 7`3 @ address
 

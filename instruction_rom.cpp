@@ -393,7 +393,7 @@ constexpr addr_register_t MAR = {
     .aout = aout(2),
     .lo = {.write = write(5), .bout = aout(2) | bout(2), .name = "MAR_lo"},
     .hi = {.write = write(4), .bout = aout(2) | bout(3), .name = "MAR_hi"},
-    .inc = other(2),
+    .inc = bout(4),
     .dec = empty_instruction,
 };
 
@@ -424,8 +424,7 @@ constexpr step_t PC_FLAG_X_RIGHT = flag_select(5);
 // writes values from alu into flag
 constexpr step_t FLAG_WRITE_ALU = other(1);
 
-// TODO: determine?
-constexpr step_t reset = bout(4);
+constexpr step_t reset = other(2);
 constexpr step_t halt = bout(5);
 constexpr step_t error = halt;
 
@@ -597,8 +596,7 @@ constexpr template_t mw_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
-	reg1_bout | reg0_write | PC.inc, // read from reg1 to reg0, pc cnt
-	reset,
+	reg1_bout | reg0_write | PC.inc | reset, // read from reg1 to reg0, pc cnt
 };
 
 // reg = imm8
@@ -606,15 +604,13 @@ constexpr template_t mw_template_imm = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | reg0_write, // write the immediate into reg0
-	PC.inc, // pc cnt
-	reset,
+	reset | PC.inc, // pc cnt
 };
 
 // reg = [MAR]
 constexpr template_t lw_template_mar = {
 	universal_step_0,
-	MEM.bout | MAR.aout | reg0_write | PC.inc, // read from addr MAR into register, pc cnt
-	reset,
+	MEM.bout | MAR.aout | reg0_write | PC.inc | reset, // read from addr MAR into register, pc cnt
 };
 
 // reg = [imm16]
@@ -624,16 +620,14 @@ constexpr template_t lw_template_imm = {
 	load_address_procedure[2],
 	load_address_procedure[3],
 	load_address_procedure[4],
-	MEM.bout | MAR.aout | reg0_write |  PC.inc, // read from addr MAR into register, pc cnt
-	reset,
+	MEM.bout | MAR.aout | reg0_write | PC.inc | reset, // read from addr MAR into register, pc cnt
 };
 
 
 // reg = [MAR]
 constexpr template_t sw_template_mar = {
 	universal_step_0,
-	MEM.write | MAR.aout | reg0_bout | PC.inc, // read from addr MAR into register, pc cnt
-	reset,
+	MEM.write | MAR.aout | reg0_bout | PC.inc | reset, // read from addr MAR into register, pc cnt
 };
 
 
@@ -644,16 +638,14 @@ constexpr template_t sw_template_imm = {
 	load_address_procedure[2],
 	load_address_procedure[3],
 	load_address_procedure[4],
-	MEM.write | MAR.aout | reg0_bout |  PC.inc, // read from addr MAR into register, pc cnt
-	reset,
+	MEM.write | MAR.aout | reg0_bout | PC.inc | reset, // read from addr MAR into register, pc cnt
 };
 
 // [SP--] = reg
 constexpr template_t push_template_reg = {
 	universal_step_0,
 	MEM.write | SP.aout | reg0_bout | PC.inc, // read from reg into mem at SP addr, pc cnt
-	SP.dec,
-	reset,
+	reset | SP.dec,
 };
 
 // [SP--] = imm8, overrides A reg
@@ -662,16 +654,14 @@ constexpr template_t push_template_imm8 = {
 	universal_step_1,
 	MEM.bout | PC.aout | A.write, // write into IR2
 	MEM.write | SP.aout | A.bout | PC.inc, // read from IR2 into [SP], pc cnt
-	SP.dec, // SP--
-	reset,
+	reset | SP.dec, // SP--
 };
 
 // reg0 = [SP++]
 constexpr template_t pop_template = {
 	universal_step_0,
 	MEM.bout | SP.aout | reg0_write | PC.inc, // write from [SP] into reg0, pc cnt
-	SP.inc, // SP++
-	reset,
+	reset | SP.inc, // SP++
 };
 
 // MAR = imm16
@@ -681,8 +671,7 @@ constexpr template_t mar_template_imm16 = {
 	load_address_procedure[2],
 	load_address_procedure[3],
 	load_address_procedure[4],
-	PC.inc, // pc cnt
-	reset,
+	reset | PC.inc, // pc cnt
 };
 
 // JNZ reg -> PC = MAR if reg != 0 else NOP
@@ -691,8 +680,7 @@ constexpr template_t jnz_template_reg = {
 	A.write | reg0_bout | PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
 	FLAG_WRITE_ALU, // write zero result to flag register
     MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
-    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
-	reset,
+    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO | reset,
 };
 
 // can save instruction if A is already loaded
@@ -700,8 +688,7 @@ constexpr template_t jnz_template_reg_A = {
 	universal_step_0,
 	FLAG_WRITE_ALU | PC.inc, // update flag register
     MAR.hi.bout | PC.hi.write | PC_FLAG_ZERO,
-    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO,
-	reset,
+    MAR.lo.bout | PC.lo.write | PC_FLAG_ZERO | reset,
 };
 
 // jump if equal flag is carry flag is true
@@ -713,8 +700,7 @@ constexpr template_t jmp_imm16_template = {
 	load_address_procedure[4],
 	PC.inc, // NOTE: pc cnt happens in case jump doesn't happens
     MAR.hi.bout | PC.hi.write | output_flags_selector, // load from mar into pc if flag
-    MAR.lo.bout | PC.lo.write | output_flags_selector, // load from mar into pc if flag
-	reset,
+    MAR.lo.bout | PC.lo.write | output_flags_selector | reset, // load from mar into pc if flag
 };
 
 // jump if equal flag is true
@@ -722,8 +708,7 @@ constexpr template_t jmp_mar_template = {
 	universal_step_0,
 	PC.inc, // NOTE: pc cnt in case jump doesn't happen
     MAR.hi.bout | PC.hi.write | output_flags_selector,
-    MAR.lo.bout | PC.lo.write | output_flags_selector,
-	reset,
+    MAR.lo.bout | PC.lo.write | output_flags_selector | reset,
 };
 
 // TODO: all math variants could have faster variants if reg0/reg1 are equal to a/b
@@ -771,23 +756,20 @@ constexpr template_t not_template_reg = {
 // SP dec
 constexpr template_t sp_dec_template = {
 	universal_step_0,
-	PC.inc | SP.dec, // decrement sp
-	reset,
+	PC.inc | SP.dec | reset, // decrement sp
 };
 
 // SP inc
 constexpr template_t sp_inc_template = {
 	universal_step_0,
-	PC.inc | SP.inc,
-	reset,
+	PC.inc | SP.inc | reset,
 };
 
 
 // MAR inc
 constexpr template_t mar_inc_template = {
 	universal_step_0,
-	PC.inc | MAR.inc, // increment mar
-	reset,
+	PC.inc | MAR.inc | reset, // increment mar
 };
 
 // MAR <- PC
@@ -795,24 +777,21 @@ constexpr template_t pc_to_mar_template = {
 	universal_step_0,
 	universal_step_1,
 	PC.hi.bout | MAR.hi.write,
-	PC.lo.bout | MAR.lo.write,
-	reset,
+	PC.lo.bout | MAR.lo.write | reset,
 };
 
 // MAR <- SP
 constexpr template_t sp_to_mar_template = {
 	universal_step_0,
 	SP.hi.bout | MAR.hi.write | PC.inc,
-	SP.lo.bout | MAR.lo.write,
-	reset,
+	SP.lo.bout | MAR.lo.write | reset,
 };
 
 // SP <- MAR
 constexpr template_t mar_to_sp_template = {
 	universal_step_0,
 	MAR.hi.bout | SP.hi.write | PC.inc,
-	MAR.lo.bout | SP.lo.write,
-	reset,
+	MAR.lo.bout | SP.lo.write | reset,
 };
 
 // SP <- imm16
@@ -822,8 +801,7 @@ constexpr template_t sp_template_imm16 = {
     MEM.bout | PC.aout | SP.hi.write, // write first part of address to sp lo
     PC.inc,                            // pc cnt
     MEM.bout | PC.aout | SP.lo.write, // write second part of address to sp hi
-    PC.inc,
-	reset,
+	reset | PC.inc,
 };
 
 
@@ -850,8 +828,7 @@ constexpr template_t cmp_template_imm = {
 // reg0 = keyboard input
 constexpr template_t keyboard_template = {
 	universal_step_0,
-	KEYB.bout | reg0_write | PC.inc,
-	reset,
+	KEYB.bout | reg0_write | PC.inc | reset,
 };
 
 
@@ -868,38 +845,32 @@ constexpr template_t halt_template = {
 	halt,
 };
 
-
+// 2 instruction nop
 constexpr template_t nop_template = {
 	universal_step_0,
-	universal_step_1,
-	reset,
+	PC.inc | reset,
 };
 
 constexpr template_t vram_read_template_no_delay = {
 	universal_step_0,
-	VRAM.bout | MAR.aout | PC.inc, // NOTE: must add register write manually
-	reset,
+	VRAM.bout | MAR.aout, // NOTE: must add register write manually
+	nop,
+	PC.inc | reset,
 };
 
 constexpr template_t vram_read_template_delay = {
 	universal_step_0,
 	nop,
-	VRAM.bout | MAR.aout | PC.inc, // NOTE: must add register write manually
-	reset,
+	VRAM.bout | MAR.aout, // NOTE: must add register write manually
+	PC.inc | reset,
 };
 
 
-constexpr template_t vram_write_template_no_delay = {
+constexpr template_t vram_write_template = {
 	universal_step_0,
-	VRAM.write | MAR.aout | PC.inc, // NOTE: must add register bout manually
-	reset,
-};
-
-constexpr template_t vram_write_template_delay = {
-	universal_step_0,
-	nop,
-	VRAM.write | MAR.aout | PC.inc, // NOTE: must add register bout manually
-	reset,
+	VRAM.write | MAR.aout,
+	VRAM.write | MAR.aout, // NOTE: must add register bout manually
+	PC.inc | reset,
 };
 
 // clang-format on
@@ -1014,25 +985,12 @@ void vram_read_instruction(const split_addr_t *instruction,
 
 void vram_write_instruction(const split_addr_t *instruction,
                             const reg_t *output_register) {
-  const template_t *curr_template = nullptr;
-  bool delayed;
-  if (instruction->step == 1 && instruction->not_vram_active == 0) {
-    // vram active right now, use no delay version
-    curr_template = &vram_write_template_no_delay;
-    delayed = false;
-  } else {
-    // have to wait one cycle, nop version instead
-    curr_template = &vram_write_template_delay;
-    delayed = true;
-  }
-
-  // create_instruction(curr_template, instruction);
+  const template_t *curr_template = &vram_write_template;
 
   step_t *curr = get_ucode_ptr(instruction);
   StepCreator template_step = curr_template->at(instruction->step);
-  if (instruction->step == 1 && !delayed)
-    template_step |= output_register->bout;
-  if (instruction->step == 2 && delayed)
+
+  if (instruction->step == 1 || instruction->step == 2)
     template_step |= output_register->bout;
 
   *curr = template_step.getStep();

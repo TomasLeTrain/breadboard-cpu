@@ -13,12 +13,13 @@ write_to_vram:
     ; cool zig zag pattern
 	move z, 0xaa
 	; start at character ram portion
-	lda mar, 0x4000
+	lda sp, 0x4000 - 1
 
 	.loop:
 		; write contents of z into vram at mar
+		inc sp
+		lda mar, sp
 		vram_write z
-		inc mar
 		; check if mar is done
 		move a, mar_hi
 		; isolate 2nd msb from mar_hi
