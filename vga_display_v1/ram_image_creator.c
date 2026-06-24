@@ -45,7 +45,7 @@ void writeCharacter(uint8_t x, uint8_t y, uint8_t character, uint8_t bg_color,
   uint8_t color_value = (fg_color << 4) | bg_color;
   uint8_t char_value = char_data[character][y & 0b111];
 
-  uint16_t addr = x | (y << 6);
+  uint16_t addr = (x + 1) | (y << 6);
 
   ram_contents[addr | (0 << 14)] = color_value;
   ram_contents[addr | (1 << 14)] = char_value;
