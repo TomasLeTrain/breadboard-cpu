@@ -1,21 +1,24 @@
 #include <assert.h>
 #include <functional>
 #include <iostream>
-#include <sstream>
 #include <stdarg.h>
 #include <stdint.h>
 
+constexpr uint32_t VRAM_BITS = 1;
 constexpr uint32_t IR2_NUM_BITS = 4;
 constexpr uint32_t STEP_NUM_BITS = 4;
-constexpr uint32_t ISTR_NUM_BITS = 4;
 constexpr uint32_t REG_NUM_BITS = 3;
-// one unused address line (for now)
-constexpr uint32_t ADDR_BITS = 16;
+constexpr uint32_t ISTR_NUM_BITS = 4;
+constexpr uint32_t IMM_NUM_BITS = 1;
+
+constexpr uint32_t ADDR_BITS = VRAM_BITS + STEP_NUM_BITS + IMM_NUM_BITS +
+                               ISTR_NUM_BITS + REG_NUM_BITS + IR2_NUM_BITS;
 
 // max included address
 constexpr uint32_t MAX_ADDR = (1 << ADDR_BITS);
 constexpr uint32_t MAX_ADDR_INC = MAX_ADDR - 1;
 
+constexpr uint32_t NUM_VRAM_BITS = (1 << VRAM_BITS);
 constexpr uint32_t NUM_IR2_BITS = (1 << IR2_NUM_BITS);
 constexpr uint32_t MAX_NUM_STEPS = (1 << STEP_NUM_BITS);
 constexpr uint32_t NUM_INSTRUCTIONS = (1 << ISTR_NUM_BITS);
@@ -31,10 +34,7 @@ constexpr uint32_t PC_CNT_BIT = 1;
 /*
 clang-format off
 
-notes:
-ir2 doesn't need bout?
-- would require adding additional chip
-- some instructions require a temporary register to implement, could be worth the extra chip to implement these
+TODO: might be better to have arbitrary instruction order to maximize possible space use
 
 registers:
 - A			000: special register written to by math operations, gp register
@@ -87,10 +87,10 @@ pop:		xxx <- mem[SP],SP++	| [0100 0 xxx]					| POP xxx
 LDA SP:		SP <- MAR			| [0101 1 000]					| LDA SP, MAR (one instruction)
 update flag reg:				| [0100 1 001]					| SET FLAG
 nop:							| [0100 1 010]					| NOP
-unused:							| [0100 1 011]					|
-unused:							| [0100 1 100]					|
-unused:							| [0100 1 101]					|
-unused:							| [0100 1 110]					|
+Z = vram[MAR]:					| [0100 1 011]					| VRAM_READ Z
+vram[MAR] = Z:					| [0100 1 100]					| VRAM_WRITE Z
+Y = vram[MAR]:					| [0100 1 011]					| VRAM_READ Y
+vram[MAR] = Y:					| [0100 1 100]					| VRAM_WRITE Y
 halt:							| [0100 1 111]					| HALT
 
 0101:
@@ -290,6 +290,7 @@ public:
 };
 
 typedef struct {
+  uint32_t original_address;
   // 4 bits wide
   uint8_t step;
   // 3 bits wide
@@ -302,6 +303,8 @@ typedef struct {
   uint8_t reg1;
   // 1 bit wide
   uint8_t ir2_extra_bits;
+  // 1 bit wide
+  uint8_t not_vram_active;
 } split_addr_t;
 
 struct reg_t {
@@ -324,8 +327,8 @@ typedef struct {
 } addr_register_t;
 
 // ucode[instruction][step][imm][reg0][reg1][ir2 extra bits]
-step_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG]
-            [NUM_IR2_BITS];
+step_t ucode[NUM_INSTRUCTIONS][MAX_NUM_STEPS][2][NUM_REG][NUM_REG][NUM_IR2_BITS]
+            [NUM_VRAM_BITS];
 
 constexpr step_t bout(uint8_t bout_idx) {
   return step_t(bout_idx, 0, 0, 0, 0, 0);
@@ -375,7 +378,8 @@ constexpr shift_reg_t Y = {
 constexpr reg_t Z   = {.write = write(7), .bout = bout((0b1000 | 7)), .name = "Z"};
 
 // also requires putting some addr register on the abus
-constexpr reg_t MEM = {.write = write(6), .bout = bout(1),.name = "MEM"};
+constexpr reg_t MEM = {.write = write(6), .bout = bout(1), .name = "MEM"};
+constexpr reg_t VRAM = {.write = other(3) | flag_select(4), .bout = other(3) | flag_select(5), .name = "VRAM"};
 
 constexpr reg_t F   = {.write = empty_instruction,   .bout = bout(0b1000 | 3),.name = "F"};
 
@@ -406,7 +410,7 @@ constexpr addr_register_t SP = {
     .lo = {.write = write(3), .bout = aout(3) | bout(2), .name = "SP_lo"},
     .hi = {.write = write(2), .bout = aout(3) | bout(3), .name = "SP_hi"},
     .inc = bout(6),
-    .dec = bout(7),
+    .dec = bout(7)
 };
 // clang-format on
 
@@ -570,6 +574,7 @@ constexpr StepCreator output_flags_selector =
 constexpr step_t universal_step_0 = MEM.bout | PC.aout | IR.write;
 // pc cnt6
 constexpr step_t universal_step_1 = PC.inc;
+constexpr step_t nop = empty_instruction;
 
 // start steps for any instruction that loads an imm16
 // WARN: MUST PERFORM PC CNT AFTER
@@ -870,11 +875,38 @@ constexpr template_t nop_template = {
 	reset,
 };
 
+constexpr template_t vram_read_template_no_delay = {
+	universal_step_0,
+	VRAM.bout | MAR.aout | PC.inc, // NOTE: must add register write manually
+	reset,
+};
+
+constexpr template_t vram_read_template_delay = {
+	universal_step_0,
+	nop,
+	VRAM.bout | MAR.aout | PC.inc, // NOTE: must add register write manually
+	reset,
+};
+
+
+constexpr template_t vram_write_template_no_delay = {
+	universal_step_0,
+	VRAM.write | MAR.aout | PC.inc, // NOTE: must add register bout manually
+	reset,
+};
+
+constexpr template_t vram_write_template_delay = {
+	universal_step_0,
+	nop,
+	VRAM.write | MAR.aout | PC.inc, // NOTE: must add register bout manually
+	reset,
+};
+
 // clang-format on
 step_t *get_ucode_ptr(const split_addr_t *instruction) {
   return &ucode[instruction->instruction][instruction->step][instruction->imm]
                [instruction->reg0][instruction->reg1]
-               [instruction->ir2_extra_bits];
+               [instruction->ir2_extra_bits][instruction->not_vram_active];
 }
 
 void setStep(const StepCreator &step, const split_addr_t *instruction) {
@@ -954,19 +986,88 @@ void push_special_instruction(const split_addr_t *instruction) {
   }
 }
 
+void vram_read_instruction(const split_addr_t *instruction,
+                           const reg_t *output_register) {
+  const template_t *curr_template = nullptr;
+  bool delayed;
+  if (instruction->step == 1 && instruction->not_vram_active == 0) {
+    // vram active right now, use no delay version
+    curr_template = &vram_read_template_no_delay;
+    delayed = false;
+  } else {
+    // have to wait one cycle, nop version instead
+    curr_template = &vram_read_template_delay;
+    delayed = true;
+  }
+
+  // create_instruction(curr_template, instruction);
+
+  step_t *curr = get_ucode_ptr(instruction);
+  StepCreator template_step = curr_template->at(instruction->step);
+  if (instruction->step == 1 && !delayed)
+    template_step |= output_register->write;
+  if (instruction->step == 2 && delayed)
+    template_step |= output_register->write;
+
+  *curr = template_step.getStep();
+}
+
+void vram_write_instruction(const split_addr_t *instruction,
+                            const reg_t *output_register) {
+  const template_t *curr_template = nullptr;
+  bool delayed;
+  if (instruction->step == 1 && instruction->not_vram_active == 0) {
+    // vram active right now, use no delay version
+    curr_template = &vram_write_template_no_delay;
+    delayed = false;
+  } else {
+    // have to wait one cycle, nop version instead
+    curr_template = &vram_write_template_delay;
+    delayed = true;
+  }
+
+  // create_instruction(curr_template, instruction);
+
+  step_t *curr = get_ucode_ptr(instruction);
+  StepCreator template_step = curr_template->at(instruction->step);
+  if (instruction->step == 1 && !delayed)
+    template_step |= output_register->bout;
+  if (instruction->step == 2 && delayed)
+    template_step |= output_register->bout;
+
+  *curr = template_step.getStep();
+}
+
 void pop_instruction(const split_addr_t *instruction) {
   if (instruction->imm == 0) {
     create_instruction(&pop_template, instruction);
   } else {
+    if (instruction->reg0 == 3) {
+      vram_read_instruction(instruction, &Z);
+      return;
+    }
+    if (instruction->reg0 == 4) {
+      vram_write_instruction(instruction, &Z);
+      return;
+    }
+    if (instruction->reg0 == 5) {
+      vram_read_instruction(instruction, &Y);
+      return;
+    }
+    if (instruction->reg0 == 6) {
+      vram_write_instruction(instruction, &Y);
+      return;
+    }
+
     // more special purpose instructions
     const template_t *templates[8] = {
         &mar_to_sp_template, // push imm8
         &update_flag_register_template,
         &nop_template,
-        &nop_template,
-        &nop_template,
-        &nop_template,
-        &nop_template,
+        &nop_template, // Z = vram[MAR]
+        &nop_template, // vram[MAR] = Z
+        &nop_template, // Y = vram[MAR]
+        &nop_template, // vram[MAR] = Y
         &halt_template,
     };
 
@@ -1043,6 +1144,8 @@ uint32_t bitTransform(uint32_t x, uint32_t x_bit, uint32_t y_bit) {
 }
 
 void rom_addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
+  uint32_t not_vram_active = bitTransform(addr, 0, 0);
+
   uint32_t STEP = bitTransform(addr, 13, 0) | bitTransform(addr, 14, 1) |
                   bitTransform(addr, 15, 2) | bitTransform(addr, 16, 3);
 
@@ -1063,6 +1166,8 @@ void rom_addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
   instruction_ptr->instruction    = (IR & 0b11110000) >> 4;
   instruction_ptr->reg1           = (IR2 & 0b0111);
   instruction_ptr->ir2_extra_bits = (IR2 & 0b1000) >> 3;
+  instruction_ptr->not_vram_active = not_vram_active;
+  instruction_ptr->original_address = addr;
   // clang-format on
 }
 
@@ -1070,7 +1175,7 @@ void addr_to_instruction(uint32_t addr, split_addr_t *instruction_ptr) {
   rom_addr_to_instruction(addr, instruction_ptr);
 }
 
-void process_address(int addr) {
+void process_address(uint32_t addr) {
   split_addr_t instruction;
   addr_to_instruction(addr, &instruction);
 
@@ -1084,7 +1189,7 @@ void process_address(int addr) {
 }
 
 void populate_ucode() {
-  for (int addr = 0; addr <= MAX_ADDR_INC; addr++) {
+  for (uint32_t addr = 0; addr <= MAX_ADDR_INC; addr++) {
     // split_addr_t instruction;
     // addr_to_instruction(addr, &instruction);
     // std::cout << "step/reg0/imm/istr/reg1 " << int(instruction.step) << " "
@@ -1155,7 +1260,8 @@ void logInstruction(const split_addr_t &instruction) {
   str += std::to_string(instruction.imm) + ", ir2_extra_bits: ";
   str += std::to_string(instruction.ir2_extra_bits) + ", reg0: ";
   str += std::to_string(instruction.reg0) + ", reg1: ";
-  str += std::to_string(instruction.reg1);
+  str += std::to_string(instruction.reg1) + ", not vram active: ";
+  str += std::to_string(instruction.not_vram_active);
   std::cout << str << std::endl;
 }
 

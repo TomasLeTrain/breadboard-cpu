@@ -43,10 +43,10 @@
     lda sp, mar        => 0b01001 @ 0`3
     update_flags       => 0b01001 @ 1`3
     nop                => 0b01001 @ 2`3
-    nop                => 0b01001 @ 3`3
-    nop                => 0b01001 @ 4`3
-    nop                => 0b01001 @ 5`3
-    nop                => 0b01001 @ 6`3
+    vram_read  z       => 0b01001 @ 3`3
+    vram_write z       => 0b01001 @ 4`3
+    vram_read  y       => 0b01001 @ 5`3
+    vram_write y       => 0b01001 @ 6`3
     halt               => 0b01001 @ 7`3
 
 	

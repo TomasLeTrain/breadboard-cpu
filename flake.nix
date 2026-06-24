@@ -1,5 +1,5 @@
 {
-  description = "Nix devshells!";
+  description = "customasm devshell";
   inputs.nixpkgs.url = "github:nixos/nixpkgs";
 
   outputs = {
