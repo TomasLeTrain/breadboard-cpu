@@ -32,7 +32,6 @@ start:
 
 	; do cool program
 	jmp write_to_vram
-	halt
 
 write_to_vram:
     ; cool zig zag pattern
@@ -62,4 +61,31 @@ write_to_vram:
 		cmp mar_hi, 0x7c ; (1 << 6) | ((240 << 6) >> 8)
 		jnc .loop
 
+	jmp copy_character
+
+copy_character:
+	move x, 0x7
+
+	curr_character = 0
+	character_base_addr = 0x3000 + curr_character + 0x7
+	; keeps the current location in vram
+	lda sp, 0x4000 + curr_character - 64
+
+	.loop:
+		; location in rom
+		lda mar, character_base_addr
+		; could be add if rom layout changes
+		sub mar_lo, x
+		load z ; read from rom into z
+ 
+		; location in vram
+		lda mar, sp ; load into mar to perform math
+		add mar_lo, 64
+		adc mar_hi, 0x00
+		lda sp, mar ; save back to sp
+
+		vram_write z
+
+		sub x, 1
+		jnz .loop ; flag updated from sub
 	halt
