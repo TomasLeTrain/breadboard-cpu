@@ -12,6 +12,7 @@
 	flags => 0b111
 }
 
+; instruction set definitions
 #ruledef
 {
     ; r0 = r1
@@ -24,9 +25,9 @@
 	; a = r0,b = imm8, flg udpate
     cmp {r0: register}, {imm: i8} => 0b0001 @ 0b1 @ r0 @ imm
 	
-	; store reg0 = [MAR]
+	; store [MAR] = reg0
     store {r0: register} => 0b0010 @ 0b0 @ r0 @ imm
-	; store reg0 = [imm16]
+	; store [imm16] = reg0
     store {r0: register}, {address: u16} => 0b0010 @ 0b1 @ r0 @ address
 
     push {r0: register} => 0b0011 @ 0b0 @ r0
@@ -53,11 +54,18 @@
 	; jumping based on register
     jnz {r0: register} => 0b0101 @ 0b0 @ r0
 	
+    ; jump to mar address
 	jmp => 0b01011 @ 0b000
 	jnc => 0b01011 @ 0b001
 	jeq => 0b01011 @ 0b010
 	jnz => 0b01011 @ 0b011
+
+	jmp mar => asm {jmp}
+	jnc mar => asm {jnc}
+	jeq mar => asm {jeq}
+	jnz mar => asm {jnz}
 	
+    ; jump to imm16
 	jmp {address: u16} => 0b01011 @ 0b100 @ address
 	jnc {address: u16} => 0b01011 @ 0b101 @ address
 	jeq {address: u16} => 0b01011 @ 0b110 @ address
@@ -91,4 +99,42 @@
 
     and {r0: register}, {r1: register} => 0b1111 @ 0b0 @ r0 @ 0b00000 @ r1
     and {r0: register}, {imm: i8}      => 0b1111 @ 0b1 @ r0 @ imm
+}
+
+; some constants
+
+; defines where sp gest
+sp_save_addr = 0xfff0
+sp_start_addr = 0xffe0
+
+; macros and other defs
+#ruledef
+{
+    call {address: u16} => asm {
+        push mar_hi
+        push mar_lo
+        jmp {address}
+    }
+
+    return => asm {
+        pop mar_lo
+        pop mar_hi
+        jmp mar
+    }
+
+    init_sp => asm {
+        lda sp, sp_start_addr
+    }
+
+    save_sp_addr => asm {
+        lda mar, sp
+        store mar_hi, sp_save_addr
+        store mar_lo, sp_save_addr+1
+    }
+
+    restore_sp_addr => asm {
+        load mar_hi, sp_save_addr
+        load mar_lo, sp_save_addr+1
+        lda sp, mar
+    }
 }
