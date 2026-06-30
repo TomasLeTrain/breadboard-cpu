@@ -644,24 +644,23 @@ constexpr template_t sw_template_imm = {
 // [SP--] = reg
 constexpr template_t push_template_reg = {
 	universal_step_0,
-	MEM.write | SP.aout | reg0_bout | PC.inc, // read from reg into mem at SP addr, pc cnt
-	reset | SP.dec,
+	PC.inc | SP.dec, // decrement before pushing value
+	MEM.write | SP.aout | reg0_bout | reset, // read from reg into mem at SP addr, pc cnt
 };
 
 // [SP--] = imm8, overrides A reg
 constexpr template_t push_template_imm8 = {
 	universal_step_0,
-	universal_step_1,
+	PC.inc | SP.dec, // decrement before pushing value
 	MEM.bout | PC.aout | A.write, // write into IR2
-	MEM.write | SP.aout | A.bout | PC.inc, // read from IR2 into [SP], pc cnt
-	reset | SP.dec, // SP--
+	MEM.write | SP.aout | A.bout | PC.inc | reset, // read from IR2 into [SP], pc cnt
 };
 
 // reg0 = [SP++]
 constexpr template_t pop_template = {
 	universal_step_0,
 	MEM.bout | SP.aout | reg0_write | PC.inc, // write from [SP] into reg0, pc cnt
-	reset | SP.inc, // SP++
+	reset | SP.inc, // increment after popping value
 };
 
 // MAR = imm16
@@ -1019,7 +1018,7 @@ void pop_instruction(const split_addr_t *instruction) {
 
     // more special purpose instructions
     const template_t *templates[8] = {
-        &mar_to_sp_template, // push imm8
+        &mar_to_sp_template,
         &update_flag_register_template,
         &nop_template,
         &nop_template, // Z = vram[MAR]
