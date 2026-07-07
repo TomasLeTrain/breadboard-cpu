@@ -714,22 +714,40 @@ constexpr template_t jmp_mar_template = {
 // TODO: special case if reg0 = b, reg1 = a (impossible to swap registers without intermediate)
 
 // reg0 = reg0 OP reg1
-constexpr template_t math_template_reg = {
+constexpr template_t math_carry_template_reg = {
 	universal_step_0,
 	universal_step_1,
 	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
 	reg0_bout | A.write | PC.inc, // load reg0 into a
 	reg1_bout | B.write, // load reg1 into b
-	F.bout | FLAG_WRITE_ALU | reg0_write, // do math op, save to reg0, writes to flag reg
+	F.bout | FLAG_WRITE_ALU | reg0_write | PC_FLAG_CARRY, // do math op, save to reg0, writes to flag reg
+	reset,
+};
+
+constexpr template_t math_no_carry_template_reg = {
+	universal_step_0,
+	universal_step_1,
+	MEM.bout | PC.aout | IR2.write, // need to load ir2 to figure out reg1
+	reg0_bout | A.write | PC.inc, // load reg0 into a
+	reg1_bout | B.write, // load reg1 into b
+	F.bout | FLAG_WRITE_ALU | reg0_write | PC_FLAG_DIRECT, // do math op, save to reg0, writes to flag reg
 	reset,
 };
 
 // reg0 = reg0 OP reg1
-constexpr template_t math_template_imm = {
+constexpr template_t math_carry_template_imm = {
 	universal_step_0,
 	reg0_bout | A.write | PC.inc, // load reg0 into a first (in case reg0 = b), pc cnt
 	MEM.bout | PC.aout | B.write, // load imm into b
-	F.bout | FLAG_WRITE_ALU | reg0_write | PC.inc, // save F to reg0, writes to flag reg
+	F.bout | FLAG_WRITE_ALU | reg0_write | PC_FLAG_CARRY | PC.inc, // save F to reg0, writes to flag reg
+	reset,
+};
+
+constexpr template_t math_no_carry_template_imm = {
+	universal_step_0,
+	reg0_bout | A.write | PC.inc, // load reg0 into a first (in case reg0 = b), pc cnt
+	MEM.bout | PC.aout | B.write, // load imm into b
+	F.bout | FLAG_WRITE_ALU | reg0_write | PC_FLAG_DIRECT | PC.inc, // save F to reg0, writes to flag reg
 	reset,
 };
 
@@ -1018,9 +1036,7 @@ void pop_instruction(const split_addr_t *instruction) {
 
     // more special purpose instructions
     const template_t *templates[8] = {
-        &mar_to_sp_template,
-        &update_flag_register_template,
-        &nop_template,
+        &mar_to_sp_template, &update_flag_register_template, &nop_template,
         &nop_template, // Z = vram[MAR]
         &nop_template, // vram[MAR] = Z
         &nop_template, // Y = vram[MAR]
@@ -1067,7 +1083,18 @@ void jmp_instruction(const split_addr_t *instruction) {
 }
 
 void math_instruction(const split_addr_t *instruction) {
-  create_instruction(&math_template_reg, &math_template_imm, instruction);
+  const template_t *reg_template = nullptr;
+  const template_t *imm_template = nullptr;
+
+  if (instruction->instruction & 1) {
+    reg_template = &math_no_carry_template_reg;
+    imm_template = &math_no_carry_template_imm;
+  } else {
+    reg_template = &math_carry_template_reg;
+    imm_template = &math_carry_template_imm;
+  }
+
+  create_instruction(reg_template, imm_template, instruction);
 }
 
 void not_instruction(const split_addr_t *instruction) {
