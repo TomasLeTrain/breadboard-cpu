@@ -15,8 +15,7 @@ constexpr uint32_t ADDR_BITS = VRAM_BITS + STEP_NUM_BITS + IMM_NUM_BITS +
                                ISTR_NUM_BITS + REG_NUM_BITS + IR2_NUM_BITS;
 
 // max included address
-constexpr uint32_t MAX_ADDR = (1 << ADDR_BITS);
-constexpr uint32_t MAX_ADDR_INC = MAX_ADDR - 1;
+constexpr uint32_t MAX_ADDR_INC = (1 << ADDR_BITS) - 1;
 
 constexpr uint32_t NUM_VRAM_BITS = (1 << VRAM_BITS);
 constexpr uint32_t NUM_IR2_BITS = (1 << IR2_NUM_BITS);
@@ -1188,6 +1187,7 @@ void populate_ucode() {
 }
 
 step_t getInstruction(int addr) {
+  assert(addr <= MAX_ADDR_INC);
   split_addr_t instruction;
   addr_to_instruction(addr, &instruction);
   return *get_ucode_ptr(&instruction);
@@ -1223,18 +1223,25 @@ void write_ucode_roms_logisim() {
   fclose(rom1);
 }
 
-// void write_ucode_logism() {
-//   printf("v3.0 hex words plain\n");
-//   for (int addr = 0; addr <= MAX_ADDR_INC; addr++) {
-//     uint16_t curr = getInstruction(addr).getRomData();
-//     printf("%04X", curr);
-//     if (addr % 16 == 15) {
-//       printf("\n");
-//     } else {
-//       printf(" ");
-//     }
-//   }
-// }
+void write_ucode_roms_binary() {
+  // Open a file in append mode
+  FILE *rom0 = fopen("rom_images/rom0.bin", "wb");
+  FILE *rom1 = fopen("rom_images/rom1.bin", "wb");
+
+  for (int addr = 0; addr <= MAX_ADDR_INC; addr++) {
+    step_t curr = getInstruction(addr);
+
+    uint16_t data = curr.getRomData();
+    uint16_t rom0_data = data & 0xff;
+    uint16_t rom1_data = (data & 0xff00) >> 8;
+    fputc(rom0_data, rom0);
+    fputc(rom1_data, rom1);
+  }
+
+  // Close the file
+  fclose(rom0);
+  fclose(rom1);
+}
 
 void logStep(const step_t &step) { std::cout << step.toString() << std::endl; }
 void logInstruction(const split_addr_t &instruction) {
@@ -1271,6 +1278,7 @@ void interactive_address_lookup() {
 int main(int argc, char *argv[]) {
   populate_ucode();
   write_ucode_roms_logisim();
+  write_ucode_roms_binary();
   std::cout << "wrote rom images" << std::endl;
 
   bool interactive_enabled = false;
