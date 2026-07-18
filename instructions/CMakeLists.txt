@@ -11,7 +11,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Create a sources variable with a link to all cpp files to compile
 set(SOURCES
     src/main.cpp
-    src/Action.cpp
 )
 
 # Add an executable with the above sources
