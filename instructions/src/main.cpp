@@ -112,13 +112,22 @@ const std::string &actionToString(const ActionType &action) {
   return action_to_string_map.at(action);
 }
 
+// TODO: this is only one possible representation of the bits
+// might be good to abstract the specific meaning of the bits to different
+// possible representations
+// struct ComputerState {
+//   uint8_t step;
+//   uint8_t instruction;
+//   uint8_t reg0;
+//   uint8_t imm;
+//   uint8_t reg1;
+//   uint8_t ir2_extra_bits;
+//   uint8_t not_vram_active;
+// };
 struct ComputerState {
   uint8_t step;
-  uint8_t instruction;
-  uint8_t reg0;
-  uint8_t imm;
-  uint8_t reg1;
-  uint8_t ir2_extra_bits;
+  uint8_t ir;
+  uint8_t ir2;
   uint8_t not_vram_active;
 };
 
@@ -130,7 +139,9 @@ std::string stateToString(const ComputerState &istr) {
 // TODO: return optional for error checking
 OutputType templateToOutput(const IstrTemplateType &istr_temp,
                             const ComputerState &istr) {
-  const auto &curr = istr_temp[istr.step];
+  // FIXME: step can be greater than the istr temp size
+  // will likely refactor this anyway
+  const auto &curr = istr_temp.at(istr.step);
   OutputType outputs = OutputType::createEmpty();
 
   // check for no intersections
@@ -192,15 +203,17 @@ ComputerState addrToState(const uint32_t addr) {
 
   ComputerState state;
 
-  // clang-format off
-  state.step           = STEP;
-  state.reg0           = (IR & 0b00000111);
-  state.imm            = (IR & 0b00001000) >> 3;
-  state.instruction    = (IR & 0b11110000) >> 4;
-  state.reg1           = (IR2 & 0b0111);
-  state.ir2_extra_bits = (IR2 & 0b1000) >> 3;
+  state.step = STEP;
+  state.ir = IR;
+  state.ir2 = IR2;
   state.not_vram_active = not_vram_active;
-  // clang-format on
+
+  // state.reg0           = (IR & 0b00000111);
+  // state.imm            = (IR & 0b00001000) >> 3;
+  // state.instruction    = (IR & 0b11110000) >> 4;
+  // state.reg1           = (IR2 & 0b0111);
+  // state.ir2_extra_bits = (IR2 & 0b1000) >> 3;
+  // state.not_vram_active = not_vram_active;
 
   return state;
 }
