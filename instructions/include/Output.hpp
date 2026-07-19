@@ -44,6 +44,13 @@ public:
     _pc_cnt |= other._pc_cnt;
   }
 
+  static Output merge(const Output &a, const Output &b) {
+    Output result = Output::createEmpty();
+    result.merge(a);
+    result.merge(b);
+    return result;
+  }
+
   static Output createEmpty() { return Output(0, 0, 0, 0, 0, 0); }
 
 private:

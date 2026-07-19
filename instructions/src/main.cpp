@@ -79,6 +79,7 @@ Output opcodeToOutput(const Opcode &opcode) {
 }
 
 Output addrToOutputs(const uint32_t addr) {
-  const Opcode opcode = addrToOpcode(addr);
-  return opcodeToOutput(opcode);
+  return opcodeToOutput(addrToOpcode(addr));
 }
+
+int main() {}
