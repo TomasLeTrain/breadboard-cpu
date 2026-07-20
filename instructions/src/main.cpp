@@ -82,4 +82,5 @@ Output addrToOutputs(const uint32_t addr) {
   return opcodeToOutput(addrToOpcode(addr));
 }
 
-int main() {}
+int main() {
+}

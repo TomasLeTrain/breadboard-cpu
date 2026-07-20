@@ -8,6 +8,9 @@
 
 enum Action {
   halt = 0,
+  nop, // equal to zero outputs
+  reset,
+
   // addr regs cnt
   pc_cnt,
   mar_cnt,
@@ -77,8 +80,6 @@ enum Action {
   flag_8,
 
   flag_write_alu,
-
-  reset,
 
   // placeholder registers
   reg0_bout,
@@ -188,6 +189,11 @@ struct ir2 {
 struct mem {
   static const Action read = mem_read;
   static const Action write = mem_write;
+};
+
+struct vram {
+  static const Action read = vram_read;
+  static const Action write = vram_write;
 };
 
 #define action_to_string_map_macro(s) {s, #s}

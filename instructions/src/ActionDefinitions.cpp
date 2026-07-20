@@ -10,6 +10,8 @@ static Output pc_cnt_output(uint8_t val) { return Output(0, 0, 0, 0, 0, val); }
 
 const std::map<Action, Output> action_to_output_map{
     {halt, bout(5)},
+    {nop, Output::createEmpty()},
+    {reset, other(2)},
 
     {pc_cnt, pc_cnt_output(1)},
     {mar_cnt, bout(4)},
@@ -87,8 +89,6 @@ const std::map<Action, Output> action_to_output_map{
     {flag_8, flag_select(7)},
 
     {flag_write_alu, other(1)},
-
-    {reset, other(2)},
 };
 
 const Output &actionToOutput(const Action &action) {
