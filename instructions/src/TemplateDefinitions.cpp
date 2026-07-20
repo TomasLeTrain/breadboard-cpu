@@ -3,12 +3,99 @@
 #include "TemplateGenerators.hpp"
 #include "Templates.hpp"
 #include <memory>
+#include <string>
+#include <vector>
+
+struct readWriteStructure {
+  Action bout;
+  Action write;
+  std::string name;
+};
+
+bool operator==(const readWriteStructure &lhs, const readWriteStructure &rhs) {
+  return lhs.bout == rhs.bout && lhs.write == rhs.write;
+}
+
+readWriteStructure a_reg{a::bout, a::write, "a"};
+readWriteStructure b_reg{b::bout, b::write, "b"};
+readWriteStructure x_reg{x::bout, x::write, "x"};
+readWriteStructure y_reg{y::bout, y::write, "y"};
+readWriteStructure z_reg{z::bout, z::write, "z"};
+readWriteStructure mar_lo_reg{mar::lo::bout, mar::lo::write, "mar_lo"};
+readWriteStructure mar_hi_reg{mar::hi::bout, mar::hi::write, "mar_hi"};
+readWriteStructure sp_lo_reg{sp::lo::bout, sp::lo::write, "sp_lo"};
+readWriteStructure sp_hi_reg{sp::hi::bout, sp::hi::write, "sp_hi"};
+readWriteStructure pc_lo_reg{pc::lo::bout, pc::lo::write, "pc_lo"};
+readWriteStructure pc_hi_reg{pc::hi::bout, pc::hi::write, "pc_hi"};
+readWriteStructure keyb_reg{keyb_bout, nop, "keyb"};
+readWriteStructure flags_reg{flags::bout, nop, "flags"};
+
+IstrTemplateType copyTemplate(const IstrTemplateType &temp) { return temp; }
+
+void setReg0(IstrTemplateType &temp, Action bout_reg0, Action write_reg0) {
+  for (StepTemplateType &step : temp) {
+    for (Action &action : step) {
+      if (action == reg0_bout)
+        action = bout_reg0;
+      if (action == reg0_write)
+        action = write_reg0;
+    }
+  }
+}
+
+void setReg1(IstrTemplateType &temp, Action bout_reg1, Action write_reg1) {
+  for (StepTemplateType &step : temp) {
+    for (Action &action : step) {
+      if (action == reg1_bout)
+        action = bout_reg1;
+      if (action == reg1_write)
+        action = write_reg1;
+    }
+  }
+}
+
+void setSelectedFlag(IstrTemplateType &temp, Action selected_flag) {
+  for (StepTemplateType &step : temp) {
+    for (Action &action : step) {
+      if (action == output_flags_selector)
+        action = selected_flag;
+    }
+  }
+}
+
+IstrTemplateType fillTemplate(const IstrTemplateType &temp,
+                              const readWriteStructure &reg0) {
+  IstrTemplateType result = copyTemplate(temp);
+  setReg0(result, reg0.bout, reg0.write);
+  return result;
+}
+
+IstrTemplateType fillTemplate(const IstrTemplateType &temp,
+                              const readWriteStructure &reg0,
+                              const readWriteStructure &reg1) {
+  IstrTemplateType result = copyTemplate(temp);
+  setReg0(result, reg0.bout, reg0.write);
+  setReg1(result, reg1.bout, reg1.write);
+  return result;
+}
+
+IstrTemplateType fillTemplate(const IstrTemplateType &temp,
+                              const readWriteStructure &reg0,
+                              const readWriteStructure &reg1,
+                              Action selected_flag) {
+  IstrTemplateType result = copyTemplate(temp);
+  setReg0(result, reg0.bout, reg0.write);
+  setReg1(result, reg1.bout, reg1.write);
+  setSelectedFlag(result, selected_flag);
+  return result;
+}
 
 // IR = [PC]
 StepTemplateType universal_step_0 = {mem::read, pc::addr, ir::write};
 
 // pc cnt6
 StepTemplateType universal_step_1 = {pc::cnt};
+StepTemplateType loadIr2 = {mem::read, pc::addr, ir2::write};
 
 // start steps for any instruction that loads an imm16
 // warn: must perform pc cnt after
@@ -20,14 +107,37 @@ IstrTemplateType load_address_procedure = {
     {mem::read, pc::addr, mar::lo::write}, // second byte has lsb
 };
 
-// todo: writting register to itself should be error or nop?
-// reg0 = reg1
-IstrTemplateType mw_template_reg = {
-    universal_step_0,
-    universal_step_1,
-    {mem::read, pc::addr, ir2::write}, // need to load ir2 to figure out reg1
-    {reg1_bout, reg0_write, pc::cnt, reset}, // read from reg1 to reg0, pc cnt
-};
+// move register to register (reg0 = reg1)
+void addMoveWordRegInstructions(
+    std::vector<std::unique_ptr<Instruction>> &dest) {
+  static const IstrTemplateType base_template = {
+      universal_step_0,
+      universal_step_1,
+      loadIr2,                                 // load ir 2
+      {reg1_bout, reg0_write, pc::cnt, reset}, // read from reg1 to reg0, pc cnt
+  };
+
+  std::vector<readWriteStructure> lhs = {
+      a_reg,      b_reg,     x_reg,     y_reg,     z_reg,    mar_lo_reg,
+      mar_hi_reg, pc_lo_reg, pc_hi_reg, sp_lo_reg, sp_hi_reg};
+
+  std::vector<readWriteStructure> rhs = {
+      a_reg,      b_reg,      x_reg,     y_reg,     z_reg,
+      mar_lo_reg, mar_hi_reg, pc_lo_reg, pc_hi_reg, sp_lo_reg,
+      sp_hi_reg,  flags_reg,  keyb_reg};
+
+  for (const auto &l : lhs) {
+    for (const auto &r : rhs) {
+      // avoid duplicates
+      if (l == r)
+        continue;
+      auto current = copyTemplate(base_template);
+      fillTemplate(current, l, r);
+      dest.push_back(std::make_unique<Instruction>(current, "mv " + l.name +
+                                                                ", " + r.name));
+    }
+  }
+}
 
 // reg = imm8
 IstrTemplateType mw_template_imm = {
@@ -36,6 +146,22 @@ IstrTemplateType mw_template_imm = {
     {mem::read, pc::addr, reg0_write}, // write the immediate into reg0
     {reset, pc::cnt},                  // pc cnt
 };
+
+void mw_instruction_imm(std::vector<std::unique_ptr<Instruction>> &dest) {
+  const IstrTemplateType &base_template = mw_template_imm;
+
+  std::vector<readWriteStructure> lhs = {
+      a_reg,      b_reg,     x_reg,     y_reg,     z_reg,    mar_lo_reg,
+      mar_hi_reg, pc_lo_reg, pc_hi_reg, sp_lo_reg, sp_hi_reg};
+
+  for (const auto &l : lhs) {
+    auto curr_temp = copyTemplate(base_template);
+    fillTemplate(curr_temp, l);
+    std::string name = "";
+    dest.push_back(
+        std::make_unique<Instruction>(curr_temp, "mv " + l.name + ", imm8"));
+  }
+}
 
 // reg = [mar]
 IstrTemplateType lw_template_mar = {
@@ -333,71 +459,197 @@ IstrTemplateType vram_write_template = {
 
 // global instance of the instruction set generated by the function below
 static InstructionSet istr_set;
-
-IstrTemplateType copyTemplate(const IstrTemplateType &temp) { return temp; }
-
-void setReg0(IstrTemplateType &temp, Action bout_reg0, Action write_reg0) {
-  for (StepTemplateType &step : temp) {
-    for (Action &action : step) {
-      if (action == reg0_bout)
-        action = bout_reg0;
-      if (action == reg0_write)
-        action = write_reg0;
-    }
-  }
-}
-
-void setReg1(IstrTemplateType &temp, Action bout_reg1, Action write_reg1) {
-  for (StepTemplateType &step : temp) {
-    for (Action &action : step) {
-      if (action == reg1_bout)
-        action = bout_reg1;
-      if (action == reg1_write)
-        action = write_reg1;
-    }
-  }
-}
-
-void setSelectedFlag(IstrTemplateType &temp, Action selected_flag) {
-  for (StepTemplateType &step : temp) {
-    for (Action &action : step) {
-      if (action == output_flags_selector)
-        action = selected_flag;
-    }
-  }
-}
-
-struct readWriteStructure {
-  Action bout;
-  Action write;
-};
-
-IstrTemplateType fillTemplate(const IstrTemplateType &temp,
-                              const readWriteStructure &reg0) {
-  IstrTemplateType result = copyTemplate(temp);
-  setReg0(result, reg0.bout, reg0.write);
-  return result;
-}
-
-IstrTemplateType fillTemplate(const IstrTemplateType &temp,
-                              const readWriteStructure &reg0,
-                              const readWriteStructure &reg1) {
-  IstrTemplateType result = copyTemplate(temp);
-  setReg0(result, reg0.bout, reg0.write);
-  setReg1(result, reg1.bout, reg1.write);
-  return result;
-}
-
-IstrTemplateType fillTemplate(const IstrTemplateType &temp,
-                              const readWriteStructure &reg0,
-                              const readWriteStructure &reg1,
-                              Action selected_flag) {
-  IstrTemplateType result = copyTemplate(temp);
-  setReg0(result, reg0.bout, reg0.write);
-  setReg1(result, reg1.bout, reg1.write);
-  setSelectedFlag(result, selected_flag);
-  return result;
-}
+// void mw_instruction() {
+//   create_instruction(&mw_template_reg, &mw_template_imm);
+// }
+//
+// void lw_instruction(const split_addr_t *instruction) {
+//   create_instruction(&lw_template_mar, &lw_template_imm, instruction);
+// }
+//
+// void sw_instruction(const split_addr_t *instruction) {
+//   if (std::string name = intToRegister(instruction->reg0).name;
+//       name == "MAR_lo" || name == "MAR_hi") {
+//     // can't implement loading to either mar with this instruction, makes
+//     more
+//     // sense to do so with lda
+//     setError(instruction);
+//     return;
+//   }
+//   create_instruction(&sw_template_mar, &sw_template_imm, instruction);
+// }
+//
+// void push_special_instruction(const split_addr_t *instruction) {
+//   if (instruction->imm == 1) {
+//     // imm push takes one instruction, the other possible 7 are used for
+//     // special functions
+//
+//     const template_t *templates[8] = {
+//         &push_template_imm8, // push imm8
+//         &sp_inc_template,    &mar_inc_template,   &sp_dec_template,
+//         &pc_to_mar_template, &sp_to_mar_template, &mar_template_imm16,
+//         &sp_template_imm16,
+//     };
+//
+//     create_instruction(templates[instruction->reg0], instruction);
+//   } else {
+//     if (std::string name = intToRegister(instruction->reg0).name;
+//         name == "MAR_lo" || name == "MAR_hi") {
+//       // can't implement since bus is taken
+//       setError(instruction);
+//       return;
+//     }
+//     create_instruction(&push_template_reg, instruction);
+//   }
+// }
+//
+// void vram_read_instruction(const split_addr_t *instruction,
+//                            const reg_t *output_register) {
+//   const template_t *curr_template = nullptr;
+//   bool delayed;
+//   if (instruction->step == 1 && instruction->not_vram_active == 0) {
+//     // vram active right now, use no delay version
+//     curr_template = &vram_read_template_no_delay;
+//     delayed = false;
+//   } else {
+//     // have to wait one cycle, nop version instead
+//     curr_template = &vram_read_template_delay;
+//     delayed = true;
+//   }
+//
+//   // create_instruction(curr_template, instruction);
+//
+//   step_t *curr = get_ucode_ptr(instruction);
+//   StepCreator template_step = curr_template->at(instruction->step);
+//   if (instruction->step == 1 && !delayed)
+//     template_step |= output_register->write;
+//   if (instruction->step == 2 && delayed)
+//     template_step |= output_register->write;
+//
+//   *curr = template_step.getStep();
+// }
+//
+// void vram_write_instruction(const split_addr_t *instruction,
+//                             const reg_t *output_register) {
+//   const template_t *curr_template = &vram_write_template;
+//
+//   step_t *curr = get_ucode_ptr(instruction);
+//   StepCreator template_step = curr_template->at(instruction->step);
+//
+//   if (instruction->step == 1 || instruction->step == 2)
+//     template_step |= output_register->bout;
+//
+//   *curr = template_step.getStep();
+// }
+//
+// void pop_instruction(const split_addr_t *instruction) {
+//   if (instruction->imm == 0) {
+//     create_instruction(&pop_template, instruction);
+//   } else {
+//     if (instruction->reg0 == 3) {
+//       vram_read_instruction(instruction, &Z);
+//       return;
+//     }
+//     if (instruction->reg0 == 4) {
+//       vram_write_instruction(instruction, &Z);
+//       return;
+//     }
+//     if (instruction->reg0 == 5) {
+//       vram_read_instruction(instruction, &Y);
+//       return;
+//     }
+//     if (instruction->reg0 == 6) {
+//       vram_write_instruction(instruction, &Y);
+//       return;
+//     }
+//
+//     // more special purpose instructions
+//     const template_t *templates[8] = {
+//         &mar_to_sp_template, &update_flag_register_template, &nop_template,
+//         &nop_template, // Z = vram[MAR]
+//         &nop_template, // vram[MAR] = Z
+//         &nop_template, // Y = vram[MAR]
+//         &nop_template, // vram[MAR] = Y
+//         &halt_template,
+//     };
+//
+//     create_instruction(templates[instruction->reg0], instruction);
+//   }
+// }
+//
+// void jmp_instruction(const split_addr_t *instruction) {
+//   const template_t *step_template = nullptr;
+//
+//   // jump if reg != 0
+//   if (instruction->imm == 0) {
+//     // special case -> can save step if already A
+//     if (instruction->reg0 == 0) {
+//       step_template = &jnz_template_reg_A;
+//     } else {
+//       // general case -> writing to A from reg0
+//       step_template = &jnz_template_reg;
+//     }
+//     create_instruction(step_template, instruction);
+//   } else {
+//     uint8_t flag_idx = instruction->reg0 & 0b011;
+//     uint8_t using_imm16_flag = instruction->reg0 & 0b100;
+//     const static step_t idx_to_flag[] = {PC_FLAG_DIRECT, PC_FLAG_CARRY,
+//                                          PC_FLAG_EQ, PC_FLAG_ZERO};
+//     step_t flag_step_bits = idx_to_flag[flag_idx];
+//
+//     // TODO: unconditional jump could save one step by skipping pc cnt
+//     if (using_imm16_flag) {
+//       step_template = &jmp_imm16_template;
+//     } else {
+//       step_template = &jmp_mar_template;
+//     }
+//
+//     StepCreator template_step = step_template->at(instruction->step);
+//     template_step.setRegisters(instruction);
+//     template_step.setFlag(flag_step_bits);
+//     setStep(template_step, instruction);
+//   }
+// }
+//
+// void math_instruction(const split_addr_t *instruction) {
+//   const template_t *reg_template = nullptr;
+//   const template_t *imm_template = nullptr;
+//
+//   if (instruction->instruction & 1) {
+//     reg_template = &math_no_carry_template_reg;
+//     imm_template = &math_no_carry_template_imm;
+//   } else {
+//     reg_template = &math_carry_template_reg;
+//     imm_template = &math_carry_template_imm;
+//   }
+//
+//   create_instruction(reg_template, imm_template, instruction);
+// }
+//
+// void not_instruction(const split_addr_t *instruction) {
+//   create_instruction(&not_template_reg, &not_template_none, instruction);
+// }
+//
+// void cmp_instruction(const split_addr_t *instruction) {
+//   create_instruction(&cmp_template_reg, &cmp_template_imm, instruction);
+// }
+//
+// void keyb_other_instruction(const split_addr_t *instruction) {
+//   create_instruction(&keyboard_template, &keyboard_template, instruction);
+// }
+//
+// using instruction_func = std::function<void(const split_addr_t *)>;
+//
+// instruction_func instructions_table[16] = {
+//     mw_instruction,         cmp_instruction,          // 0, 1
+//     sw_instruction,         push_special_instruction, // 2, 3
+//     pop_instruction,        jmp_instruction,          // 4, 5
+//     keyb_other_instruction, lw_instruction,           // 6, 7
+//     math_instruction,       math_instruction,         // sub, sbc
+//     math_instruction,       math_instruction,         // add, adc
+//     not_instruction,        math_instruction,         // not, xor
+//     math_instruction,       math_instruction,         // or, and
+// };
 
 void instantiateTemplates() {
   // TODO: implement all the different templates
@@ -406,86 +658,80 @@ void instantiateTemplates() {
   // TODO: make functions to fill placeholders in templates and automatically
   // create all permutations of functions
 
-  readWriteStructure a_reg{a::bout, a::write};
-  readWriteStructure b_reg{b::bout, b::write};
-  readWriteStructure x_reg{x::bout, x::write};
-  readWriteStructure y_reg{y::bout, y::write};
-  readWriteStructure z_reg{z::bout, z::write};
-
   fillTemplate(mw_template_imm, a_reg);
   fillTemplate(mw_template_imm, a_reg, b_reg);
   fillTemplate(mw_template_imm, a_reg, b_reg, flags::select::carry);
 
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(mw_template_imm);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(lw_template_mar);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(lw_template_imm);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(sw_template_mar);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(sw_template_imm);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(push_template_reg);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(push_template_imm8);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(pop_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(mar_template_imm16);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(jnz_template_reg);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(jnz_template_reg_a);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(jmp_imm16_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(jmp_mar_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(math_carry_template_reg);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(math_no_carry_template_reg);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(math_carry_template_imm);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(math_no_carry_template_imm);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(not_template_none);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(not_template_reg);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(sp_dec_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(sp_inc_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(mar_cnt_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(pc_to_mar_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(sp_to_mar_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(mar_to_sp_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(sp_template_imm16);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(cmp_template_reg);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(cmp_template_imm);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(keyboard_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(update_flag_register_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(halt_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(nop_template);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(vram_read_template_no_delay);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(vram_read_template_delay);
-  istr_set.instructions[istr_idx++] =
-      std::make_unique<Instruction>(vram_write_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(mw_template_imm);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(lw_template_mar);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(lw_template_imm);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(sw_template_mar);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(sw_template_imm);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(push_template_reg);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(push_template_imm8);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(pop_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(mar_template_imm16);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(jnz_template_reg);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(jnz_template_reg_a);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(jmp_imm16_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(jmp_mar_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(math_carry_template_reg);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(math_no_carry_template_reg);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(math_carry_template_imm);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(math_no_carry_template_imm);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(not_template_none);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(not_template_reg);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(sp_dec_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(sp_inc_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(mar_cnt_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(pc_to_mar_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(sp_to_mar_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(mar_to_sp_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(sp_template_imm16);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(cmp_template_reg);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(cmp_template_imm);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(keyboard_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(update_flag_register_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(halt_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(nop_template);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(vram_read_template_no_delay);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(vram_read_template_delay);
+  // istr_set.instructions[istr_idx++] =
+  //     std::make_unique<Instruction>(vram_write_template);
 }
 
 IstrTemplateType opcodeToTemplate(const Opcode &opcode) {
