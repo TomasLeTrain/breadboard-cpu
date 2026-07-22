@@ -84,6 +84,7 @@ enum Action {
     OutputFlagsSelector,
 }
 
+// TODO: ensure values created are within their max sizes
 struct Output {
     bout: u8,
     write: u8,
@@ -94,7 +95,7 @@ struct Output {
 }
 
 impl Output {
-    fn create_empty() -> Self {
+    fn new() -> Self {
         Self {
             bout: 0,
             write: 0,
@@ -106,43 +107,43 @@ impl Output {
     }
 
     fn from_write(val: u8) -> Self {
-        let mut result = Self::create_empty();
+        let mut result = Self::new();
         result.write = val;
         result
     }
 
     fn from_bout(val: u8) -> Self {
-        let mut result = Self::create_empty();
+        let mut result = Self::new();
         result.bout = val;
         result
     }
 
     fn from_addr(val: u8) -> Self {
-        let mut result = Self::create_empty();
+        let mut result = Self::new();
         result.addr = val;
         result
     }
 
     fn from_other(val: u8) -> Self {
-        let mut result = Self::create_empty();
+        let mut result = Self::new();
         result.misc = val;
         result
     }
 
     fn from_flag_select(val: u8) -> Self {
-        let mut result = Self::create_empty();
+        let mut result = Self::new();
         result.flag_select = val;
         result
     }
 
     fn from_pc_cnt(val: u8) -> Self {
-        let mut result = Self::create_empty();
+        let mut result = Self::new();
         result.pc_cnt = val;
         result
     }
 
-    fn from(arr: &[Self]) -> Output {
-        let mut result = Self::create_empty();
+    fn from_arr(arr: &[Self]) -> Output {
+        let mut result = Self::new();
         for curr in arr {
             result.merge(curr)
         }
@@ -150,19 +151,13 @@ impl Output {
     }
 
     fn intersect(&self, other: &Self) -> bool {
-        if (self.bout > 0) && (other.bout > 0) {
-            true
-        } else if (self.write > 0) && (other.write > 0) {
-            true
-        } else if (self.addr > 0) && (other.addr > 0) {
-            true
-        } else if (self.flag_select > 0) && (other.flag_select > 0) {
-            true
-        } else if (self.pc_cnt > 0) && (other.pc_cnt > 0) {
-            true
-        } else {
-            false
-        }
+        let category_intersects = |a: u8, b: u8| -> bool { a > 0 && b > 0 };
+
+        category_intersects(self.bout, other.bout)
+            || category_intersects(self.write, other.write)
+            || category_intersects(self.addr, other.addr)
+            || category_intersects(self.flag_select, other.flag_select)
+            || category_intersects(self.pc_cnt, other.pc_cnt)
     }
 
     fn merge(&mut self, other: &Self) {
@@ -176,10 +171,20 @@ impl Output {
     }
 }
 
+impl<const N: usize> From<[Output; N]> for Output {
+    fn from(arr: [Output; N]) -> Self {
+        let mut result = Self::new();
+        for curr in arr {
+            result.merge(&curr)
+        }
+        result
+    }
+}
+
 fn init_action_output_map() -> HashMap<Action, Output> {
-    let map = HashMap::from([
+    HashMap::from([
         (Action::Halt, Output::from_bout(5)),
-        (Action::Nop, Output::create_empty()),
+        (Action::Nop, Output::new()),
         (Action::Reset, Output::from_other(2)),
         // addr regs cnt
         (Action::PcCnt, Output::from_pc_cnt(1)),
@@ -191,40 +196,40 @@ fn init_action_output_map() -> HashMap<Action, Output> {
         (Action::MarAddr, Output::from_addr(2)),
         (Action::SpAddr, Output::from_addr(3)),
         // registers bout
-        (Action::ABout, Output::from_bout(0b1000 | 0)),
+        (Action::ABout, Output::from_bout(0b1000)),
         (Action::BBout, Output::from_bout(0b1000 | 1)),
         (Action::XBout, Output::from_bout(0b1000 | 5)),
         (Action::YBout, Output::from_bout(0b1000 | 6)),
         (Action::ZBout, Output::from_bout(0b1000 | 7)),
         (
             Action::PcLoBout,
-            Output::from(&[Output::from_addr(1), Output::from_bout(2)]),
+            [Output::from_addr(1), Output::from_bout(2)].into(),
         ),
         (
             Action::PcHiBout,
-            Output::from(&[Output::from_addr(1), Output::from_bout(3)]),
+            [Output::from_addr(1), Output::from_bout(3)].into(),
         ),
         (
             Action::MarLoBout,
-            Output::from(&[Output::from_addr(2), Output::from_bout(2)]),
+            [Output::from_addr(2), Output::from_bout(2)].into(),
         ),
         (
             Action::MarHiBout,
-            Output::from(&[Output::from_addr(2), Output::from_bout(3)]),
+            [Output::from_addr(2), Output::from_bout(3)].into(),
         ),
         (
             Action::SpLoBout,
-            Output::from(&[Output::from_addr(3), Output::from_bout(2)]),
+            [Output::from_addr(3), Output::from_bout(2)].into(),
         ),
         (
             Action::SpHiBout,
-            Output::from(&[Output::from_addr(3), Output::from_bout(3)]),
+            [Output::from_addr(3), Output::from_bout(3)].into(),
         ),
         (Action::KeybBout, Output::from_bout(0b1000 | 2)),
         (Action::FlagsBout, Output::from_bout(0b1000 | 4)),
         (Action::FAluBout, Output::from_bout(0b1000 | 3)),
         // registers write
-        (Action::AWrite, Output::from_write(0b1000 | 0)),
+        (Action::AWrite, Output::from_write(0b1000)),
         (Action::BWrite, Output::from_write(0b1000 | 1)),
         (Action::XWrite, Output::from_write(0b1000 | 5)),
         (Action::YWrite, Output::from_write(0b1000 | 6)),
@@ -244,29 +249,29 @@ fn init_action_output_map() -> HashMap<Action, Output> {
         // vram read/write
         (
             Action::VramRead,
-            Output::from(&[Output::from_other(3), Output::from_flag_select(5)]),
+            [Output::from_other(3), Output::from_flag_select(5)].into(),
         ),
         (
             Action::VramWrite,
-            Output::from(&[Output::from_other(3), Output::from_flag_select(4)]),
+            [Output::from_other(3), Output::from_flag_select(4)].into(),
         ),
         // shift left
         (
             Action::XShiftLeft,
-            Output::from(&[Output::from_other(3), Output::from_flag_select(0)]),
+            [Output::from_other(3), Output::from_flag_select(0)].into(),
         ),
         (
             Action::YShiftLeft,
-            Output::from(&[Output::from_other(3), Output::from_flag_select(2)]),
+            [Output::from_other(3), Output::from_flag_select(2)].into(),
         ),
         // shift right
         (
             Action::XShiftRight,
-            Output::from(&[Output::from_other(3), Output::from_flag_select(1)]),
+            [Output::from_other(3), Output::from_flag_select(1)].into(),
         ),
         (
             Action::YShiftRight,
-            Output::from(&[Output::from_other(3), Output::from_flag_select(3)]),
+            [Output::from_other(3), Output::from_flag_select(3)].into(),
         ),
         // flags
         (Action::FlagDirect, Output::from_flag_select(0)),
@@ -278,17 +283,16 @@ fn init_action_output_map() -> HashMap<Action, Output> {
         (Action::Flag7, Output::from_flag_select(6)),
         (Action::Flag8, Output::from_flag_select(7)),
         (Action::FlagWriteAlu, Output::from_other(1)),
-    ]);
-    map
+    ])
 }
 
 // custom max-capacity runtime-size implementation that fits in 8 bytes
-struct IstrTemplate {
+struct StepTemplate {
     arr: [Action; 7],
     size: u8,
 }
 
-impl IstrTemplate {
+impl StepTemplate {
     fn new() -> Self {
         Self {
             arr: [Action::Halt; 7],
@@ -300,35 +304,30 @@ impl IstrTemplate {
         self.size += 1;
     }
 
-    fn from(arr: &[Action]) -> Self {
+    fn from_arr<const N: usize>(arr: [Action; N]) -> Self {
         assert!(arr.len() <= 7);
         let mut result = Self::new();
 
         for val in arr {
-            result.push(*val);
+            result.push(val);
         }
+
         result
     }
 }
 
-// impl IntoIterator for IstrTemplate {
-//     type Item = Action;
-//     type IntoIter = IstrTemplateIterator;
-//
-//     fn into_iter(self) -> Self::IntoIter {
-//         IstrTemplateIterator {
-//             istr_template: self,
-//             index: 0,
-//         }
-//     }
-// }
+impl<const N: usize> From<[Action; N]> for StepTemplate {
+    fn from(arr: [Action; N]) -> Self {
+        StepTemplate::from_arr(arr)
+    }
+}
 
-struct IstrTemplateIterator<'a> {
-    istr_template: &'a IstrTemplate,
+struct StepTemplateIterator<'a> {
+    istr_template: &'a StepTemplate,
     index: u8,
 }
 
-impl<'a> Iterator for IstrTemplateIterator<'a> {
+impl<'a> Iterator for StepTemplateIterator<'a> {
     // we will be counting with usize
     type Item = Action;
 
@@ -342,30 +341,33 @@ impl<'a> Iterator for IstrTemplateIterator<'a> {
     }
 }
 
-impl<'a> IntoIterator for &'a IstrTemplate {
+impl<'a> IntoIterator for &'a StepTemplate {
     type Item = Action;
-    type IntoIter = IstrTemplateIterator<'a>;
+    type IntoIter = StepTemplateIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        IstrTemplateIterator {
+        StepTemplateIterator {
             istr_template: self,
             index: 0,
         }
     }
 }
 
-fn test() {
-    // let thing: IstrTemplate = vec![vec![]];
+type IstrTemplate = Vec<StepTemplate>;
+
+fn universal_step_0() -> StepTemplate {
+    [Action::MemRead, Action::PcAddr, Action::IrWrite].into()
 }
 
-// IstrTemplateType load_address_procedure = {
-//     universal_step_0,
-//     {pc::cnt},
-//     {mem::read, pc::addr, mar::hi::write}, // first byte has msb
-//     {pc::cnt},                             // pc cnt
-//     {mem::read, pc::addr, mar::lo::write}, // second byte has lsb
-// };
-//
+fn load_address_procedure() -> IstrTemplate {
+    vec![
+        universal_step_0(),
+        [Action::PcCnt].into(),
+        [Action::PcCnt, Action::PcAddr, Action::MarHiWrite].into(), // first byte has msb
+        [Action::PcCnt].into(),                                     // pc cnt
+        [Action::MemRead, Action::PcAddr, Action::MarLoWrite].into(), // second byte has lsb
+    ]
+}
 
 fn bitTransform(x: u32, x_bit: u32, y_bit: u32) -> u32 {
     if x & (1 << x_bit) == 0 { 0 } else { 1 << y_bit }
@@ -409,20 +411,18 @@ fn addrToOpcode(addr: u32) -> Opcode {
     }
 }
 
-// struct StepTemplate {}
 struct istr {}
+
 fn actionToOutput(action: &Action) -> Output {
-    Output::create_empty()
+    Output::new()
 }
 
-// type StepTemplate = Vec<Action>;
-
-fn step_template_to_output(step_istr: &IstrTemplate) -> Output {
-    let mut output = Output::create_empty();
+fn step_template_to_output(step_istr: &StepTemplate) -> Output {
+    let mut output = Output::new();
 
     for action_i in step_istr {
         let output_i = actionToOutput(&action_i);
-        for action_j in *step_istr {
+        for action_j in step_istr {
             let output_j = actionToOutput(&action_j);
             if output_i.intersect(&output_j) {
                 // TODO: output error
@@ -432,7 +432,7 @@ fn step_template_to_output(step_istr: &IstrTemplate) -> Output {
     }
 
     // perform merging logic
-    for action in *step_istr {
+    for action in step_istr {
         output.merge(&actionToOutput(&action));
     }
 
