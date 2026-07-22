@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
-enum Action {
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+pub enum Action {
     Halt,
     Nop, // equal to zero outputs
     Reset,
@@ -84,7 +84,11 @@ enum Action {
     OutputFlagsSelector,
 }
 
+use Action::*;
+use std::sync::LazyLock;
+
 // TODO: ensure values created are within their max sizes
+// #[derive(Copy, Clone)]
 struct Output {
     bout: u8,
     write: u8,
@@ -174,199 +178,421 @@ impl Output {
 impl<const N: usize> From<[Output; N]> for Output {
     fn from(arr: [Output; N]) -> Self {
         let mut result = Self::new();
-        for curr in arr {
+        for curr in arr.iter() {
             result.merge(&curr)
         }
         result
     }
 }
 
-fn init_action_output_map() -> HashMap<Action, Output> {
+static ACTION_TO_OUTPUT_MAP: LazyLock<HashMap<Action, Output>> = LazyLock::new(|| {
     HashMap::from([
-        (Action::Halt, Output::from_bout(5)),
-        (Action::Nop, Output::new()),
-        (Action::Reset, Output::from_other(2)),
+        (Halt, Output::from_bout(5)),
+        (Nop, Output::new()),
+        (Reset, Output::from_other(2)),
         // addr regs cnt
-        (Action::PcCnt, Output::from_pc_cnt(1)),
-        (Action::MarCnt, Output::from_bout(4)),
-        (Action::SpDec, Output::from_bout(7)),
-        (Action::SpInc, Output::from_bout(6)),
+        (PcCnt, Output::from_pc_cnt(1)),
+        (MarCnt, Output::from_bout(4)),
+        (SpDec, Output::from_bout(7)),
+        (SpInc, Output::from_bout(6)),
         // addr regs addr
-        (Action::PcAddr, Output::from_addr(1)),
-        (Action::MarAddr, Output::from_addr(2)),
-        (Action::SpAddr, Output::from_addr(3)),
+        (PcAddr, Output::from_addr(1)),
+        (MarAddr, Output::from_addr(2)),
+        (SpAddr, Output::from_addr(3)),
         // registers bout
-        (Action::ABout, Output::from_bout(0b1000)),
-        (Action::BBout, Output::from_bout(0b1000 | 1)),
-        (Action::XBout, Output::from_bout(0b1000 | 5)),
-        (Action::YBout, Output::from_bout(0b1000 | 6)),
-        (Action::ZBout, Output::from_bout(0b1000 | 7)),
+        (ABout, Output::from_bout(0b1000)),
+        (BBout, Output::from_bout(0b1000 | 1)),
+        (XBout, Output::from_bout(0b1000 | 5)),
+        (YBout, Output::from_bout(0b1000 | 6)),
+        (ZBout, Output::from_bout(0b1000 | 7)),
         (
-            Action::PcLoBout,
+            PcLoBout,
             [Output::from_addr(1), Output::from_bout(2)].into(),
         ),
         (
-            Action::PcHiBout,
+            PcHiBout,
             [Output::from_addr(1), Output::from_bout(3)].into(),
         ),
         (
-            Action::MarLoBout,
+            MarLoBout,
             [Output::from_addr(2), Output::from_bout(2)].into(),
         ),
         (
-            Action::MarHiBout,
+            MarHiBout,
             [Output::from_addr(2), Output::from_bout(3)].into(),
         ),
         (
-            Action::SpLoBout,
+            SpLoBout,
             [Output::from_addr(3), Output::from_bout(2)].into(),
         ),
         (
-            Action::SpHiBout,
+            SpHiBout,
             [Output::from_addr(3), Output::from_bout(3)].into(),
         ),
-        (Action::KeybBout, Output::from_bout(0b1000 | 2)),
-        (Action::FlagsBout, Output::from_bout(0b1000 | 4)),
-        (Action::FAluBout, Output::from_bout(0b1000 | 3)),
+        (KeybBout, Output::from_bout(0b1000 | 2)),
+        (FlagsBout, Output::from_bout(0b1000 | 4)),
+        (FAluBout, Output::from_bout(0b1000 | 3)),
         // registers write
-        (Action::AWrite, Output::from_write(0b1000)),
-        (Action::BWrite, Output::from_write(0b1000 | 1)),
-        (Action::XWrite, Output::from_write(0b1000 | 5)),
-        (Action::YWrite, Output::from_write(0b1000 | 6)),
-        (Action::ZWrite, Output::from_write(7)),
-        (Action::PcLoWrite, Output::from_write(0b1000 | 3)),
-        (Action::PcHiWrite, Output::from_write(0b1000 | 2)),
-        (Action::MarLoWrite, Output::from_write(5)),
-        (Action::MarHiWrite, Output::from_write(4)),
-        (Action::SpLoWrite, Output::from_write(3)),
-        (Action::SpHiWrite, Output::from_write(2)),
+        (AWrite, Output::from_write(0b1000)),
+        (BWrite, Output::from_write(0b1000 | 1)),
+        (XWrite, Output::from_write(0b1000 | 5)),
+        (YWrite, Output::from_write(0b1000 | 6)),
+        (ZWrite, Output::from_write(7)),
+        (PcLoWrite, Output::from_write(0b1000 | 3)),
+        (PcHiWrite, Output::from_write(0b1000 | 2)),
+        (MarLoWrite, Output::from_write(5)),
+        (MarHiWrite, Output::from_write(4)),
+        (SpLoWrite, Output::from_write(3)),
+        (SpHiWrite, Output::from_write(2)),
         // ir regs
-        (Action::IrWrite, Output::from_write(0b1000 | 7)),
-        (Action::Ir2Write, Output::from_write(1)),
+        (IrWrite, Output::from_write(0b1000 | 7)),
+        (Ir2Write, Output::from_write(1)),
         // mem read/write
-        (Action::MemRead, Output::from_bout(1)),
-        (Action::MemWrite, Output::from_write(6)),
+        (MemRead, Output::from_bout(1)),
+        (MemWrite, Output::from_write(6)),
         // vram read/write
         (
-            Action::VramRead,
+            VramRead,
             [Output::from_other(3), Output::from_flag_select(5)].into(),
         ),
         (
-            Action::VramWrite,
+            VramWrite,
             [Output::from_other(3), Output::from_flag_select(4)].into(),
         ),
         // shift left
         (
-            Action::XShiftLeft,
+            XShiftLeft,
             [Output::from_other(3), Output::from_flag_select(0)].into(),
         ),
         (
-            Action::YShiftLeft,
+            YShiftLeft,
             [Output::from_other(3), Output::from_flag_select(2)].into(),
         ),
         // shift right
         (
-            Action::XShiftRight,
+            XShiftRight,
             [Output::from_other(3), Output::from_flag_select(1)].into(),
         ),
         (
-            Action::YShiftRight,
+            YShiftRight,
             [Output::from_other(3), Output::from_flag_select(3)].into(),
         ),
         // flags
-        (Action::FlagDirect, Output::from_flag_select(0)),
-        (Action::FlagCarry, Output::from_flag_select(1)),
-        (Action::FlagEq, Output::from_flag_select(2)),
-        (Action::FlagZero, Output::from_flag_select(3)),
-        (Action::Flag6, Output::from_flag_select(4)),
-        (Action::Flag5, Output::from_flag_select(5)),
-        (Action::Flag7, Output::from_flag_select(6)),
-        (Action::Flag8, Output::from_flag_select(7)),
-        (Action::FlagWriteAlu, Output::from_other(1)),
+        (FlagDirect, Output::from_flag_select(0)),
+        (FlagCarry, Output::from_flag_select(1)),
+        (FlagEq, Output::from_flag_select(2)),
+        (FlagZero, Output::from_flag_select(3)),
+        (Flag6, Output::from_flag_select(4)),
+        (Flag5, Output::from_flag_select(5)),
+        (Flag7, Output::from_flag_select(6)),
+        (Flag8, Output::from_flag_select(7)),
+        (FlagWriteAlu, Output::from_other(1)),
     ])
-}
+});
 
-// custom max-capacity runtime-size implementation that fits in 8 bytes
-struct StepTemplate {
-    arr: [Action; 7],
-    size: u8,
-}
+mod step_template {
+    use crate::Action;
 
-impl StepTemplate {
-    fn new() -> Self {
-        Self {
-            arr: [Action::Halt; 7],
-            size: 0,
+    // custom max-capacity runtime-size implementation that fits in 8 bytes
+    #[derive(Clone, Copy)]
+    pub struct StepTemplate {
+        arr: [Action; 7],
+        size: u8,
+    }
+
+    impl StepTemplate {
+        fn new() -> Self {
+            Self {
+                arr: [Action::Halt; 7],
+                size: 0,
+            }
         }
-    }
-    fn push(&mut self, value: Action) {
-        self.arr[self.size as usize] = value;
-        self.size += 1;
-    }
-
-    fn from_arr<const N: usize>(arr: [Action; N]) -> Self {
-        assert!(arr.len() <= 7);
-        let mut result = Self::new();
-
-        for val in arr {
-            result.push(val);
+        fn push(&mut self, value: Action) {
+            self.arr[self.size as usize] = value;
+            self.size += 1;
         }
 
-        result
+        fn from_arr<const N: usize>(arr: [Action; N]) -> Self {
+            assert!(arr.len() <= 7);
+            let mut result = Self::new();
+
+            for val in arr {
+                result.push(val);
+            }
+
+            result
+        }
+
+        pub fn iter<'a>(&'a self) -> Iter<'a> {
+            Iter {
+                iter: self.arr.iter(),
+                size: self.size,
+                index: 0,
+            }
+        }
+
+        pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a> {
+            IterMut {
+                iter: self.arr.iter_mut(),
+                size: self.size,
+                index: 0,
+            }
+        }
     }
-}
 
-impl<const N: usize> From<[Action; N]> for StepTemplate {
-    fn from(arr: [Action; N]) -> Self {
-        StepTemplate::from_arr(arr)
+    impl<const N: usize> From<[Action; N]> for StepTemplate {
+        fn from(arr: [Action; N]) -> Self {
+            StepTemplate::from_arr(arr)
+        }
     }
-}
 
-struct StepTemplateIterator<'a> {
-    istr_template: &'a StepTemplate,
-    index: u8,
-}
+    pub struct IntoIter {
+        istr_template: StepTemplate,
+        index: u8,
+    }
 
-impl<'a> Iterator for StepTemplateIterator<'a> {
-    // we will be counting with usize
-    type Item = Action;
+    pub struct Iter<'a> {
+        iter: core::slice::Iter<'a, Action>,
+        size: u8,
+        index: u8,
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.istr_template.size {
-            None
-        } else {
-            self.index += 1;
-            Some(self.istr_template.arr[(self.index - 1) as usize])
+    pub struct IterMut<'a> {
+        iter: core::slice::IterMut<'a, Action>,
+        size: u8,
+        index: u8,
+    }
+
+    impl Iterator for IntoIter {
+        type Item = Action;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.index >= self.istr_template.size {
+                None
+            } else {
+                self.index += 1;
+                Some(self.istr_template.arr[(self.index - 1) as usize])
+            }
+        }
+    }
+
+    impl<'a> Iterator for Iter<'a> {
+        type Item = &'a Action;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.index >= self.size {
+                None
+            } else {
+                self.index += 1;
+                self.iter.next()
+            }
+        }
+    }
+
+    impl<'a> Iterator for IterMut<'a> {
+        type Item = &'a mut Action;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.index >= self.size {
+                None
+            } else {
+                self.index += 1;
+                self.iter.next()
+            }
+        }
+    }
+
+    impl IntoIterator for StepTemplate {
+        type Item = Action;
+        type IntoIter = IntoIter;
+
+        fn into_iter(self) -> Self::IntoIter {
+            IntoIter {
+                istr_template: self,
+                index: 0,
+            }
+        }
+    }
+
+    impl<'a> IntoIterator for &'a StepTemplate {
+        type Item = &'a Action;
+        type IntoIter = Iter<'a>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.iter()
+        }
+    }
+
+    impl<'a> IntoIterator for &'a mut StepTemplate {
+        type Item = &'a mut Action;
+        type IntoIter = IterMut<'a>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.iter_mut()
         }
     }
 }
 
-impl<'a> IntoIterator for &'a StepTemplate {
-    type Item = Action;
-    type IntoIter = StepTemplateIterator<'a>;
+use crate::step_template::StepTemplate;
 
-    fn into_iter(self) -> Self::IntoIter {
-        StepTemplateIterator {
-            istr_template: self,
-            index: 0,
-        }
-    }
+struct ARegister {
+    bout: Action,
+    write: Action,
 }
+
+struct BRegister {
+    bout: Action,
+    write: Action,
+}
+
+struct XRegister {
+    bout: Action,
+    write: Action,
+    shift_left: Action,
+    shift_right: Action,
+}
+
+struct YRegister {
+    bout: Action,
+    write: Action,
+    shift_left: Action,
+    shift_right: Action,
+}
+
+struct ZRegister {
+    bout: Action,
+    write: Action,
+}
+
+struct LoRegister {
+    bout: Action,
+    write: Action,
+}
+
+struct HiRegister {
+    bout: Action,
+    write: Action,
+}
+
+struct PcRegister {
+    addr: Action,
+    lo: LoRegister,
+    hi: HiRegister,
+    cnt: Action,
+}
+
+struct MarRegister {
+    addr: Action,
+    lo: LoRegister,
+    hi: HiRegister,
+    cnt: Action,
+}
+
+struct SpRegister {
+    addr: Action,
+    lo: LoRegister,
+    hi: HiRegister,
+    inc: Action,
+    dec: Action,
+}
+
+struct MemStruct {
+    bout: Action,
+    write: Action,
+}
+
+static PC: LazyLock<PcRegister> = LazyLock::new(|| PcRegister {
+    addr: PcAddr,
+    lo: LoRegister {
+        bout: PcLoBout,
+        write: PcLoWrite,
+    },
+    hi: HiRegister {
+        bout: PcHiBout,
+        write: PcHiWrite,
+    },
+    cnt: PcCnt,
+});
+
+static MAR: LazyLock<MarRegister> = LazyLock::new(|| MarRegister {
+    addr: MarAddr,
+    lo: LoRegister {
+        bout: MarLoBout,
+        write: MarLoWrite,
+    },
+    hi: HiRegister {
+        bout: MarHiBout,
+        write: MarHiWrite,
+    },
+    cnt: MarCnt,
+});
+
+static SP: LazyLock<SpRegister> = LazyLock::new(|| SpRegister {
+    addr: SpAddr,
+    lo: LoRegister {
+        bout: SpLoBout,
+        write: SpLoWrite,
+    },
+    hi: HiRegister {
+        bout: SpHiBout,
+        write: SpHiWrite,
+    },
+    inc: SpInc,
+    dec: SpDec,
+});
+
+static MEM: LazyLock<MemStruct> = LazyLock::new(|| MemStruct {
+    bout: MemRead,
+    write: MemWrite,
+});
 
 type IstrTemplate = Vec<StepTemplate>;
 
-fn universal_step_0() -> StepTemplate {
-    [Action::MemRead, Action::PcAddr, Action::IrWrite].into()
+static UNIVERSAL_STEP_0: LazyLock<StepTemplate> =
+    LazyLock::new(|| [MemRead, PcAddr, IrWrite].into());
+static UNIVERSAL_STEP_1: LazyLock<StepTemplate> = LazyLock::new(|| [PcCnt].into());
+
+static LOAD_ADDRESS_PROCEDURE: LazyLock<IstrTemplate> = LazyLock::new(|| {
+    vec![
+        *UNIVERSAL_STEP_0,
+        [PC.cnt].into(),
+        [PC.cnt, PC.addr, MAR.hi.write].into(), // first byte has msb
+        [PC.cnt].into(),                        // pc cnt
+        [MEM.bout, PC.addr, MAR.lo.write].into(), // second byte has lsb
+    ]
+});
+
+trait Bout {
+    fn bout(&self) -> Action;
+}
+trait Write {
+    fn write(&self) -> Action;
 }
 
-fn load_address_procedure() -> IstrTemplate {
-    vec![
-        universal_step_0(),
-        [Action::PcCnt].into(),
-        [Action::PcCnt, Action::PcAddr, Action::MarHiWrite].into(), // first byte has msb
-        [Action::PcCnt].into(),                                     // pc cnt
-        [Action::MemRead, Action::PcAddr, Action::MarLoWrite].into(), // second byte has lsb
-    ]
+fn set_reg0(istr_temp: &mut IstrTemplate, reg0: &(impl Bout + Write)) {
+    for step in istr_temp {
+        for action in step.iter_mut() {
+            if *action == Reg0Bout {
+                *action = reg0.bout();
+            }
+            if *action == Reg0Write {
+                *action = reg0.write();
+            }
+        }
+    }
+}
+
+fn set_reg1(istr_temp: &mut IstrTemplate, reg0: &(impl Bout + Write)) {
+    for step in istr_temp {
+        for action in step.iter_mut() {
+            if *action == Reg1Bout {
+                *action = reg0.bout();
+            }
+            if *action == Reg1Write {
+                *action = reg0.write();
+            }
+        }
+    }
 }
 
 fn bitTransform(x: u32, x_bit: u32, y_bit: u32) -> u32 {
@@ -411,32 +637,39 @@ fn addrToOpcode(addr: u32) -> Opcode {
     }
 }
 
-struct istr {}
-
-fn actionToOutput(action: &Action) -> Output {
+fn action_to_output(action: Action) -> Output {
     Output::new()
 }
 
 fn step_template_to_output(step_istr: &StepTemplate) -> Output {
-    let mut output = Output::new();
+    let mut result = Output::new();
 
-    for action_i in step_istr {
-        let output_i = actionToOutput(&action_i);
-        for action_j in step_istr {
-            let output_j = actionToOutput(&action_j);
-            if output_i.intersect(&output_j) {
-                // TODO: output error
-                return output;
+    let actions: Vec<_> = step_istr.into_iter().collect();
+    let outputs: Vec<_> = step_istr
+        .into_iter()
+        .map(|&action| action_to_output(action))
+        .collect();
+
+    // loop through all unique pairs
+    for i in 1..outputs.len() - 1 {
+        for j in i + 1..outputs.len() {
+            if outputs[i].intersect(&outputs[j]) {
+                eprintln!(
+                    "Failed when merging actions {:?} and {:?}",
+                    *actions[i], *actions[j]
+                );
+
+                // TODO: print error?
+                return result;
             }
         }
     }
 
-    // perform merging logic
-    for action in step_istr {
-        output.merge(&actionToOutput(&action));
+    for output in &outputs {
+        result.merge(output);
     }
 
-    output
+    result
 }
 
 fn main() {

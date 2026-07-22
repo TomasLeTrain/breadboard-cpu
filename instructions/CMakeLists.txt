@@ -3,6 +3,8 @@
 # $ cmake --version
 cmake_minimum_required(VERSION 4.1)
 
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-free-nonheap-object")
+
 # Set the project name
 project (instructions)
 

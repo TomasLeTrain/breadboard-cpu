@@ -6,8 +6,8 @@ build/$(PROJECT).elf: build FORCE
 	$(MAKE) -C build
 
 build:
-	# cmake -B build -DCMAKE_VERBOSE_MAKEFILE=ON
-	cmake -B build
+	cmake -B build -DCMAKE_VERBOSE_MAKEFILE=ON
+	# cmake -B build
 
 clean:
 	rm -rf build

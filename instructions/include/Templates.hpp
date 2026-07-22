@@ -4,5 +4,5 @@
 #include "Opcode.hpp"
 #include <vector>
 
-using StepTemplateType = std::vector<Action>;
-using IstrTemplateType = std::vector<StepTemplateType>;
+using StepTemplateType = std::array<Action, 10>;
+using IstrTemplateType = std::array<StepTemplateType, 16>;

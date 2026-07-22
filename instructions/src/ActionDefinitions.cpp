@@ -13,16 +13,11 @@ const std::map<Action, Output> action_to_output_map{
     {nop, Output::createEmpty()},
     {reset, other(2)},
 
+    // addr regs cnt
     {pc_cnt, pc_cnt_output(1)},
     {mar_cnt, bout(4)},
     {sp_dec, bout(7)},
     {sp_inc, bout(6)},
-
-    // addr regs cnt
-    {pc_cnt, Output(0, 0, 0, 0, 0, 0)},
-    {mar_cnt, Output(0, 0, 0, 0, 0, 0)},
-    {sp_dec, Output(0, 0, 0, 0, 0, 0)},
-    {sp_inc, Output(0, 0, 0, 0, 0, 0)},
 
     // addr regs addr
     {pc_addr, addr(1)},

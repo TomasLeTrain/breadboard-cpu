@@ -6,29 +6,41 @@
 #include <memory>
 #include <queue>
 
-class TemplateGeneratorInterface {
-public:
-  virtual IstrTemplateType opcodeToTemplate(const Opcode &opcode) = 0;
-};
-
-class Instruction : public TemplateGeneratorInterface {
+class Instruction {
 public:
   Instruction(IstrTemplateType instruction_template, std::string name)
       : instruction_template(instruction_template), name(name) {}
 
-  IstrTemplateType opcodeToTemplate(const Opcode &opcode) override {
-    return instruction_template;
-  }
+  const IstrTemplateType &getTemplate() const { return instruction_template; }
+  std::string getName() const { return name; }
 
 private:
   IstrTemplateType instruction_template;
   std::string name;
 };
 
+class TemplateGeneratorInterface {
+public:
+  virtual const Instruction &opcodeToInstruction(const Opcode &opcode) = 0;
+};
+
+class InstructionWrapper : public TemplateGeneratorInterface {
+public:
+  InstructionWrapper(const Instruction &instruction)
+      : instruction(instruction) {}
+
+  const Instruction &opcodeToInstruction(const Opcode &opcode) override {
+    return instruction;
+  }
+
+private:
+  const Instruction &instruction;
+};
+
 class ExtendedInstruction : public TemplateGeneratorInterface {
 public:
-  IstrTemplateType opcodeToTemplate(const Opcode &opcode) override {
-    return instructions.at(opcode.ir2)->opcodeToTemplate(opcode);
+  const Instruction &opcodeToInstruction(const Opcode &opcode) override {
+    return instructions.at(opcode.ir2)->opcodeToInstruction(opcode);
   }
 
   void setTemplateGenerator(int ir2_idx,
@@ -44,8 +56,8 @@ class InstructionSet : public TemplateGeneratorInterface {
 public:
   InstructionSet() {}
 
-  IstrTemplateType opcodeToTemplate(const Opcode &opcode) override {
-    return instructions.at(opcode.ir)->opcodeToTemplate(opcode);
+  const Instruction &opcodeToInstruction(const Opcode &opcode) override {
+    return instructions.at(opcode.ir)->opcodeToInstruction(opcode);
   }
 
   void setTemplateGenerator(int ir_idx,

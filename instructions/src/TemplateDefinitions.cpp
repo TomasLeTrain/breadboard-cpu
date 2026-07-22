@@ -6,14 +6,14 @@
 #include <string>
 #include <vector>
 
-struct readWriteStructure {
+class readWriteStructure {
+public:
   Action bout;
   Action write;
   std::string name;
 };
-
 bool operator==(const readWriteStructure &lhs, const readWriteStructure &rhs) {
-  return lhs.bout == rhs.bout && lhs.write == rhs.write;
+  return lhs.name == rhs.name;
 }
 
 readWriteStructure a_reg{a::bout, a::write, "a"};
@@ -109,7 +109,7 @@ IstrTemplateType load_address_procedure = {
 
 // move register to register (reg0 = reg1)
 void addMoveWordRegInstructions(
-    std::vector<std::unique_ptr<Instruction>> &dest) {
+    std::vector<std::unique_ptr<InstructionWrapper>> &dest) {
   static const IstrTemplateType base_template = {
       universal_step_0,
       universal_step_1,
@@ -126,15 +126,16 @@ void addMoveWordRegInstructions(
       mar_lo_reg, mar_hi_reg, pc_lo_reg, pc_hi_reg, sp_lo_reg,
       sp_hi_reg,  flags_reg,  keyb_reg};
 
-  for (const auto &l : lhs) {
-    for (const auto &r : rhs) {
+  for (const readWriteStructure &l : lhs) {
+    for (const readWriteStructure &r : rhs) {
       // avoid duplicates
       if (l == r)
         continue;
-      auto current = copyTemplate(base_template);
+      IstrTemplateType current = copyTemplate(base_template);
       fillTemplate(current, l, r);
-      dest.push_back(std::make_unique<Instruction>(current, "mv " + l.name +
-                                                                ", " + r.name));
+
+      Instruction istr(current, "mv " + l.name + ", " + r.name);
+      dest.push_back(std::make_unique<InstructionWrapper>(istr));
     }
   }
 }
@@ -735,5 +736,5 @@ void instantiateTemplates() {
 }
 
 IstrTemplateType opcodeToTemplate(const Opcode &opcode) {
-  return istr_set.opcodeToTemplate(opcode);
+  return istr_set.opcodeToInstruction(opcode).getTemplate();
 }
