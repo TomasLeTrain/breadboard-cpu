@@ -1,16 +1,14 @@
-use std::collections::HashMap;
-
 mod action;
-mod output;
-
 mod instructions;
 mod opcode;
+mod output;
 mod step_template;
 
 use action::Action;
 use action::action_to_output;
 use output::Output;
-use std::sync::LazyLock;
+
+use instructions::NamedInstruction;
 
 fn step_template_to_output(step_istr: &step_template::StepTemplate) -> Output {
     let mut result = Output::new();
@@ -40,7 +38,16 @@ fn step_template_to_output(step_istr: &step_template::StepTemplate) -> Output {
     result
 }
 
+fn print_istrs(istrs: &Vec<NamedInstruction>) {
+    for istr in istrs {
+        println!("istr: {}", istr.name);
+        step_template_to_output(istr.istr.first().unwrap());
+    }
+}
+
 fn main() {
     println!("Hello, world!");
-    instructions::build_all_instructions();
+    let istrs = instructions::build_all_instructions();
+    print_istrs(&istrs);
+    println!("total num instructions: {}", istrs.len());
 }

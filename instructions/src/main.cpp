@@ -82,4 +82,21 @@ Output addrToOutputs(const uint32_t addr) {
   return opcodeToOutput(addrToOpcode(addr));
 }
 
-int main() {}
+struct ptrHolder {
+  int *ptr;
+};
+
+int main() {
+  ptrHolder thing2;
+
+  {
+    int bar = 4;
+    thing2.ptr = &bar;
+  }
+
+  // bar doesn't exist
+
+  *thing2.ptr = 2;
+
+  cout << *thing2.ptr << endl;
+}
