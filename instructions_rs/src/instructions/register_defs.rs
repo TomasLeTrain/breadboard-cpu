@@ -130,3 +130,76 @@ pub static IR2: LazyLock<WriteRegister> = LazyLock::new(|| WriteRegister { write
 
 pub static KEYB: LazyLock<BoutRegister> = LazyLock::new(|| BoutRegister { bout: KeybBout });
 pub static FLAGS: LazyLock<BoutRegister> = LazyLock::new(|| BoutRegister { bout: FlagsBout });
+
+pub trait Bout {
+    fn bout(&self) -> Action;
+}
+pub trait Write {
+    fn write(&self) -> Action;
+}
+
+pub trait AddressRegister {
+    fn hi(&self) -> &(impl Bout + Write);
+    fn lo(&self) -> &(impl Bout + Write);
+    fn addr(&self) -> Action;
+}
+
+impl Bout for BoutWriteRegister {
+    fn bout(&self) -> Action {
+        self.bout
+    }
+}
+
+impl Write for BoutWriteRegister {
+    fn write(&self) -> Action {
+        self.write
+    }
+}
+
+impl Bout for BoutRegister {
+    fn bout(&self) -> Action {
+        self.bout
+    }
+}
+
+impl Write for WriteRegister {
+    fn write(&self) -> Action {
+        self.write
+    }
+}
+
+impl AddressRegister for PcRegister {
+    fn hi(&self) -> &(impl Bout + Write) {
+        &self.hi
+    }
+    fn lo(&self) -> &(impl Bout + Write) {
+        &self.lo
+    }
+    fn addr(&self) -> Action {
+        self.addr
+    }
+}
+
+impl AddressRegister for SpRegister {
+    fn hi(&self) -> &(impl Bout + Write) {
+        &self.hi
+    }
+    fn lo(&self) -> &(impl Bout + Write) {
+        &self.lo
+    }
+    fn addr(&self) -> Action {
+        self.addr
+    }
+}
+
+impl AddressRegister for MarRegister {
+    fn hi(&self) -> &(impl Bout + Write) {
+        &self.hi
+    }
+    fn lo(&self) -> &(impl Bout + Write) {
+        &self.lo
+    }
+    fn addr(&self) -> Action {
+        self.addr
+    }
+}

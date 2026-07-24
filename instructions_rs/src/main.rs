@@ -10,6 +10,8 @@ use output::Output;
 
 use instructions::NamedInstruction;
 
+use crate::instructions::InstructionType;
+
 fn step_template_to_output(step_istr: &step_template::StepTemplate) -> Output {
     let mut result = Output::new();
 
@@ -50,4 +52,17 @@ fn main() {
     let istrs = instructions::build_all_instructions();
     print_istrs(&istrs);
     println!("total num instructions: {}", istrs.len());
+
+    let num_single = istrs
+        .iter()
+        .filter(|e| matches!(e.istr_type, InstructionType::Single))
+        .count();
+
+    let num_extended = istrs
+        .iter()
+        .filter(|e| matches!(e.istr_type, InstructionType::Extended))
+        .count();
+
+    println!("total num single istrs: {}", num_single);
+    println!("total num extended istrs: {}", num_extended);
 }

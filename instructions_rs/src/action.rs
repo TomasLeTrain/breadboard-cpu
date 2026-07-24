@@ -83,5 +83,12 @@ pub enum Action {
     Reg1Bout,
     Reg0Write,
     Reg1Write,
+
+    AddrHiBout,
+    AddrHiWrite,
+    AddrLoBout,
+    AddrLoWrite,
+    AddrOut,
+
     OutputFlagsSelector,
 }
