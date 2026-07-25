@@ -35,7 +35,7 @@ fn move_word_reg_instructions(destination: &mut Vec<NamedInstruction>) {
         [Reg1Bout, Reg0Write, Reset].into(), // read from reg1 to reg0
     ];
 
-    // excludes PC
+    // PC is not excluded for writing to
     for reg0 in WRITE_REGISTERS.iter() {
         // excludes PC, avoids duplicates
         let rhs = READ_REGISTERS
@@ -609,45 +609,285 @@ fn vram_write_instructions(destination: &mut Vec<NamedInstruction>) {
 
 fn cmp_imm_instructions(destination: &mut Vec<NamedInstruction>) {
     todo!()
+    //
+    // // Reg0 = Reg0 op Reg1
+    // IstrTemplateType cmpTemplateImm = [
+    //     universalStep0,
+    //     [Reg0Bout, A.write,
+    //      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
+    //     [MEM.bout, PC.addr, B.write].into(), // load imm into b
+    //     [FLAGS.aluWrite, PC.cnt].into(),
+    //     [Reset].into(),
+    // ].into();
 }
 fn cmp_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     todo!()
-}
+    // possible edge cases:
+    // reg0 = A, reg1 = ?
+    // reg0 = ?, reg1 = B
+    // reg0 = A, reg1 = B
+    // reg0 = B, reg1 = A
 
-fn not_instructions(destination: &mut Vec<NamedInstruction>) {
-    todo!()
-    // // Reg0 = ~Reg0
-    // IstrTemplateType notTemplateNone = [
-    //     universalStep0,
-    //     [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a, pc cnt
-    //     [fAluBout, flagWriteAlu,
-    //      Reg0Write].into(), // do math op, save to Reg0, writes to flag reg
-    //     [Reset].into(),
-    // ].into();
-}
-
-fn not_reg_instructions(destination: &mut Vec<NamedInstruction>) {
-    todo!()
-    // // Reg0 = ~Reg1
-    // IstrTemplateType notTemplateReg = [
+    // // Reg0 = Reg0 op Reg1
+    // IstrTemplateType cmpTemplateReg = [
     //     universalStep0,
     //     universalStep1,
     //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-    //     [Reg1Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-    //     [fAluBout, flagWriteAlu,
-    //      Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
+    //     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
+    //     [Reg1Bout, B.write].into(),             // load Reg1 into b
+    //     [FLAGS.aluWrite].into(),                // writes to flag reg
     //     [Reset].into(),
     // ].into();
 }
 
+fn not_instructions(destination: &mut Vec<NamedInstruction>) {
+    // Reg0 = ~Reg0
+    let not = vec![
+        *UNIVERSAL_STEP_0,
+        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a, pc cnt
+        [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // no need to write to a since we are opping directly on A
+    let not_a = vec![
+        *UNIVERSAL_STEP_0,
+        [FAluBout, FlagWriteAlu, Reg0Write, PC.cnt].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    for reg in WRITE_REGISTERS
+        .iter()
+        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    {
+        let mut current = {
+            if matches!(reg.name, "A") {
+                &not_a
+            } else {
+                &not
+            }
+        }
+        .clone();
+
+        fill_reg0(&mut current, reg);
+
+        assert!(all_regs_filled(&current));
+
+        destination.push(NamedInstruction {
+            istr: current,
+            name: format!("not {}", reg.name),
+            istr_type: InstructionType::Single,
+        });
+    }
+}
+
+fn not_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+    // Reg0 = ~Reg1
+    let base_template = vec![
+        *UNIVERSAL_STEP_0,
+        *UNIVERSAL_STEP_1,
+        *LOAD_IR2,
+        [Reg1Bout, A.write, PC.cnt].into(), // load Reg1 into a
+        [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // a = reg1, so no need to load reg1 into a
+    let base_template_reg1_a = vec![
+        *UNIVERSAL_STEP_0,
+        *UNIVERSAL_STEP_1,
+        *LOAD_IR2,
+        [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // PC excluded
+    for reg0 in WRITE_REGISTERS
+        .iter()
+        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    {
+        // excludes PC, avoids duplicates
+        let rhs = READ_REGISTERS
+            .iter()
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            .filter(|e| e.name != reg0.name);
+        for reg1 in rhs {
+            // avoid duplicates
+            let mut current = {
+                if matches!(reg1.name, "A") {
+                    &base_template_reg1_a
+                } else {
+                    &base_template
+                }
+            }
+            .clone();
+
+            fill_reg0(&mut current, reg0);
+            fill_reg1(&mut current, reg1);
+
+            assert!(all_regs_filled(&current));
+
+            destination.push(NamedInstruction {
+                istr: current,
+                name: format!("not {}, {}", reg0.name, reg1.name),
+                istr_type: InstructionType::Extended,
+            });
+        }
+    }
+}
+
+// in order of associated bits (0 is first, 7 is last)
+enum MathIstrTypes {
+    SubNoCarry,
+    SubCarry,
+    AddNoCarry,
+    AddCarry,
+    Not,
+    Xor,
+    Or,
+    And,
+}
+
+impl std::fmt::Display for MathIstrTypes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            MathIstrTypes::SubNoCarry => "sub",
+            MathIstrTypes::SubCarry => "sbb",
+            MathIstrTypes::AddNoCarry => "add",
+            MathIstrTypes::AddCarry => "adc",
+            MathIstrTypes::Not => "not",
+            MathIstrTypes::Xor => "xor",
+            MathIstrTypes::Or => "or",
+            MathIstrTypes::And => "and",
+        };
+        write!(f, "{name}")
+    }
+}
+
+impl MathIstrTypes {
+    pub fn iterator() -> std::slice::Iter<'static, MathIstrTypes> {
+        static DIRECTIONS: [MathIstrTypes; 8] = [
+            MathIstrTypes::SubNoCarry,
+            MathIstrTypes::SubCarry,
+            MathIstrTypes::AddNoCarry,
+            MathIstrTypes::AddCarry,
+            MathIstrTypes::Not,
+            MathIstrTypes::Xor,
+            MathIstrTypes::Or,
+            MathIstrTypes::And,
+        ];
+        DIRECTIONS.iter()
+    }
+}
+
+fn get_flag_action(math_type: &MathIstrTypes) -> Action {
+    if matches!(math_type, MathIstrTypes::SubCarry | MathIstrTypes::AddCarry) {
+        FlagCarry
+    } else {
+        FlagDirect
+    }
+}
+
 fn math_imm_instructions(destination: &mut Vec<NamedInstruction>) {
-    todo!()
+    // Reg0 = Reg0 op imm
+    let math_imm = vec![
+        *UNIVERSAL_STEP_0,
+        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into A, pc cnt
+        [MEM.bout, PC.addr, B.write].into(), // load imm into B
+        [
+            FAluBout,
+            FlagWriteAlu,
+            Reg0Write,
+            OutputFlagsSelector,
+            PC.cnt,
+        ]
+        .into(), // save f to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // Reg0 = imm op Reg0
+    let math_imm_reverse = vec![
+        *UNIVERSAL_STEP_0,
+        [Reg0Bout, B.write, PC.cnt].into(), // load Reg0 into B, pc cnt
+        [MEM.bout, PC.addr, A.write].into(), // load imm into A
+        [
+            FAluBout,
+            FlagWriteAlu,
+            Reg0Write,
+            OutputFlagsSelector,
+            PC.cnt,
+        ]
+        .into(), // save f to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // edge cases where register gets loaded to itself
+    // all other cases have good register overwrite order
+    let math_imm_a = vec![
+        *UNIVERSAL_STEP_0,
+        [PC.cnt].into(),                     // load A into A (nop), pc cnt
+        [MEM.bout, PC.addr, B.write].into(), // load imm into B
+        [FAluBout, FlagWriteAlu, A.write, OutputFlagsSelector, PC.cnt].into(), // save f to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    let math_imm_b_reverse = vec![
+        *UNIVERSAL_STEP_0,
+        [PC.cnt].into(),                     // load B into B (nop), pc cnt
+        [MEM.bout, PC.addr, A.write].into(), // load imm into A
+        [FAluBout, FlagWriteAlu, B.write, OutputFlagsSelector, PC.cnt].into(), // save f to B, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
+        for reversed in [false, true] {
+            for reg in WRITE_REGISTERS
+                .iter()
+                .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            {
+                let mut current = {
+                    if matches!(reg.name, "A") && !reversed {
+                        &math_imm_a
+                    } else if matches!(reg.name, "B") && reversed {
+                        &math_imm_b_reverse
+                    } else {
+                        if reversed {
+                            &math_imm_reverse
+                        } else {
+                            &math_imm
+                        }
+                    }
+                }
+                .clone();
+
+                fill_reg0(&mut current, reg);
+                fill_flag_select(&mut current, get_flag_action(math_type));
+
+                assert!(all_regs_filled(&current));
+                assert!(flag_select_filled(&current));
+
+                let name = if reversed {
+                    format!("{} imm8, {}", math_type, reg.name)
+                } else {
+                    format!("{} {}, imm8", math_type, reg.name)
+                };
+
+                destination.push(NamedInstruction {
+                    istr: current,
+                    name,
+                    istr_type: InstructionType::Single,
+                });
+            }
+        }
+    }
 }
 fn math_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     todo!()
-    // TODO: all math variants could have faster variants if Reg0/Reg1 are equal to
-    // a/b todo: special case if Reg0 = b, Reg1 = a (impossible to swap registers
-    // without intermediate)
+    // possible edge cases:
+    // reg0 = A, reg1 = ?
+    // reg0 = ?, reg1 = B
+    // reg0 = A, reg1 = B
+    // reg0 = B, reg1 = A
     //
     // // Reg0 = Reg0 op Reg1
     // IstrTemplateType mathCarryTemplateReg = [
@@ -672,47 +912,6 @@ fn math_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     //     [Reset].into(),
     // ].into();
     //
-    // // Reg0 = Reg0 op Reg1
-    // IstrTemplateType mathCarryTemplateImm = [
-    //     universalStep0,
-    //     [Reg0Bout, A.write,
-    //      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
-    //     [MEM.bout, PC.addr, B.write].into(), // load imm into b
-    //     [fAluBout, flagWriteAlu, Reg0Write, FLAGS.SELECT.carry,
-    //      PC.cnt].into(), // save f to Reg0, writes to flag reg
-    //     [Reset].into(),
-    // ].into();
-    //
-    // IstrTemplateType mathNoCarryTemplateImm = [
-    //     universalStep0,
-    //     [Reg0Bout, A.write,
-    //      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
-    //     [MEM.bout, PC.addr, B.write].into(), // load imm into b
-    //     [fAluBout, flagWriteAlu, Reg0Write, FLAGS.SELECT.direct,
-    //      PC.cnt].into(), // save f to Reg0, writes to flag reg
-    //     [Reset].into(),
-    // ].into();
-    //
-    // // Reg0 = Reg0 op Reg1
-    // IstrTemplateType cmpTemplateReg = [
-    //     universalStep0,
-    //     universalStep1,
-    //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-    //     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-    //     [Reg1Bout, B.write].into(),             // load Reg1 into b
-    //     [FLAGS.aluWrite].into(),                // writes to flag reg
-    //     [Reset].into(),
-    // ].into();
-    //
-    // // Reg0 = Reg0 op Reg1
-    // IstrTemplateType cmpTemplateImm = [
-    //     universalStep0,
-    //     [Reg0Bout, A.write,
-    //      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
-    //     [MEM.bout, PC.addr, B.write].into(), // load imm into b
-    //     [FLAGS.aluWrite, PC.cnt].into(),
-    //     [Reset].into(),
-    // ].into();
 }
 
 fn jnz_reg_instructions(destination: &mut Vec<NamedInstruction>) {
@@ -783,6 +982,9 @@ pub fn build_all_instructions() -> Vec<NamedInstruction> {
     mv_addr_reg_instructions(&mut all_istrs);
 
     misc_instructions(&mut all_istrs);
+    not_instructions(&mut all_istrs);
+    not_reg_instructions(&mut all_istrs);
+    math_imm_instructions(&mut all_istrs);
 
     all_istrs
 }

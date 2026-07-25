@@ -81,6 +81,10 @@ pub fn fill_reg1(istr_temp: &mut [StepTemplate], reg: &NamedRegister) {
     };
 }
 
+pub fn fill_flag_select(istr_temp: &mut [StepTemplate], flag: Action) {
+    replace_action(istr_temp, OutputFlagsSelector, flag);
+}
+
 pub fn all_regs_filled(istr_temp: &[StepTemplate]) -> bool {
     for step in istr_temp {
         for action in step.iter() {
@@ -108,6 +112,17 @@ pub fn addr_reg_filled(istr_temp: &[StepTemplate]) -> bool {
                     | Addr1LoWrite
                     | Addr1Out
             ) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+pub fn flag_select_filled(istr_temp: &[StepTemplate]) -> bool {
+    for step in istr_temp {
+        for action in step.iter() {
+            if matches!(action, OutputFlagsSelector) {
                 return false;
             }
         }
