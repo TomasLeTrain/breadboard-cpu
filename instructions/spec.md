@@ -205,8 +205,6 @@ cmp X, Y
 cmp X, Z
 cmp X, MAR.LO
 cmp X, MAR.HI
-cmp X, PC.LO
-cmp X, PC.HI
 cmp X, SP.LO
 cmp X, SP.HI
 cmp X, FLAGS
@@ -219,8 +217,6 @@ cmp Y, imm8
 cmp Z, imm8
 cmp MAR.LO, imm8
 cmp MAR.HI, imm8
-cmp PC.LO, imm8
-cmp PC.HI, imm8
 cmp SP.LO, imm8
 cmp SP.HI, imm8
 cmp FLAGS, imm8
@@ -229,56 +225,54 @@ cmp KEYB, imm8
 
 
 math (no not):
-math X, X
-math X, Y
-math X, Z
-math X, MAR.LO
-math X, MAR.HI
-math X, PC.LO
-math X, PC.HI
-math X, SP.LO
-math X, SP.HI
-math X, FLAGS
-math X, KEYB
-693 = 7(math ops) * 11(first op) * 9(sec op; flag and keyb read only) individual instructions
+math A, A
+math A, B
+math A, X
+math A, Y
+math A, Z
+math A, MAR.LO
+math A, MAR.HI
+math A, SP.LO
+math A, SP.HI
+math A, FLAGS
+math A, KEYB
+692 = 693 - 1(math B,A is impossible) = 7(math ops) * 11(first op) * 9(sec op; flag and keyb read only) individual instructions
 
 math imm8 (no not):
+math A, imm8
+math B, imm8
 math X, imm8
 math Y, imm8
 math Z, imm8
 math MAR.LO, imm8
 math MAR.HI, imm8
-math PC.LO, imm8
-math PC.HI, imm8
 math SP.LO, imm8
 math SP.HI, imm8
-math FLAGS, imm8
-math KEYB, imm8
-154 = 7(math ops) * 2(order) * 11(reg) individual instructions
+126 = 7(math ops) * 2(order) * 9(reg) individual instructions
 
 not:
+not A
+not B
 not X
 not Y
 not Z
 not MAR.LO
 not MAR.HI
-not PC.LO
-not PC.HI
 not SP.LO
 not SP.HI
-9 = 9 (a and b overriden) individual instructions
+9 = 9 individual instructions
 
 not:
-not X, Y
-not X, Z
-not X, MAR.LO
-not X, MAR.HI
-not X, PC.LO
-not X, PC.HI
-not X, SP.LO
-not X, SP.HI
-not X, FLAGS
-not X, KEYB
+not A, B
+not A, X
+not A, Y
+not A, Z
+not A, MAR.LO
+not A, MAR.HI
+not A, SP.LO
+not A, SP.HI
+not A, FLAGS
+not A, KEYB
 80 = 10(first op) * 8(sec op; flag and keyb read only) individual instructions
 
 

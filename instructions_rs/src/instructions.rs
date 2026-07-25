@@ -106,7 +106,7 @@ fn move_word_imm_instructions(destination: &mut Vec<NamedInstruction>) {
 }
 
 // reg = [mar]
-fn lw_template_mar_instructions(destination: &mut Vec<NamedInstruction>) {
+fn lw_template_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         [MEM.bout, Addr0Out, Reg0Write, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
@@ -527,7 +527,7 @@ fn mv_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     }
 }
 
-fn addr_cnt_instructions(destination: &mut Vec<NamedInstruction>) {
+fn misc_instructions(destination: &mut Vec<NamedInstruction>) {
     // sp dec
     let sp_dec = vec![
         *UNIVERSAL_STEP_0,
@@ -560,211 +560,229 @@ fn addr_cnt_instructions(destination: &mut Vec<NamedInstruction>) {
         name: "inc MAR".to_string(),
         istr_type: InstructionType::Single,
     });
+
+    let halt = vec![*UNIVERSAL_STEP_0, [Halt].into()];
+
+    destination.push(NamedInstruction {
+        istr: halt,
+        name: "halt".to_string(),
+        istr_type: InstructionType::Single,
+    });
+
+    // 2 instruction nop
+    let nop = vec![*UNIVERSAL_STEP_0, [PC.cnt, Reset].into()];
+
+    destination.push(NamedInstruction {
+        istr: nop,
+        name: "nop".to_string(),
+        istr_type: InstructionType::Single,
+    });
 }
 
-//
-// // jnz reg -> pc = mar if reg != 0 else nop
-// IstrTemplateType jnzTemplateReg = [
-//     universalStep0,
-//     [A.write, Reg0Bout,
-//      PC.cnt].into(),          // note: pc cnt happens in case jump doesn't happens
-//     [FLAGS.aluWrite].into(), // write zero result to flag register
-//     [MAR.HI.bout, PC.HI.write, FLAGS.SELECT.zero].into(),
-//     [MAR.LO.bout, PC.LO.write, FLAGS.SELECT.zero, Reset].into(),
-// ].into();
-//
-// // can save instruction if a is already loaded
-// IstrTemplateType jnzTemplateRegA = [
-//     universalStep0,
-//     [FLAGS.aluWrite, PC.cnt].into(), // update flag register
-//     [MAR.HI.bout, PC.HI.write, FLAGS.SELECT.zero].into(),
-//     [MAR.LO.bout, PC.LO.write, FLAGS.SELECT.zero, Reset].into(),
-// ].into();
-//
-// // jump if equal flag is carry flag is true
-// IstrTemplateType jmpImm16Template = [
-//     loadAddressProcedure[0],
-//     loadAddressProcedure[1],
-//     loadAddressProcedure[2],
-//     loadAddressProcedure[3],
-//     loadAddressProcedure[4],
-//     [PC.cnt].into(), // note: pc cnt happens in case jump doesn't happens
-//     [MAR.HI.bout, PC.HI.write,
-//      outputFlagsSelector].into(), // load from mar into pc if flag
-//     [MAR.LO.bout, PC.LO.write, outputFlagsSelector,
-//      Reset].into(), // load from mar into pc if flag
-// ].into();
-//
-// // jump if equal flag is true
-// IstrTemplateType jmpMarTemplate = [
-//     universalStep0,
-//     [PC.cnt].into(), // note: pc cnt in case jump doesn't happen
-//     [MAR.HI.bout, PC.HI.write, outputFlagsSelector].into(),
-//     [MAR.LO.bout, PC.LO.write, outputFlagsSelector, Reset].into(),
-// ].into();
-//
-// // todo: all math variants could have faster variants if Reg0/Reg1 are equal to
-// // a/b todo: special case if Reg0 = b, Reg1 = a (impossible to swap registers
-// // without intermediate)
-//
-// // Reg0 = Reg0 op Reg1
-// IstrTemplateType mathCarryTemplateReg = [
-//     universalStep0,
-//     universalStep1,
-//     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-//     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-//     [Reg1Bout, B.write].into(),             // load Reg1 into b
-//     [fAluBout, FLAGS.aluWrite, Reg0Write,
-//      FLAGS.SELECT.carry].into(), // do math op, save to Reg0, writes to flag reg
-//     [Reset].into(),
-// ].into();
-//
-// IstrTemplateType mathNoCarryTemplateReg = [
-//     universalStep0,
-//     universalStep1,
-//     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-//     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-//     [Reg1Bout, B.write].into(),             // load Reg1 into b
-//     [fAluBout, FLAGS.aluWrite, Reg0Write,
-//      FLAGS.SELECT.direct].into(), // do math op, save to Reg0, writes to flag reg
-//     [Reset].into(),
-// ].into();
-//
-// // Reg0 = Reg0 op Reg1
-// IstrTemplateType mathCarryTemplateImm = [
-//     universalStep0,
-//     [Reg0Bout, A.write,
-//      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
-//     [MEM.bout, PC.addr, B.write].into(), // load imm into b
-//     [fAluBout, flagWriteAlu, Reg0Write, FLAGS.SELECT.carry,
-//      PC.cnt].into(), // save f to Reg0, writes to flag reg
-//     [Reset].into(),
-// ].into();
-//
-// IstrTemplateType mathNoCarryTemplateImm = [
-//     universalStep0,
-//     [Reg0Bout, A.write,
-//      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
-//     [MEM.bout, PC.addr, B.write].into(), // load imm into b
-//     [fAluBout, flagWriteAlu, Reg0Write, FLAGS.SELECT.direct,
-//      PC.cnt].into(), // save f to Reg0, writes to flag reg
-//     [Reset].into(),
-// ].into();
-//
-// // Reg0 = ~Reg0
-// IstrTemplateType notTemplateNone = [
-//     universalStep0,
-//     [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a, pc cnt
-//     [fAluBout, flagWriteAlu,
-//      Reg0Write].into(), // do math op, save to Reg0, writes to flag reg
-//     [Reset].into(),
-// ].into();
-//
-// // Reg0 = ~Reg1
-// IstrTemplateType notTemplateReg = [
-//     universalStep0,
-//     universalStep1,
-//     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-//     [Reg1Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-//     [fAluBout, flagWriteAlu,
-//      Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
-//     [Reset].into(),
-// ].into();
-//
-// // sp <- imm16
-// IstrTemplateType spTemplateImm16 = [
-//     universalStep0,
-//     [PC.cnt].into(),
-//     [MEM.bout, PC.addr,
-//      SP.HI.write].into(), // write first part of address to sp lo
-//     [PC.cnt].into(),       // pc cnt
-//     [MEM.bout, PC.addr,
-//      SP.LO.write].into(), // write second part of address to sp hi
-//     [Reset, PC.cnt].into(),
-// ].into();
-//
-// // Reg0 = Reg0 op Reg1
-// IstrTemplateType cmpTemplateReg = [
-//     universalStep0,
-//     universalStep1,
-//     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-//     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-//     [Reg1Bout, B.write].into(),             // load Reg1 into b
-//     [FLAGS.aluWrite].into(),                // writes to flag reg
-//     [Reset].into(),
-// ].into();
-//
-// // Reg0 = Reg0 op Reg1
-// IstrTemplateType cmpTemplateImm = [
-//     universalStep0,
-//     [Reg0Bout, A.write,
-//      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
-//     [MEM.bout, PC.addr, B.write].into(), // load imm into b
-//     [FLAGS.aluWrite, PC.cnt].into(),
-//     [Reset].into(),
-// ].into();
-//
-// // Reg0 = keyboard input
-// IstrTemplateType keyboardTemplate = [
-//     universalStep0,
-//     [keybBout, Reg0Write, PC.cnt, Reset].into(),
-// ].into();
-//
-// // Reg0 = keyboard input
-// IstrTemplateType updateFlagRegisterTemplate = [
-//     universalStep0,
-//     [flagWriteAlu, PC.cnt].into(),
-//     [Reset].into(),
-// ].into();
-//
-// IstrTemplateType haltTemplate = [
-//     universalStep0,
-//     [halt].into(),
-// ].into();
-//
-// // 2 instruction nop
-// IstrTemplateType nopTemplate = [
-//     universalStep0,
-//     [PC.cnt, Reset].into(),
-// ].into();
-//
-// IstrTemplateType vramReadTemplateNoDelay = [
-//     universalStep0,
-//     [VRAM.bout, MAR.addr].into(), // note: must add register write manually
-//     [nop].into(),
-//     [PC.cnt, Reset].into(),
-// ].into();
-//
-// IstrTemplateType vramReadTemplateDelay = [
-//     universalStep0,
-//     [nop].into(),
-//     [VRAM.bout, MAR.addr].into(), // note: must add register write manually
-//     [PC.cnt, Reset].into(),
-// ].into();
-//
-// IstrTemplateType vramWriteTemplate = [
-//     universalStep0,
-//     [VRAM.write, MAR.addr].into(),
-//     [VRAM.write, MAR.addr].into(), // note: must add register bout manually
-//     [PC.cnt, Reset].into(),         /// todo: can add MAR.cnt
-// ].into();
+fn vram_read_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+    // IstrTemplateType vramReadTemplateNoDelay = [
+    //     universalStep0,
+    //     [VRAM.bout, MAR.addr].into(), // note: must add register write manually
+    //     [nop].into(),
+    //     [PC.cnt, Reset].into(),
+    // ].into();
+    //
+    // IstrTemplateType vramReadTemplateDelay = [
+    //     universalStep0,
+    //     [nop].into(),
+    //     [VRAM.bout, MAR.addr].into(), // note: must add register write manually
+    //     [PC.cnt, Reset].into(),
+    // ].into();
+    //
+}
+
+fn vram_write_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+    // IstrTemplateType vramWriteTemplate = [
+    //     universalStep0,
+    //     [VRAM.write, MAR.addr].into(),
+    //     [VRAM.write, MAR.addr].into(), // note: must add register bout manually
+    //     [PC.cnt, Reset].into(),         /// todo: can add MAR.cnt
+    // ].into();
+}
+
+fn cmp_imm_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+}
+fn cmp_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+}
+
+fn not_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+    // // Reg0 = ~Reg0
+    // IstrTemplateType notTemplateNone = [
+    //     universalStep0,
+    //     [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a, pc cnt
+    //     [fAluBout, flagWriteAlu,
+    //      Reg0Write].into(), // do math op, save to Reg0, writes to flag reg
+    //     [Reset].into(),
+    // ].into();
+}
+
+fn not_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+    // // Reg0 = ~Reg1
+    // IstrTemplateType notTemplateReg = [
+    //     universalStep0,
+    //     universalStep1,
+    //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
+    //     [Reg1Bout, A.write, PC.cnt].into(),    // load Reg0 into a
+    //     [fAluBout, flagWriteAlu,
+    //      Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
+    //     [Reset].into(),
+    // ].into();
+}
+
+fn math_imm_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+}
+fn math_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+    // TODO: all math variants could have faster variants if Reg0/Reg1 are equal to
+    // a/b todo: special case if Reg0 = b, Reg1 = a (impossible to swap registers
+    // without intermediate)
+    //
+    // // Reg0 = Reg0 op Reg1
+    // IstrTemplateType mathCarryTemplateReg = [
+    //     universalStep0,
+    //     universalStep1,
+    //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
+    //     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
+    //     [Reg1Bout, B.write].into(),             // load Reg1 into b
+    //     [fAluBout, FLAGS.aluWrite, Reg0Write,
+    //      FLAGS.SELECT.carry].into(), // do math op, save to Reg0, writes to flag reg
+    //     [Reset].into(),
+    // ].into();
+    //
+    // IstrTemplateType mathNoCarryTemplateReg = [
+    //     universalStep0,
+    //     universalStep1,
+    //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
+    //     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
+    //     [Reg1Bout, B.write].into(),             // load Reg1 into b
+    //     [fAluBout, FLAGS.aluWrite, Reg0Write,
+    //      FLAGS.SELECT.direct].into(), // do math op, save to Reg0, writes to flag reg
+    //     [Reset].into(),
+    // ].into();
+    //
+    // // Reg0 = Reg0 op Reg1
+    // IstrTemplateType mathCarryTemplateImm = [
+    //     universalStep0,
+    //     [Reg0Bout, A.write,
+    //      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
+    //     [MEM.bout, PC.addr, B.write].into(), // load imm into b
+    //     [fAluBout, flagWriteAlu, Reg0Write, FLAGS.SELECT.carry,
+    //      PC.cnt].into(), // save f to Reg0, writes to flag reg
+    //     [Reset].into(),
+    // ].into();
+    //
+    // IstrTemplateType mathNoCarryTemplateImm = [
+    //     universalStep0,
+    //     [Reg0Bout, A.write,
+    //      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
+    //     [MEM.bout, PC.addr, B.write].into(), // load imm into b
+    //     [fAluBout, flagWriteAlu, Reg0Write, FLAGS.SELECT.direct,
+    //      PC.cnt].into(), // save f to Reg0, writes to flag reg
+    //     [Reset].into(),
+    // ].into();
+    //
+    // // Reg0 = Reg0 op Reg1
+    // IstrTemplateType cmpTemplateReg = [
+    //     universalStep0,
+    //     universalStep1,
+    //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
+    //     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
+    //     [Reg1Bout, B.write].into(),             // load Reg1 into b
+    //     [FLAGS.aluWrite].into(),                // writes to flag reg
+    //     [Reset].into(),
+    // ].into();
+    //
+    // // Reg0 = Reg0 op Reg1
+    // IstrTemplateType cmpTemplateImm = [
+    //     universalStep0,
+    //     [Reg0Bout, A.write,
+    //      PC.cnt].into(), // load Reg0 into a first (in case Reg0 = b), pc cnt
+    //     [MEM.bout, PC.addr, B.write].into(), // load imm into b
+    //     [FLAGS.aluWrite, PC.cnt].into(),
+    //     [Reset].into(),
+    // ].into();
+}
+
+fn jnz_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+    // // jnz reg -> pc = mar if reg != 0 else nop
+    // IstrTemplateType jnzTemplateReg = [
+    //     universalStep0,
+    //     [A.write, Reg0Bout,
+    //      PC.cnt].into(),          // note: pc cnt happens in case jump doesn't happens
+    //     [FLAGS.aluWrite].into(), // write zero result to flag register
+    //     [MAR.HI.bout, PC.HI.write, FLAGS.SELECT.zero].into(),
+    //     [MAR.LO.bout, PC.LO.write, FLAGS.SELECT.zero, Reset].into(),
+    // ].into();
+    //
+    // // can save instruction if a is already loaded
+    // IstrTemplateType jnzTemplateRegA = [
+    //     universalStep0,
+    //     [FLAGS.aluWrite, PC.cnt].into(), // update flag register
+    //     [MAR.HI.bout, PC.HI.write, FLAGS.SELECT.zero].into(),
+    //     [MAR.LO.bout, PC.LO.write, FLAGS.SELECT.zero, Reset].into(),
+    // ].into();
+    //
+    todo!()
+}
+
+fn jmp_instructions(destination: &mut Vec<NamedInstruction>) {
+    todo!()
+    // // jump if equal flag is carry flag is true
+    // IstrTemplateType jmpImm16Template = [
+    //     loadAddressProcedure[0],
+    //     loadAddressProcedure[1],
+    //     loadAddressProcedure[2],
+    //     loadAddressProcedure[3],
+    //     loadAddressProcedure[4],
+    //     [PC.cnt].into(), // note: pc cnt happens in case jump doesn't happens
+    //     [MAR.HI.bout, PC.HI.write,
+    //      outputFlagsSelector].into(), // load from mar into pc if flag
+    //     [MAR.LO.bout, PC.LO.write, outputFlagsSelector,
+    //      Reset].into(), // load from mar into pc if flag
+    // ].into();
+    //
+    // // jump if equal flag is true
+    // IstrTemplateType jmpMarTemplate = [
+    //     universalStep0,
+    //     [PC.cnt].into(), // note: pc cnt in case jump doesn't happen
+    //     [MAR.HI.bout, PC.HI.write, outputFlagsSelector].into(),
+    //     [MAR.LO.bout, PC.LO.write, outputFlagsSelector, Reset].into(),
+    // ].into();
+    //
+}
 
 pub fn build_all_instructions() -> Vec<NamedInstruction> {
     let mut all_istrs: Vec<NamedInstruction> = Vec::new();
     move_word_reg_instructions(&mut all_istrs);
     move_word_imm_instructions(&mut all_istrs);
 
-    lw_template_mar_instructions(&mut all_istrs);
+    lw_template_addr_reg_instructions(&mut all_istrs);
     lw_template_imm16_instructions(&mut all_istrs);
 
     sw_template_addr_reg_instructions(&mut all_istrs);
     sw_template_imm16_instructions(&mut all_istrs);
+
     push_reg_instructions(&mut all_istrs);
     push_imm8_instructions(&mut all_istrs);
+
     pop_addr_reg_instructions(&mut all_istrs);
+
     lda_imm16_instructions(&mut all_istrs);
     mv_addr_reg_instructions(&mut all_istrs);
-    addr_cnt_instructions(&mut all_istrs);
+
+    misc_instructions(&mut all_istrs);
 
     all_istrs
 }
