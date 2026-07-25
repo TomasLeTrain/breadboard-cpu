@@ -9,8 +9,7 @@ use action::action_to_output;
 use output::Output;
 
 use instructions::NamedInstruction;
-
-use crate::instructions::InstructionType;
+use instructions::InstructionType;
 
 fn step_template_to_output(step_istr: &step_template::StepTemplate) -> Output {
     let mut result = Output::new();
