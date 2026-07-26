@@ -282,3 +282,55 @@ pub static ADDR_REGISTERS: LazyLock<Vec<NamedAddressRegister>> = LazyLock::new(|
         },
     ]
 });
+
+// in order of associated bits (0 is first, 7 is last)
+pub enum MathIstrTypes {
+    SubNoCarry,
+    SubCarry,
+    AddNoCarry,
+    AddCarry,
+    Not,
+    Xor,
+    Or,
+    And,
+}
+
+impl std::fmt::Display for MathIstrTypes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            MathIstrTypes::SubNoCarry => "sub",
+            MathIstrTypes::SubCarry => "sbb",
+            MathIstrTypes::AddNoCarry => "add",
+            MathIstrTypes::AddCarry => "adc",
+            MathIstrTypes::Not => "not",
+            MathIstrTypes::Xor => "xor",
+            MathIstrTypes::Or => "or",
+            MathIstrTypes::And => "and",
+        };
+        write!(f, "{name}")
+    }
+}
+
+impl MathIstrTypes {
+    pub fn iterator() -> std::slice::Iter<'static, MathIstrTypes> {
+        static DIRECTIONS: [MathIstrTypes; 8] = [
+            MathIstrTypes::SubNoCarry,
+            MathIstrTypes::SubCarry,
+            MathIstrTypes::AddNoCarry,
+            MathIstrTypes::AddCarry,
+            MathIstrTypes::Not,
+            MathIstrTypes::Xor,
+            MathIstrTypes::Or,
+            MathIstrTypes::And,
+        ];
+        DIRECTIONS.iter()
+    }
+}
+
+pub fn get_flag_action(math_type: &MathIstrTypes) -> Action {
+    if matches!(math_type, MathIstrTypes::SubCarry | MathIstrTypes::AddCarry) {
+        FlagCarry
+    } else {
+        FlagDirect
+    }
+}

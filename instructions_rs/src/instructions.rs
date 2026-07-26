@@ -736,58 +736,6 @@ fn not_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     }
 }
 
-// in order of associated bits (0 is first, 7 is last)
-enum MathIstrTypes {
-    SubNoCarry,
-    SubCarry,
-    AddNoCarry,
-    AddCarry,
-    Not,
-    Xor,
-    Or,
-    And,
-}
-
-impl std::fmt::Display for MathIstrTypes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            MathIstrTypes::SubNoCarry => "sub",
-            MathIstrTypes::SubCarry => "sbb",
-            MathIstrTypes::AddNoCarry => "add",
-            MathIstrTypes::AddCarry => "adc",
-            MathIstrTypes::Not => "not",
-            MathIstrTypes::Xor => "xor",
-            MathIstrTypes::Or => "or",
-            MathIstrTypes::And => "and",
-        };
-        write!(f, "{name}")
-    }
-}
-
-impl MathIstrTypes {
-    pub fn iterator() -> std::slice::Iter<'static, MathIstrTypes> {
-        static DIRECTIONS: [MathIstrTypes; 8] = [
-            MathIstrTypes::SubNoCarry,
-            MathIstrTypes::SubCarry,
-            MathIstrTypes::AddNoCarry,
-            MathIstrTypes::AddCarry,
-            MathIstrTypes::Not,
-            MathIstrTypes::Xor,
-            MathIstrTypes::Or,
-            MathIstrTypes::And,
-        ];
-        DIRECTIONS.iter()
-    }
-}
-
-fn get_flag_action(math_type: &MathIstrTypes) -> Action {
-    if matches!(math_type, MathIstrTypes::SubCarry | MathIstrTypes::AddCarry) {
-        FlagCarry
-    } else {
-        FlagDirect
-    }
-}
-
 fn math_imm_instructions(destination: &mut Vec<NamedInstruction>) {
     // Reg0 = Reg0 op imm
     let math_imm = vec![
@@ -982,8 +930,10 @@ pub fn build_all_instructions() -> Vec<NamedInstruction> {
     mv_addr_reg_instructions(&mut all_istrs);
 
     misc_instructions(&mut all_istrs);
+
     not_instructions(&mut all_istrs);
     not_reg_instructions(&mut all_istrs);
+
     math_imm_instructions(&mut all_istrs);
 
     all_istrs
