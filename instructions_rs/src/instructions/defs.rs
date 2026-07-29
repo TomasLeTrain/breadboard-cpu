@@ -24,7 +24,7 @@ pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplate> = LazyLock::new(|| {
     ]
 });
 
-fn replace_action(istr_temp: &mut [StepTemplate], pattern: Action, replacement: Action) {
+pub fn replace_action(istr_temp: &mut [StepTemplate], pattern: Action, replacement: Action) {
     for step in istr_temp {
         for action in step.iter_mut() {
             if *action == pattern {
@@ -185,6 +185,11 @@ pub struct SimpleInstruction {
     pub name: String,
 }
 
+pub struct ExtendedInstruction {
+    pub istr: IstrTemplate,
+    pub name: String,
+}
+
 pub static ALL_REGISTERS: LazyLock<Vec<NamedRegister>> = LazyLock::new(|| {
     vec![
         NamedRegister {
@@ -281,6 +286,7 @@ pub enum MathIstrTypes {
     Xor,
     Or,
     And,
+    Cmp, // not different than subNoCarry in associated bits, but nice to include in enum
 }
 
 impl std::fmt::Display for MathIstrTypes {
@@ -294,6 +300,7 @@ impl std::fmt::Display for MathIstrTypes {
             MathIstrTypes::Xor => "xor",
             MathIstrTypes::Or => "or",
             MathIstrTypes::And => "and",
+            MathIstrTypes::Cmp => "cmp",
         };
         write!(f, "{name}")
     }
@@ -301,7 +308,7 @@ impl std::fmt::Display for MathIstrTypes {
 
 impl MathIstrTypes {
     pub fn iterator() -> std::slice::Iter<'static, MathIstrTypes> {
-        static DIRECTIONS: [MathIstrTypes; 8] = [
+        static DIRECTIONS: [MathIstrTypes; 9] = [
             MathIstrTypes::SubNoCarry,
             MathIstrTypes::SubCarry,
             MathIstrTypes::AddNoCarry,
@@ -310,15 +317,70 @@ impl MathIstrTypes {
             MathIstrTypes::Xor,
             MathIstrTypes::Or,
             MathIstrTypes::And,
+            MathIstrTypes::Cmp,
         ];
         DIRECTIONS.iter()
     }
+
+    pub fn get_action(&self) -> Action {
+        if matches!(self, MathIstrTypes::SubCarry | MathIstrTypes::AddCarry) {
+            FlagCarry
+        } else {
+            FlagDirect
+        }
+    }
 }
 
-pub fn get_flag_action(math_type: &MathIstrTypes) -> Action {
-    if matches!(math_type, MathIstrTypes::SubCarry | MathIstrTypes::AddCarry) {
-        FlagCarry
-    } else {
-        FlagDirect
+// in order of associated bits (0 is first, 7 is last)
+pub enum OutputFlags {
+    Direct,
+    Carry,
+    Eq,
+    NotZero,
+    F5,
+    F6,
+    F7,
+    F8,
+}
+
+impl OutputFlags {
+    pub fn iterator() -> std::slice::Iter<'static, OutputFlags> {
+        static OUTPUT_FLAGS: [OutputFlags; 8] = [
+            OutputFlags::Direct,
+            OutputFlags::Carry,
+            OutputFlags::Eq,
+            OutputFlags::NotZero,
+            OutputFlags::F5,
+            OutputFlags::F6,
+            OutputFlags::F7,
+            OutputFlags::F8,
+        ];
+        OUTPUT_FLAGS.iter()
+    }
+
+    pub fn get_action(&self) -> Action {
+        match self {
+            OutputFlags::Direct => FlagDirect,
+            OutputFlags::Carry => FlagCarry,
+            OutputFlags::Eq => FlagEq,
+            OutputFlags::NotZero => FlagNotZero,
+            OutputFlags::F5 => Flag5,
+            OutputFlags::F6 => Flag6,
+            OutputFlags::F7 => Flag7,
+            OutputFlags::F8 => Flag8,
+        }
+    }
+
+    pub fn get_jump_name(&self) -> &str {
+        match self {
+            OutputFlags::Direct => "jmp",
+            OutputFlags::Carry => "jc",
+            OutputFlags::Eq => "jeq",
+            OutputFlags::NotZero => "jnz",
+            OutputFlags::F5 => "j5",
+            OutputFlags::F6 => "j6",
+            OutputFlags::F7 => "j7",
+            OutputFlags::F8 => "j8",
+        }
     }
 }

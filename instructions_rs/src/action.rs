@@ -68,9 +68,9 @@ pub enum Action {
     FlagDirect,
     FlagCarry,
     FlagEq,
-    FlagZero,
-    Flag6,
+    FlagNotZero,
     Flag5,
+    Flag6,
     Flag7,
     Flag8,
 
