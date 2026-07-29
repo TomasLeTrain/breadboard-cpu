@@ -1,14 +1,4 @@
-use crate::{
-    action::Action::{self, *},
-    step_template::StepTemplate,
-    step_template_to_output,
-};
-
-use std::{
-    ops::{Deref, DerefMut},
-    str::Matches,
-    sync::LazyLock,
-};
+use crate::action::Action::*;
 
 mod register_defs;
 use register_defs::*;
@@ -16,10 +6,10 @@ use register_defs::*;
 mod defs;
 use defs::*;
 
-pub use defs::{InstructionType, NamedInstruction};
+pub use defs::SimpleInstruction;
 
 // move register to register (reg0 = reg1)
-fn move_word_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         *UNIVERSAL_STEP_1,
@@ -58,17 +48,16 @@ fn move_word_reg_instructions(destination: &mut Vec<NamedInstruction>) {
 
             assert!(all_regs_filled(&current));
 
-            destination.push(NamedInstruction {
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
                 name: format!("mv {}, {}", reg0.name, reg1.name),
-                istr_type: InstructionType::Extended,
-            });
+            }));
         }
     }
 }
 
 // move imm8 to register (reg0 = imm8)
-fn move_word_imm_instructions(destination: &mut Vec<NamedInstruction>) {
+fn move_word_imm_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         *UNIVERSAL_STEP_1,
@@ -97,16 +86,15 @@ fn move_word_imm_instructions(destination: &mut Vec<NamedInstruction>) {
         fill_reg0(&mut current, reg);
         assert!(all_regs_filled(&current));
 
-        destination.push(NamedInstruction {
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
             name: format!("mv {}, imm8", reg.name),
-            istr_type: InstructionType::Single,
-        });
+        }));
     }
 }
 
 // reg = [mar]
-fn lw_template_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn lw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         [MEM.bout, Addr0Out, Reg0Write, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
@@ -149,17 +137,16 @@ fn lw_template_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
             assert!(all_regs_filled(&current));
             assert!(addr_reg_filled(&current));
 
-            destination.push(NamedInstruction {
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
                 name: format!("lw {}, mem[{}]", reg.name, addr_reg.name),
-                istr_type: InstructionType::Single,
-            });
+            }));
         }
     }
 }
 
 // reg = [imm16]
-fn lw_template_imm16_instructions(destination: &mut Vec<NamedInstruction>) {
+fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
@@ -214,17 +201,16 @@ fn lw_template_imm16_instructions(destination: &mut Vec<NamedInstruction>) {
             assert!(all_regs_filled(&current));
             assert!(addr_reg_filled(&current));
 
-            destination.push(NamedInstruction {
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
                 name: format!("lw {}, mem[imm16], {}", reg.name, addr_reg.name),
-                istr_type: InstructionType::Single,
-            });
+            }));
         }
     }
 }
 
 // mem[mar] = reg
-fn sw_template_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn sw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         [MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into(),
@@ -260,17 +246,16 @@ fn sw_template_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
             assert!(all_regs_filled(&current));
             assert!(addr_reg_filled(&current));
 
-            destination.push(NamedInstruction {
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
                 name: format!("sw {}, mem[{}]", reg.name, addr_reg.name),
-                istr_type: InstructionType::Single,
-            });
+            }));
         }
     }
 }
 
 // mem[imm16] = reg
-fn sw_template_imm16_instructions(destination: &mut Vec<NamedInstruction>) {
+fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
@@ -314,17 +299,16 @@ fn sw_template_imm16_instructions(destination: &mut Vec<NamedInstruction>) {
             assert!(all_regs_filled(&current));
             assert!(addr_reg_filled(&current));
 
-            destination.push(NamedInstruction {
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
                 name: format!("sw {}, mem[imm16], {}", reg.name, addr_reg.name),
-                istr_type: InstructionType::Single,
-            });
+            }));
         }
     }
 }
 
 // [sp--] = reg
-fn push_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn push_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         [PC.cnt, SP.dec].into(), // decrement before pushing value
@@ -358,16 +342,15 @@ fn push_reg_instructions(destination: &mut Vec<NamedInstruction>) {
 
         assert!(all_regs_filled(&current));
 
-        destination.push(NamedInstruction {
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
             name: format!("push {}", reg.name),
-            istr_type: InstructionType::Single,
-        });
+        }));
     }
 }
 
 // [sp--] = imm8, overrides a reg
-fn push_imm8_instructions(destination: &mut Vec<NamedInstruction>) {
+fn push_imm8_instructions(destination: &mut Vec<InstructionImpl>) {
     let current = vec![
         *UNIVERSAL_STEP_0,
         [PC.cnt, SP.dec].into(),             // decrement before pushing value
@@ -375,15 +358,14 @@ fn push_imm8_instructions(destination: &mut Vec<NamedInstruction>) {
         [MEM.write, SP.addr, A.bout, PC.cnt, Reset].into(), // read from ir2 into [sp], pc cnt
     ];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: current,
         name: "push imm8".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 }
 
 // Reg0 = [sp++]
-fn pop_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn pop_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         [MEM.bout, SP.addr, Reg0Write, PC.cnt].into(), // write from [sp] into Reg0, pc cnt
@@ -417,16 +399,15 @@ fn pop_reg_instructions(destination: &mut Vec<NamedInstruction>) {
 
         assert!(all_regs_filled(&current));
 
-        destination.push(NamedInstruction {
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
             name: format!("pop {}", reg.name),
-            istr_type: InstructionType::Single,
-        });
+        }));
     }
 }
 
 // AddrReg = mem[SP], SP += 2
-fn pop_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn pop_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let sp_to_mar = vec![
         *UNIVERSAL_STEP_0,
         [MEM.bout, SP.addr, MAR.hi.write, PC.cnt].into(),
@@ -435,11 +416,10 @@ fn pop_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
         [SP.inc, Reset].into(),
     ];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: sp_to_mar,
         name: "pop MAR".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 
     let sp_to_sp_through_mar = vec![
         *UNIVERSAL_STEP_0,
@@ -451,11 +431,10 @@ fn pop_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
         [SP.inc, Reset].into(),
     ];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: sp_to_sp_through_mar,
         name: "pop SP, MAR".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 
     let sp_to_sp_through_ab = vec![
         *UNIVERSAL_STEP_0,
@@ -467,15 +446,14 @@ fn pop_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
         [SP.inc, Reset].into(),
     ];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: sp_to_sp_through_ab,
         name: "pop SP, AB".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 }
 
 // mar/sp = imm16
-fn lda_imm16_instructions(destination: &mut Vec<NamedInstruction>) {
+fn lda_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
@@ -492,16 +470,15 @@ fn lda_imm16_instructions(destination: &mut Vec<NamedInstruction>) {
 
         assert!(addr_reg_filled(&current));
 
-        destination.push(NamedInstruction {
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
             name: format!("lda {}, imm16", addr_reg.name),
-            istr_type: InstructionType::Single,
-        });
+        }));
     }
 }
 
 // mar/sp = imm16
-fn mv_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn mv_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
         *UNIVERSAL_STEP_0,
         [MEM.bout, Addr1Out, Addr0HiWrite, PC.cnt].into(), // first byte has msb
@@ -518,36 +495,33 @@ fn mv_addr_reg_instructions(destination: &mut Vec<NamedInstruction>) {
 
             assert!(addr_reg_filled(&current));
 
-            destination.push(NamedInstruction {
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
                 name: format!("mva {}, {}", addr_reg0.name, addr_reg1.name),
-                istr_type: InstructionType::Single,
-            });
+            }));
         }
     }
 }
 
-fn misc_instructions(destination: &mut Vec<NamedInstruction>) {
+fn misc_instructions(destination: &mut Vec<InstructionImpl>) {
     // sp dec
     let sp_dec = vec![
         *UNIVERSAL_STEP_0,
         [PC.cnt, SP.dec, Reset].into(), // decrement sp
     ];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: sp_dec,
         name: "dec SP".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 
     // sp cnt
     let sp_inc = vec![*UNIVERSAL_STEP_0, [PC.cnt, SP.inc, Reset].into()];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: sp_inc,
         name: "inc SP".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 
     // mar cnt
     let mar_inc = vec![
@@ -555,31 +529,28 @@ fn misc_instructions(destination: &mut Vec<NamedInstruction>) {
         [PC.cnt, MAR.cnt, Reset].into(), // cntrement mar
     ];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: mar_inc,
         name: "inc MAR".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 
     let halt = vec![*UNIVERSAL_STEP_0, [Halt].into()];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: halt,
         name: "halt".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 
     // 2 instruction nop
     let nop = vec![*UNIVERSAL_STEP_0, [PC.cnt, Reset].into()];
 
-    destination.push(NamedInstruction {
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: nop,
         name: "nop".to_string(),
-        istr_type: InstructionType::Single,
-    });
+    }));
 }
 
-fn vram_read_instructions(destination: &mut Vec<NamedInstruction>) {
+fn vram_read_instructions(destination: &mut Vec<InstructionImpl>) {
     todo!()
     // IstrTemplateType vramReadTemplateNoDelay = [
     //     universalStep0,
@@ -597,7 +568,7 @@ fn vram_read_instructions(destination: &mut Vec<NamedInstruction>) {
     //
 }
 
-fn vram_write_instructions(destination: &mut Vec<NamedInstruction>) {
+fn vram_write_instructions(destination: &mut Vec<InstructionImpl>) {
     todo!()
     // IstrTemplateType vramWriteTemplate = [
     //     universalStep0,
@@ -607,7 +578,7 @@ fn vram_write_instructions(destination: &mut Vec<NamedInstruction>) {
     // ].into();
 }
 
-fn cmp_imm_instructions(destination: &mut Vec<NamedInstruction>) {
+fn cmp_imm_instructions(destination: &mut Vec<InstructionImpl>) {
     todo!()
     //
     // // Reg0 = Reg0 op Reg1
@@ -620,7 +591,7 @@ fn cmp_imm_instructions(destination: &mut Vec<NamedInstruction>) {
     //     [Reset].into(),
     // ].into();
 }
-fn cmp_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn cmp_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     todo!()
     // possible edge cases:
     // reg0 = A, reg1 = ?
@@ -640,7 +611,7 @@ fn cmp_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     // ].into();
 }
 
-fn not_instructions(destination: &mut Vec<NamedInstruction>) {
+fn not_instructions(destination: &mut Vec<InstructionImpl>) {
     // Reg0 = ~Reg0
     let not = vec![
         *UNIVERSAL_STEP_0,
@@ -673,15 +644,14 @@ fn not_instructions(destination: &mut Vec<NamedInstruction>) {
 
         assert!(all_regs_filled(&current));
 
-        destination.push(NamedInstruction {
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
             name: format!("not {}", reg.name),
-            istr_type: InstructionType::Single,
-        });
+        }));
     }
 }
 
-fn not_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn not_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     // Reg0 = ~Reg1
     let base_template = vec![
         *UNIVERSAL_STEP_0,
@@ -727,16 +697,15 @@ fn not_reg_instructions(destination: &mut Vec<NamedInstruction>) {
 
             assert!(all_regs_filled(&current));
 
-            destination.push(NamedInstruction {
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
                 name: format!("not {}, {}", reg0.name, reg1.name),
-                istr_type: InstructionType::Extended,
-            });
+            }));
         }
     }
 }
 
-fn math_imm_instructions(destination: &mut Vec<NamedInstruction>) {
+fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
     // Reg0 = Reg0 op imm
     let math_imm = vec![
         *UNIVERSAL_STEP_0,
@@ -820,16 +789,15 @@ fn math_imm_instructions(destination: &mut Vec<NamedInstruction>) {
                     format!("{} {}, imm8", math_type, reg.name)
                 };
 
-                destination.push(NamedInstruction {
+                destination.push(InstructionImpl::Simple(SimpleInstruction {
                     istr: current,
                     name,
-                    istr_type: InstructionType::Single,
-                });
+                }));
             }
         }
     }
 }
-fn math_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn math_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     todo!()
     // possible edge cases:
     // reg0 = A, reg1 = ?
@@ -862,7 +830,7 @@ fn math_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     //
 }
 
-fn jnz_reg_instructions(destination: &mut Vec<NamedInstruction>) {
+fn jnz_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     // // jnz reg -> pc = mar if reg != 0 else nop
     // IstrTemplateType jnzTemplateReg = [
     //     universalStep0,
@@ -884,7 +852,7 @@ fn jnz_reg_instructions(destination: &mut Vec<NamedInstruction>) {
     todo!()
 }
 
-fn jmp_instructions(destination: &mut Vec<NamedInstruction>) {
+fn jmp_instructions(destination: &mut Vec<InstructionImpl>) {
     todo!()
     // // jump if equal flag is carry flag is true
     // IstrTemplateType jmpImm16Template = [
@@ -910,8 +878,8 @@ fn jmp_instructions(destination: &mut Vec<NamedInstruction>) {
     //
 }
 
-pub fn build_all_instructions() -> Vec<NamedInstruction> {
-    let mut all_istrs: Vec<NamedInstruction> = Vec::new();
+pub fn build_all_instructions() -> Vec<InstructionImpl> {
+    let mut all_istrs: Vec<InstructionImpl> = Vec::new();
     move_word_reg_instructions(&mut all_istrs);
     move_word_imm_instructions(&mut all_istrs);
 
@@ -937,4 +905,139 @@ pub fn build_all_instructions() -> Vec<NamedInstruction> {
     math_imm_instructions(&mut all_istrs);
 
     all_istrs
+}
+
+use crate::opcode::Opcode;
+use crate::output::Output;
+
+struct Extended<I> {
+    instructions: [I; 16],
+}
+
+impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
+    fn to_output(&self, mut opcode: Opcode) -> Output {
+        let step = opcode.step as usize;
+
+        let extended_prelude = [*UNIVERSAL_STEP_0, *UNIVERSAL_STEP_1, *LOAD_IR2];
+
+        if step < extended_prelude.len() {
+            return extended_prelude[step].to_output();
+        }
+
+        opcode.step -= extended_prelude.len() as u8;
+
+        self.instructions[opcode.ir2 as usize].to_output(opcode)
+    }
+}
+
+struct Single<I> {
+    instruction: I,
+}
+
+impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
+    fn to_output(&self, mut opcode: Opcode) -> Output {
+        let step = opcode.step as usize;
+
+        let simple_prelude = [*UNIVERSAL_STEP_0];
+
+        if step < simple_prelude.len() {
+            return simple_prelude[step].to_output();
+        }
+
+        opcode.step -= simple_prelude.len() as u8;
+
+        self.instruction.to_output(opcode)
+    }
+}
+
+struct VramInstruction {
+    // vram is active on odd numbered instructions (0 indexed)
+    active_even: SimpleInstruction,
+    // vram is active on even numbered instructions (0 indexed)
+    active_odd: SimpleInstruction,
+    name: String,
+}
+
+// TODO: implement
+impl OpcodeToOutput for VramInstruction {
+    fn to_output(&self, opcode: Opcode) -> Output {
+        let step = opcode.step as usize;
+        let vram_active = opcode.not_vram_active as usize;
+
+        let target_istr: &SimpleInstruction;
+
+        if vram_active == step % 2 {
+            // case active even:
+            // 0: false
+            // 1: true
+            // 2: false
+            target_istr = &self.active_even;
+        } else {
+            // case active odd:
+            // 0: true
+            // 1: false
+            // 2: true
+            target_istr = &self.active_odd;
+        }
+
+        target_istr.to_output(opcode)
+    }
+}
+
+// where the chain ends for simple instructions
+impl OpcodeToOutput for SimpleInstruction {
+    fn to_output(&self, opcode: Opcode) -> Output {
+        let step = opcode.step as usize;
+
+        if self.istr.len() < step {
+            Halt.to_output()
+        } else {
+            self.istr[step].to_output()
+        }
+    }
+}
+
+pub enum InstructionImpl {
+    Simple(SimpleInstruction),
+    Vram(VramInstruction),
+}
+
+impl InstructionImpl {
+    pub fn name(&self) -> &String {
+        match self {
+            InstructionImpl::Simple(simple_instruction) => &simple_instruction.name,
+            InstructionImpl::Vram(vram_instruction) => &vram_instruction.name,
+        }
+    }
+}
+
+impl OpcodeToOutput for InstructionImpl {
+    fn to_output(&self, opcode: Opcode) -> Output {
+        match self {
+            InstructionImpl::Simple(simple_instruction) => simple_instruction.to_output(opcode),
+            InstructionImpl::Vram(vram_instruction) => vram_instruction.to_output(opcode),
+        }
+    }
+}
+
+enum InstructionEntry {
+    Single(Single<InstructionImpl>),
+    Extended(Extended<InstructionImpl>),
+}
+
+pub struct IstrSet {
+    istrs: [InstructionEntry; 256],
+}
+
+pub trait OpcodeToOutput {
+    fn to_output(&self, opcode: Opcode) -> Output;
+}
+
+impl OpcodeToOutput for IstrSet {
+    fn to_output(&self, opcode: Opcode) -> Output {
+        match &self.istrs[opcode.ir as usize] {
+            InstructionEntry::Single(single) => single.to_output(opcode),
+            InstructionEntry::Extended(extended) => extended.to_output(opcode),
+        }
+    }
 }

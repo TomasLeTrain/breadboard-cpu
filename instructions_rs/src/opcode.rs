@@ -1,16 +1,16 @@
+pub struct Opcode {
+    pub step: u8,
+    pub ir: u8,
+    pub ir2: u8,
+    pub not_vram_active: bool,
+}
+
 fn bitTransform(x: u32, x_bit: u32, y_bit: u32) -> u32 {
     if x & (1 << x_bit) == 0 { 0 } else { 1 << y_bit }
 }
 
-struct Opcode {
-    step: u8,
-    ir: u8,
-    ir2: u8,
-    not_vram_active: u8,
-}
-
 fn addrToOpcode(addr: u32) -> Opcode {
-    let not_vram_active = bitTransform(addr, 0, 0) as u8;
+    let not_vram_active = bitTransform(addr, 0, 0) != 0;
 
     let step = (bitTransform(addr, 13, 0)
         | bitTransform(addr, 14, 1)

@@ -110,6 +110,8 @@ static ACTION_TO_OUTPUT_MAP: LazyLock<HashMap<Action, Output>> = LazyLock::new(|
     ])
 });
 
-pub fn action_to_output(action: &Action) -> Output {
-    *ACTION_TO_OUTPUT_MAP.get(action).unwrap()
+impl Action {
+    pub fn to_output(&self) -> Output {
+        *ACTION_TO_OUTPUT_MAP.get(self).unwrap()
+    }
 }

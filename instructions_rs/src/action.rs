@@ -1,7 +1,5 @@
 mod defs;
 
-pub use defs::action_to_output;
-
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub enum Action {
     Halt,

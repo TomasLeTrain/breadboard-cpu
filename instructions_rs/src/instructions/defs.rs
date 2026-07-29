@@ -2,14 +2,9 @@ use crate::{
     action::Action::{self, *},
     instructions::register_defs::*,
     step_template::StepTemplate,
-    step_template_to_output,
 };
 
-use std::{
-    ops::{Deref, DerefMut},
-    str::Matches,
-    sync::LazyLock,
-};
+use std::sync::LazyLock;
 
 pub type IstrTemplate = Vec<StepTemplate>;
 
@@ -173,12 +168,6 @@ pub enum AddressRegisters<'a> {
     Sp(&'a SpRegister),
 }
 
-#[derive(Clone, Copy)]
-pub enum InstructionType {
-    Single,
-    Extended,
-}
-
 #[derive(Clone)]
 pub struct NamedRegister<'a> {
     pub reg: Registers<'a>,
@@ -191,10 +180,9 @@ pub struct NamedAddressRegister<'a> {
     pub name: &'a str,
 }
 
-pub struct NamedInstruction {
+pub struct SimpleInstruction {
     pub istr: IstrTemplate,
     pub name: String,
-    pub istr_type: InstructionType,
 }
 
 pub static ALL_REGISTERS: LazyLock<Vec<NamedRegister>> = LazyLock::new(|| {

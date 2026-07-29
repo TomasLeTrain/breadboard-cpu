@@ -1,4 +1,7 @@
-use crate::Action;
+use crate::{
+    Action,
+    output::{self, Output},
+};
 
 // custom max-capacity runtime-size implementation that fits in 8 bytes
 #[derive(Clone, Copy)]
@@ -136,5 +139,35 @@ impl<'a> IntoIterator for &'a mut StepTemplate {
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
+    }
+}
+
+impl StepTemplate {
+    pub fn to_output(self) -> Output {
+        let mut result = Output::new();
+
+        let actions: Vec<_> = self.iter().collect();
+        let outputs: Vec<_> = self.iter().map(Action::to_output).collect();
+
+        // loop through all unique pairs
+        for i in 1..outputs.len() - 1 {
+            for j in i + 1..outputs.len() {
+                if outputs[i].intersect(&outputs[j]) {
+                    eprintln!(
+                        "Failed when merging actions {:?} and {:?}",
+                        *actions[i], *actions[j]
+                    );
+
+                    // TODO: print error?
+                    return result;
+                }
+            }
+        }
+
+        for output in &outputs {
+            result.merge(output);
+        }
+
+        result
     }
 }
