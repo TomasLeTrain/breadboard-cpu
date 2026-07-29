@@ -11,17 +11,11 @@ pub use defs::SimpleInstruction;
 // move register to register (reg0 = reg1)
 fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        *UNIVERSAL_STEP_0,
-        *UNIVERSAL_STEP_1,
-        *LOAD_IR2,                                   // load ir 2
         [Reg1Bout, Reg0Write, PC.cnt, Reset].into(), // read from reg1 to reg0, pc cnt
     ];
 
     // removes the pc cnt in case pc is getting written to
     let base_template_pc = vec![
-        *UNIVERSAL_STEP_0,
-        *UNIVERSAL_STEP_1,
-        *LOAD_IR2,                           // load ir 2
         [Reg1Bout, Reg0Write, Reset].into(), // read from reg1 to reg0
     ];
 
@@ -59,7 +53,6 @@ fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 // move imm8 to register (reg0 = imm8)
 fn move_word_imm_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        *UNIVERSAL_STEP_0,
         *UNIVERSAL_STEP_1,
         [MEM.bout, PC.addr, Reg0Write].into(), // write immediate to reg0
         [PC.cnt, Reset].into(),                // pc cnt
@@ -67,7 +60,6 @@ fn move_word_imm_instructions(destination: &mut Vec<InstructionImpl>) {
 
     // writes to A first to be able to then write to reg0
     let base_template_pc = vec![
-        *UNIVERSAL_STEP_0,
         *UNIVERSAL_STEP_1,
         [MEM.bout, PC.addr, A.write].into(), // write immediate to A
         [A.bout, Reg0Write, Reset].into(),   // write A contents to PC reg
@@ -96,19 +88,16 @@ fn move_word_imm_instructions(destination: &mut Vec<InstructionImpl>) {
 // reg = [mar]
 fn lw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, Addr0Out, Reg0Write, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
     ];
 
     // does not include the pc.cnt since PC is getting written to
     let base_template_pc = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, Addr0Out, Reg0Write, Reset].into(), // read from addr mar into register, pc cnt
     ];
 
     // write to A to be able to write to addr reg
     let base_template_conflict = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, Addr0Out, A.write, PC.cnt].into(), // read from addr mar into register, pc cnt
         [A.bout, Reg0Write, Reset].into(),            // read from addr mar into register, pc cnt
     ];
@@ -148,7 +137,6 @@ fn lw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 // reg = [imm16]
 fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -158,7 +146,6 @@ fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
 
     // does not include the pc.cnt since PC is getting written to
     let base_template_pc = vec![
-        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -168,7 +155,6 @@ fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
 
     // write to A to be able to write to addr reg
     let base_template_conflict = vec![
-        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -211,14 +197,10 @@ fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
 
 // mem[mar] = reg
 fn sw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
-    let base_template = vec![
-        *UNIVERSAL_STEP_0,
-        [MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into(),
-    ];
+    let base_template = vec![[MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into()];
 
     // writes to a first to avoid addr bus conflicts
     let base_template_addr_reg = vec![
-        *UNIVERSAL_STEP_0,
         [A.write, Reg0Bout].into(),
         [MEM.write, Addr0Out, A.bout, PC.cnt, Reset].into(),
     ];
@@ -257,7 +239,6 @@ fn sw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 // mem[imm16] = reg
 fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -267,7 +248,6 @@ fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
 
     // writes to a first to avoid bus conflicts
     let base_template_addr_reg = vec![
-        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -310,14 +290,12 @@ fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
 // [sp--] = reg
 fn push_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        *UNIVERSAL_STEP_0,
         [PC.cnt, SP.dec].into(), // decrement before pushing value
         [MEM.write, SP.addr, Reg0Bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
     ];
 
     // have to write to A first to avoid addr bus contention
     let base_template_addr_reg = vec![
-        *UNIVERSAL_STEP_0,
         [A.write, Reg0Bout, PC.cnt, SP.dec].into(), // decrement before pushing value
         [MEM.write, SP.addr, A.bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
     ];
@@ -352,7 +330,6 @@ fn push_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 // [sp--] = imm8, overrides a reg
 fn push_imm8_instructions(destination: &mut Vec<InstructionImpl>) {
     let current = vec![
-        *UNIVERSAL_STEP_0,
         [PC.cnt, SP.dec].into(),             // decrement before pushing value
         [MEM.bout, PC.addr, A.write].into(), // write into ir2
         [MEM.write, SP.addr, A.bout, PC.cnt, Reset].into(), // read from ir2 into [sp], pc cnt
@@ -367,14 +344,12 @@ fn push_imm8_instructions(destination: &mut Vec<InstructionImpl>) {
 // Reg0 = [sp++]
 fn pop_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, SP.addr, Reg0Write, PC.cnt].into(), // write from [sp] into Reg0, pc cnt
         [SP.inc, Reset].into(),                        // cnt after popping value
     ];
 
     // have to write to A first to avoid addr bus contention
     let base_template_addr_reg = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, SP.addr, A.write, PC.cnt].into(), // write from [sp] into A, pc cnt
         [A.bout, Reg0Write, SP.inc, Reset].into(),   // cnt after popping value
     ];
@@ -409,7 +384,6 @@ fn pop_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 // AddrReg = mem[SP], SP += 2
 fn pop_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let sp_to_mar = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, SP.addr, MAR.hi.write, PC.cnt].into(),
         [SP.inc].into(),
         [MEM.bout, SP.addr, MAR.lo.write].into(),
@@ -422,7 +396,6 @@ fn pop_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     }));
 
     let sp_to_sp_through_mar = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, SP.addr, MAR.hi.write, PC.cnt].into(),
         [SP.inc].into(),
         [MEM.bout, SP.addr, MAR.lo.write].into(),
@@ -437,7 +410,6 @@ fn pop_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     }));
 
     let sp_to_sp_through_ab = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, SP.addr, B.write, PC.cnt].into(),
         [SP.inc].into(),
         [MEM.bout, SP.addr, A.write].into(),
@@ -455,7 +427,6 @@ fn pop_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 // mar/sp = imm16
 fn lda_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -480,7 +451,6 @@ fn lda_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
 // mar/sp = imm16
 fn mv_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     let base_template = vec![
-        *UNIVERSAL_STEP_0,
         [MEM.bout, Addr1Out, Addr0HiWrite, PC.cnt].into(), // first byte has msb
         [MEM.bout, Addr1Out, Addr0LoWrite].into(),         // second byte has lsb
         [PC.cnt, Reset].into(),                            // pc cnt
@@ -506,7 +476,6 @@ fn mv_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 fn misc_instructions(destination: &mut Vec<InstructionImpl>) {
     // sp dec
     let sp_dec = vec![
-        *UNIVERSAL_STEP_0,
         [PC.cnt, SP.dec, Reset].into(), // decrement sp
     ];
 
@@ -525,7 +494,6 @@ fn misc_instructions(destination: &mut Vec<InstructionImpl>) {
 
     // mar cnt
     let mar_inc = vec![
-        *UNIVERSAL_STEP_0,
         [PC.cnt, MAR.cnt, Reset].into(), // cntrement mar
     ];
 
@@ -534,7 +502,7 @@ fn misc_instructions(destination: &mut Vec<InstructionImpl>) {
         name: "inc MAR".to_string(),
     }));
 
-    let halt = vec![*UNIVERSAL_STEP_0, [Halt].into()];
+    let halt = vec![[Halt].into()];
 
     destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: halt,
@@ -542,7 +510,7 @@ fn misc_instructions(destination: &mut Vec<InstructionImpl>) {
     }));
 
     // 2 instruction nop
-    let nop = vec![*UNIVERSAL_STEP_0, [PC.cnt, Reset].into()];
+    let nop = vec![[PC.cnt, Reset].into()];
 
     destination.push(InstructionImpl::Simple(SimpleInstruction {
         istr: nop,
@@ -614,7 +582,6 @@ fn cmp_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 fn not_instructions(destination: &mut Vec<InstructionImpl>) {
     // Reg0 = ~Reg0
     let not = vec![
-        *UNIVERSAL_STEP_0,
         [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a, pc cnt
         [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg0, writes to flag reg
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
@@ -622,7 +589,6 @@ fn not_instructions(destination: &mut Vec<InstructionImpl>) {
 
     // no need to write to a since we are opping directly on A
     let not_a = vec![
-        *UNIVERSAL_STEP_0,
         [FAluBout, FlagWriteAlu, Reg0Write, PC.cnt].into(), // do math op, save to Reg0, writes to flag reg
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
     ];
@@ -654,20 +620,14 @@ fn not_instructions(destination: &mut Vec<InstructionImpl>) {
 fn not_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     // Reg0 = ~Reg1
     let base_template = vec![
-        *UNIVERSAL_STEP_0,
-        *UNIVERSAL_STEP_1,
-        *LOAD_IR2,
-        [Reg1Bout, A.write, PC.cnt].into(), // load Reg1 into a
+        [Reg1Bout, A.write, PC.cnt].into(),         // load Reg1 into a
         [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
     ];
 
     // a = reg1, so no need to load reg1 into a
     let base_template_reg1_a = vec![
-        *UNIVERSAL_STEP_0,
-        *UNIVERSAL_STEP_1,
-        *LOAD_IR2,
-        [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
+        [FAluBout, FlagWriteAlu, Reg0Write, PC.cnt].into(), // do math op, save to Reg1, writes to flag reg
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
     ];
 
@@ -708,8 +668,7 @@ fn not_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
     // Reg0 = Reg0 op imm
     let math_imm = vec![
-        *UNIVERSAL_STEP_0,
-        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into A, pc cnt
+        [Reg0Bout, A.write, PC.cnt].into(),  // load Reg0 into A, pc cnt
         [MEM.bout, PC.addr, B.write].into(), // load imm into B
         [
             FAluBout,
@@ -724,8 +683,7 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
 
     // Reg0 = imm op Reg0
     let math_imm_reverse = vec![
-        *UNIVERSAL_STEP_0,
-        [Reg0Bout, B.write, PC.cnt].into(), // load Reg0 into B, pc cnt
+        [Reg0Bout, B.write, PC.cnt].into(),  // load Reg0 into B, pc cnt
         [MEM.bout, PC.addr, A.write].into(), // load imm into A
         [
             FAluBout,
@@ -741,7 +699,6 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
     // edge cases where register gets loaded to itself
     // all other cases have good register overwrite order
     let math_imm_a = vec![
-        *UNIVERSAL_STEP_0,
         [PC.cnt].into(),                     // load A into A (nop), pc cnt
         [MEM.bout, PC.addr, B.write].into(), // load imm into B
         [FAluBout, FlagWriteAlu, A.write, OutputFlagsSelector, PC.cnt].into(), // save f to Reg0, writes to flag reg
@@ -749,7 +706,6 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
     ];
 
     let math_imm_b_reverse = vec![
-        *UNIVERSAL_STEP_0,
         [PC.cnt].into(),                     // load B into B (nop), pc cnt
         [MEM.bout, PC.addr, A.write].into(), // load imm into A
         [FAluBout, FlagWriteAlu, B.write, OutputFlagsSelector, PC.cnt].into(), // save f to B, writes to flag reg
@@ -958,29 +914,25 @@ struct VramInstruction {
     name: String,
 }
 
-// TODO: implement
 impl OpcodeToOutput for VramInstruction {
     fn to_output(&self, opcode: Opcode) -> Output {
         let step = opcode.step as usize;
         let vram_active = opcode.not_vram_active as usize;
-
-        let target_istr: &SimpleInstruction;
 
         if vram_active == step % 2 {
             // case active even:
             // 0: false
             // 1: true
             // 2: false
-            target_istr = &self.active_even;
+            &self.active_even
         } else {
             // case active odd:
             // 0: true
             // 1: false
             // 2: true
-            target_istr = &self.active_odd;
+            &self.active_odd
         }
-
-        target_istr.to_output(opcode)
+        .to_output(opcode)
     }
 }
 
@@ -1022,7 +974,7 @@ impl OpcodeToOutput for InstructionImpl {
 
 enum InstructionEntry {
     Single(Single<InstructionImpl>),
-    Extended(Extended<InstructionImpl>),
+    Extended(Box<Extended<InstructionImpl>>),
 }
 
 pub struct IstrSet {
