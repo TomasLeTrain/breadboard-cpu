@@ -14,11 +14,6 @@ fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         [Reg1Bout, Reg0Write, PC.cnt, Reset].into(), // read from reg1 to reg0, pc cnt
     ];
 
-    // removes the pc cnt in case pc is getting written to
-    let base_template_pc = vec![
-        [Reg1Bout, Reg0Write, Reset].into(), // read from reg1 to reg0
-    ];
-
     // PC is not excluded for writing to
     for reg0 in WRITE_REGISTERS.iter() {
         // excludes PC, avoids duplicates
@@ -27,15 +22,12 @@ fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
             .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
             .filter(|e| e.name != reg0.name);
         for reg1 in rhs {
-            // avoid duplicates
-            let mut current = {
-                if reg0.name == "PC.lo" || reg0.name == "PC.hi" {
-                    &base_template_pc
-                } else {
-                    &base_template
-                }
+            let mut current = base_template.clone();
+
+            // if writing to PC then don't increment
+            if matches!(reg0.name, "PC.lo" | "PC.hi") {
+                replace_action(&mut current, PC.cnt, Nop);
             }
-            .clone();
 
             fill_reg0(&mut current, reg0);
             fill_reg1(&mut current, reg1);
@@ -826,36 +818,95 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
 }
 
 fn math_reg_instructions(destination: &mut Vec<InstructionImpl>) {
-    todo!()
     // possible edge cases:
-    // reg0 = A, reg1 = ?
-    // reg0 = ?, reg1 = B
-    // reg0 = A, reg1 = B
-    // reg0 = B, reg1 = A
-    //
-    // // Reg0 = Reg0 op Reg1
-    // IstrTemplateType mathCarryTemplateReg = [
-    //     universalStep0,
-    //     universalStep1,
-    //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-    //     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-    //     [Reg1Bout, B.write].into(),             // load Reg1 into b
-    //     [fAluBout, FLAGS.aluWrite, Reg0Write,
-    //      FLAGS.SELECT.carry].into(), // do math op, save to Reg0, writes to flag reg
-    //     [Reset].into(),
-    // ].into();
-    //
-    // IstrTemplateType mathNoCarryTemplateReg = [
-    //     universalStep0,
-    //     universalStep1,
-    //     [MEM.bout, PC.addr, ir2.write].into(), // need to load ir2 to figure out Reg1
-    //     [Reg0Bout, A.write, PC.cnt].into(),    // load Reg0 into a
-    //     [Reg1Bout, B.write].into(),             // load Reg1 into b
-    //     [fAluBout, FLAGS.aluWrite, Reg0Write,
-    //      FLAGS.SELECT.direct].into(), // do math op, save to Reg0, writes to flag reg
-    //     [Reset].into(),
-    // ].into();
-    //
+    // reg0 = A, reg1 = ? -> remove a load step
+    // reg0 = ?, reg1 = B -> remove b load step
+    // reg0 = A, reg1 = B -> remove both load steps
+    // reg0 = B, reg1 = A -> impossible
+
+    // NOTE: all istrs here must be able to work if no pc.cnt happens
+
+    // Reg0 = Reg0 op Reg1
+    let math_reg = vec![
+        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a
+        [Reg1Bout, B.write].into(),         // load Reg1 into b
+        [FAluBout, FlagWriteAlu, Reg0Write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(),
+    ];
+
+    // a and b already loaded
+    let math_reg_a_b = vec![
+        [FAluBout, FlagWriteAlu, A.write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset, PC.cnt].into(),
+    ];
+
+    let math_reg_a = vec![
+        [Reg1Bout, B.write, PC.cnt].into(), // load Reg1 into b
+        [FAluBout, FlagWriteAlu, Reg0Write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(),
+    ];
+
+    let math_reg_b = vec![
+        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a
+        [FAluBout, FlagWriteAlu, Reg0Write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(),
+    ];
+
+    for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
+        for reg0 in WRITE_REGISTERS.iter() {
+            // excludes PC, avoids duplicates
+            for reg1 in READ_REGISTERS
+                .iter()
+                .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            {
+                // avoid duplicates
+
+                // impossible case
+                if matches!(reg1.name, "A") && matches!(reg0.name, "B") {
+                    continue;
+                }
+
+                let mut current = {
+                    let reg0_a = matches!(reg0.name, "A");
+                    let reg1_b = matches!(reg1.name, "B");
+
+                    if reg0_a && reg1_b {
+                        &math_reg_a_b
+                    } else if reg0_a {
+                        &math_reg_a
+                    } else if reg1_b {
+                        &math_reg_b
+                    } else {
+                        &math_reg
+                    }
+                }
+                .clone();
+
+                if matches!(math_type, MathIstrTypes::Cmp) {
+                    // on cmp, replace writing actions to nothing
+                    replace_action(&mut current, Reg0Write, Nop);
+                    replace_action(&mut current, FAluBout, Nop);
+                } else {
+                    if matches!(reg0.name, "PC.lo" | "PC.hi") {
+                        // here we are writing to PC (since not cmp), so avoid pc.cnt
+                        replace_action(&mut current, PC.cnt, Nop);
+                    }
+                }
+
+                fill_reg0(&mut current, reg0);
+                fill_reg1(&mut current, reg1);
+                fill_flag_select(&mut current, math_type.get_action());
+
+                assert!(all_regs_filled(&current));
+                assert!(flag_select_filled(&current));
+
+                destination.push(InstructionImpl::Simple(SimpleInstruction {
+                    istr: current,
+                    name: format!("{} {}, {}", math_type, reg0.name, reg1.name),
+                }));
+            }
+        }
+    }
 }
 
 fn jnz_reg_instructions(destination: &mut Vec<InstructionImpl>) {
@@ -936,6 +987,7 @@ fn jmp_instructions(destination: &mut Vec<InstructionImpl>) {
 
                 assert!(all_regs_filled(&current));
                 assert!(addr_reg_filled(&current));
+                assert!(flag_select_filled(&current));
 
                 let name = if imm {
                     format!("{} imm16, {}", flag.get_jump_name(), addr_reg.name)
@@ -985,6 +1037,8 @@ pub fn build_all_instructions() -> Vec<InstructionImpl> {
     jnz_reg_instructions(&mut all_istrs);
     jmp_instructions(&mut all_istrs);
 
+    math_reg_instructions(&mut all_istrs);
+
     all_istrs
 }
 
@@ -1031,7 +1085,7 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
     }
 }
 
-struct VramInstruction {
+pub struct VramInstruction {
     // vram is active on odd numbered instructions (0 indexed)
     active_even: SimpleInstruction,
     // vram is active on even numbered instructions (0 indexed)
