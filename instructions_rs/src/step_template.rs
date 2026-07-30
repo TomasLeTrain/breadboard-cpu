@@ -1,6 +1,6 @@
 use crate::{
     Action,
-    output::{self, Output},
+    output::Output,
 };
 
 // custom max-capacity runtime-size implementation that fits in 8 bytes

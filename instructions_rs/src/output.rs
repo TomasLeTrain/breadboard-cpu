@@ -6,7 +6,7 @@ pub struct Output {
     addr: u8,
     misc: u8,
     flag_select: u8,
-    pc_cnt: u8,
+    pc_cnt: bool,
 }
 
 impl Output {
@@ -17,7 +17,7 @@ impl Output {
             addr: 0,
             misc: 0,
             flag_select: 0,
-            pc_cnt: 0,
+            pc_cnt: false,
         }
     }
 
@@ -51,7 +51,7 @@ impl Output {
         result
     }
 
-    pub fn from_pc_cnt(val: u8) -> Self {
+    pub fn from_pc_cnt(val: bool) -> Self {
         let mut result = Self::new();
         result.pc_cnt = val;
         result
@@ -65,6 +65,22 @@ impl Output {
         result
     }
 
+    // returns true if one of the fields has a value greater than allowed
+
+    const MAX_BOUT_VAL: u8 = (1 << 4) - 1;
+    const MAX_WRITE_VAL: u8 = (1 << 4) - 1;
+    const MAX_ADDR_VAL: u8 = (1 << 2) - 1;
+    const MAX_MISC_VAL: u8 = (1 << 2) - 1;
+    const MAX_FLAG_SELECT_VAL: u8 = (1 << 3) - 1;
+
+    fn sizes_exceeded(&self) -> bool {
+        self.bout > Self::MAX_BOUT_VAL
+            || self.write > Self::MAX_WRITE_VAL
+            || self.addr > Self::MAX_ADDR_VAL
+            || self.misc > Self::MAX_MISC_VAL
+            || self.flag_select > Self::MAX_FLAG_SELECT_VAL
+    }
+
     pub fn intersect(&self, other: &Self) -> bool {
         let category_intersects = |a: u8, b: u8| -> bool { a > 0 && b > 0 };
 
@@ -72,11 +88,13 @@ impl Output {
             || category_intersects(self.write, other.write)
             || category_intersects(self.addr, other.addr)
             || category_intersects(self.flag_select, other.flag_select)
-            || category_intersects(self.pc_cnt, other.pc_cnt)
+            || category_intersects(self.pc_cnt as u8, other.pc_cnt as u8)
     }
 
     pub fn merge(&mut self, other: &Self) {
-        // TODO: add intersect assert
+        assert!(!self.sizes_exceeded());
+        assert!(!self.intersect(other));
+
         self.bout |= other.bout;
         self.write |= other.write;
         self.addr |= other.addr;

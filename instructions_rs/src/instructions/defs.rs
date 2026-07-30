@@ -60,24 +60,6 @@ fn set_reg1(istr_temp: &mut [StepTemplate], reg1: &(impl Bout + Write)) {
     set_reg1_bout(istr_temp, reg1);
 }
 
-impl Register {
-    pub fn fill_reg0(&self, istr_temp: &mut [StepTemplate]) {
-        match self.to_reg_impl() {
-            RegisterImpl::BoutWrite(reg) => set_reg0(istr_temp, reg),
-            RegisterImpl::Write(write_reg) => set_reg0_write(istr_temp, write_reg),
-            RegisterImpl::Bout(bout_reg) => set_reg0_bout(istr_temp, bout_reg),
-        };
-    }
-
-    pub fn fill_reg1(&self, istr_temp: &mut [StepTemplate]) {
-        match self.to_reg_impl() {
-            RegisterImpl::BoutWrite(reg) => set_reg1(istr_temp, reg),
-            RegisterImpl::Write(write_reg) => set_reg1_write(istr_temp, write_reg),
-            RegisterImpl::Bout(bout_reg) => set_reg1_bout(istr_temp, bout_reg),
-        };
-    }
-}
-
 pub fn fill_flag_select(istr_temp: &mut [StepTemplate], flag: Action) {
     replace_action(istr_temp, OutputFlagsSelector, flag);
 }
@@ -181,18 +163,6 @@ pub enum AddressRegisterImpl<'a> {
     Sp(&'a SpRegister),
 }
 
-#[derive(Clone)]
-pub struct NamedRegister<'a> {
-    pub reg: RegisterImpl<'a>,
-    pub name: &'a str,
-}
-
-#[derive(Clone)]
-pub struct NamedAddressRegister<'a> {
-    pub reg: AddressRegisterImpl<'a>,
-    pub name: &'a str,
-}
-
 #[derive(PartialEq)]
 pub enum Register {
     A,
@@ -211,6 +181,22 @@ pub enum Register {
 }
 
 impl Register {
+    pub fn fill_reg0(&self, istr_temp: &mut [StepTemplate]) {
+        match self.to_reg_impl() {
+            RegisterImpl::BoutWrite(reg) => set_reg0(istr_temp, reg),
+            RegisterImpl::Write(write_reg) => set_reg0_write(istr_temp, write_reg),
+            RegisterImpl::Bout(bout_reg) => set_reg0_bout(istr_temp, bout_reg),
+        };
+    }
+
+    pub fn fill_reg1(&self, istr_temp: &mut [StepTemplate]) {
+        match self.to_reg_impl() {
+            RegisterImpl::BoutWrite(reg) => set_reg1(istr_temp, reg),
+            RegisterImpl::Write(write_reg) => set_reg1_write(istr_temp, write_reg),
+            RegisterImpl::Bout(bout_reg) => set_reg1_bout(istr_temp, bout_reg),
+        };
+    }
+
     pub fn name(&self) -> &str {
         match self {
             Register::A => "A",
@@ -229,7 +215,7 @@ impl Register {
         }
     }
 
-    pub fn to_reg_impl<'a>(&self) -> RegisterImpl<'a> {
+    pub fn to_reg_impl(&self) -> RegisterImpl<'_> {
         match self {
             Register::A => RegisterImpl::BoutWrite(&A),
             Register::B => RegisterImpl::BoutWrite(&B),
@@ -244,13 +230,6 @@ impl Register {
             Register::SpHi => RegisterImpl::BoutWrite(&SP.hi),
             Register::Flags => RegisterImpl::Bout(&FLAGS),
             Register::Keyb => RegisterImpl::Bout(&KEYB),
-        }
-    }
-
-    pub fn to_reg(&self) -> NamedRegister {
-        NamedRegister {
-            reg: self.to_reg_impl(),
-            name: self.name(),
         }
     }
 
@@ -296,17 +275,10 @@ impl AddressRegisterEnum {
         }
     }
 
-    pub fn to_reg_impl(&self) -> AddressRegisterImpl {
+    pub fn to_reg_impl(&self) -> AddressRegisterImpl<'_> {
         match self {
             AddressRegisterEnum::Mar => AddressRegisterImpl::Mar(&MAR),
             AddressRegisterEnum::Sp => AddressRegisterImpl::Sp(&SP),
-        }
-    }
-
-    pub fn to_reg(&self) -> NamedAddressRegister {
-        NamedAddressRegister {
-            reg: self.to_reg_impl(),
-            name: self.name(),
         }
     }
 
@@ -316,92 +288,6 @@ impl AddressRegisterEnum {
         ALL_REGISTERS.iter()
     }
 }
-
-pub static ALL_REGISTERS: LazyLock<Vec<NamedRegister>> = LazyLock::new(|| {
-    vec![
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&A),
-            name: "A",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&B),
-            name: "B",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&X.register),
-            name: "X",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&Y.register),
-            name: "Y",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&Z),
-            name: "Z",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&MAR.lo),
-            name: "MAR.lo",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&MAR.hi),
-            name: "MAR.hi",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&PC.lo),
-            name: "PC.lo",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&PC.hi),
-            name: "PC.hi",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&SP.lo),
-            name: "SP.lo",
-        },
-        NamedRegister {
-            reg: RegisterImpl::BoutWrite(&SP.hi),
-            name: "SP.hi",
-        },
-        NamedRegister {
-            reg: RegisterImpl::Bout(&FLAGS),
-            name: "FLAGS",
-        },
-        NamedRegister {
-            reg: RegisterImpl::Bout(&KEYB),
-            name: "KEYB",
-        },
-    ]
-});
-
-pub static READ_REGISTERS: LazyLock<Vec<NamedRegister>> = LazyLock::new(|| {
-    ALL_REGISTERS
-        .clone()
-        .into_iter()
-        .filter(|e| matches!(e.reg, RegisterImpl::BoutWrite(_) | RegisterImpl::Bout(_)))
-        .collect()
-});
-
-pub static WRITE_REGISTERS: LazyLock<Vec<NamedRegister>> = LazyLock::new(|| {
-    ALL_REGISTERS
-        .clone()
-        .into_iter()
-        .filter(|e| matches!(e.reg, RegisterImpl::BoutWrite(_) | RegisterImpl::Write(_)))
-        .collect()
-});
-
-pub static ADDR_REGISTERS: LazyLock<Vec<NamedAddressRegister>> = LazyLock::new(|| {
-    vec![
-        NamedAddressRegister {
-            reg: AddressRegisterImpl::Sp(&SP),
-            name: "SP",
-        },
-        NamedAddressRegister {
-            reg: AddressRegisterImpl::Mar(&MAR),
-            name: "MAR",
-        },
-    ]
-});
 
 // in order of associated bits (0 is first, 7 is last)
 pub enum MathIstrTypes {

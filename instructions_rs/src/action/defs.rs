@@ -11,7 +11,7 @@ static ACTION_TO_OUTPUT_MAP: LazyLock<HashMap<Action, Output>> = LazyLock::new(|
         (Nop, Output::new()),
         (Reset, Output::from_other(2)),
         // addr regs cnt
-        (PcCnt, Output::from_pc_cnt(1)),
+        (PcCnt, Output::from_pc_cnt(true)),
         (MarCnt, Output::from_bout(4)),
         (SpDec, Output::from_bout(7)),
         (SpInc, Output::from_bout(6)),

@@ -5,10 +5,8 @@ mod output;
 mod step_template;
 
 use action::Action;
-use output::Output;
 
-use crate::instructions::{InstructionImpl, OpcodeToOutput};
-use instructions::SimpleInstruction;
+use crate::instructions::InstructionImpl;
 
 fn print_istrs(istrs: &Vec<InstructionImpl>) {
     for istr in istrs {

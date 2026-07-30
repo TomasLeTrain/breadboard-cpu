@@ -1,4 +1,4 @@
-use crate::{action::Action::*, instructions::*};
+use crate::instructions::*;
 
 // move register to register (reg0 = reg1)
 fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
