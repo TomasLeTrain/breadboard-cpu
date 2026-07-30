@@ -9,18 +9,18 @@ fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     for reg0 in Register::write_iterator() {
         // excludes PC, avoids duplicates
         let rhs = Register::read_iterator()
-            .filter(|e| !matches!(e, Register::PC_lo | Register::PC_hi))
+            .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
             .filter(|&e| e != reg0);
         for reg1 in rhs {
             let mut current = base_template.clone();
 
             // if writing to PC then don't increment
-            if matches!(reg0, Register::PC_lo | Register::PC_hi) {
+            if matches!(reg0, Register::PcLo | Register::PcHi) {
                 replace_action(&mut current, PC.cnt, Nop);
             }
 
-            fill_reg0(&mut current, &reg0.to_reg());
-            fill_reg1(&mut current, &reg1.to_reg());
+            reg0.fill_reg0(&mut current);
+            reg1.fill_reg1(&mut current);
 
             assert!(all_regs_filled(&current));
 
@@ -49,7 +49,7 @@ fn move_word_imm_instructions(destination: &mut Vec<InstructionImpl>) {
 
     for reg in Register::write_iterator() {
         let mut current = {
-            if matches!(reg, Register::PC_lo | Register::PC_hi) {
+            if matches!(reg, Register::PcLo | Register::PcHi) {
                 &base_template_pc
             } else {
                 &base_template
@@ -57,7 +57,7 @@ fn move_word_imm_instructions(destination: &mut Vec<InstructionImpl>) {
         }
         .clone();
 
-        fill_reg0(&mut current, &reg.to_reg());
+        reg.fill_reg0(&mut current);
         assert!(all_regs_filled(&current));
 
         destination.push(InstructionImpl::Simple(SimpleInstruction {
@@ -83,8 +83,8 @@ fn lw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     for addr_reg in AddressRegisterEnum::iterator() {
         for reg in Register::write_iterator() {
             let conflict = match addr_reg.to_reg_impl() {
-                AddressRegisterImpl::Mar(_) => matches!(reg, Register::MAR_lo | Register::MAR_hi),
-                AddressRegisterImpl::Sp(_) => matches!(reg, Register::SP_lo | Register::SP_hi),
+                AddressRegisterImpl::Mar(_) => matches!(reg, Register::MarLo | Register::MarHi),
+                AddressRegisterImpl::Sp(_) => matches!(reg, Register::SpLo | Register::SpHi),
             };
 
             let mut current = if conflict {
@@ -95,12 +95,12 @@ fn lw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
             .clone();
 
             // if writing to PC then don't increment
-            if matches!(reg, Register::PC_lo | Register::PC_hi) {
+            if matches!(reg, Register::PcLo | Register::PcHi) {
                 replace_action(&mut current, PC.cnt, Nop);
             }
 
-            fill_addr_reg0(&mut current, &addr_reg.to_reg());
-            fill_reg0(&mut current, &reg.to_reg());
+            addr_reg.fill_addr_reg0(&mut current);
+            reg.fill_reg0(&mut current);
 
             assert!(all_regs_filled(&current));
             assert!(addr_reg_filled(&current));
@@ -145,12 +145,12 @@ fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     for addr_reg in AddressRegisterEnum::iterator() {
         for reg in Register::write_iterator() {
             let conflict = match addr_reg.to_reg_impl() {
-                AddressRegisterImpl::Mar(_) => matches!(reg, Register::MAR_lo | Register::MAR_hi),
-                AddressRegisterImpl::Sp(_) => matches!(reg, Register::SP_lo | Register::SP_hi),
+                AddressRegisterImpl::Mar(_) => matches!(reg, Register::MarLo | Register::MarHi),
+                AddressRegisterImpl::Sp(_) => matches!(reg, Register::SpLo | Register::SpHi),
             };
 
             let mut current = {
-                if matches!(reg, Register::PC_lo | Register::PC_hi) {
+                if matches!(reg, Register::PcLo | Register::PcHi) {
                     &base_template_pc
                 } else if conflict {
                     &base_template_conflict
@@ -160,8 +160,8 @@ fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
             }
             .clone();
 
-            fill_addr_reg0(&mut current, &addr_reg.to_reg());
-            fill_reg0(&mut current, &reg.to_reg());
+            addr_reg.fill_addr_reg0(&mut current);
+            reg.fill_reg0(&mut current);
 
             assert!(all_regs_filled(&current));
             assert!(addr_reg_filled(&current));
@@ -174,50 +174,18 @@ fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     }
 }
 
-// mem[mar] = reg
-fn sw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
-    let base_template = vec![[MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into()];
+fn sw_instructions(destination: &mut Vec<InstructionImpl>) {
+    // mem[mar] = reg
+    let sw = vec![[MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into()];
 
     // writes to a first to avoid addr bus conflicts
-    let base_template_addr_reg = vec![
+    let sw_addr_reg = vec![
         [A.write, Reg0Bout].into(),
         [MEM.write, Addr0Out, A.bout, PC.cnt, Reset].into(),
     ];
 
-    for addr_reg in ADDR_REGISTERS.iter() {
-        for reg in READ_REGISTERS
-            .iter()
-            // excluded PC (useless op, can be replaced with imm8)
-            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
-        {
-            let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
-
-            let mut current = {
-                if addr_bus_conflict {
-                    &base_template_addr_reg
-                } else {
-                    &base_template
-                }
-            }
-            .clone();
-
-            fill_addr_reg0(&mut current, addr_reg);
-            fill_reg0(&mut current, reg);
-
-            assert!(all_regs_filled(&current));
-            assert!(addr_reg_filled(&current));
-
-            destination.push(InstructionImpl::Simple(SimpleInstruction {
-                istr: current,
-                name: format!("sw {}, mem[{}]", reg.name, addr_reg.name),
-            }));
-        }
-    }
-}
-
-// mem[imm16] = reg
-fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
-    let base_template = vec![
+    // mem[imm16] = reg
+    let sw_imm = vec![
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -226,7 +194,7 @@ fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
     ];
 
     // writes to a first to avoid bus conflicts
-    let base_template_addr_reg = vec![
+    let sw_imm_addr_reg = vec![
         IMM_TO_ADDR_REG[1],
         IMM_TO_ADDR_REG[2],
         IMM_TO_ADDR_REG[3],
@@ -235,33 +203,47 @@ fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
         [MEM.write, Addr0Out, A.bout, PC.cnt, Reset].into(),
     ];
 
-    for addr_reg in ADDR_REGISTERS.iter() {
-        for reg in READ_REGISTERS
-            .iter()
-            // excluded PC (useless op, can be replaced with imm8)
-            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
-        {
-            let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
+    for imm in [false, true] {
+        for addr_reg in AddressRegisterEnum::iterator() {
+            for reg in Register::read_iterator()
+                // excluded PC (useless op, can be replaced with imm8)
+                .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
+            {
+                let addr_bus_conflict = matches!(
+                    reg,
+                    Register::MarLo | Register::MarHi | Register::SpLo | Register::SpHi
+                );
 
-            let mut current = {
-                if addr_bus_conflict {
-                    &base_template_addr_reg
+                let conflict_template = if imm { &sw_imm_addr_reg } else { &sw_addr_reg };
+                let base_template = if imm { &sw_imm } else { &sw };
+
+                let mut current = {
+                    if addr_bus_conflict {
+                        conflict_template
+                    } else {
+                        base_template
+                    }
+                }
+                .clone();
+
+                addr_reg.fill_addr_reg0(&mut current);
+                reg.fill_reg0(&mut current);
+
+                assert!(all_regs_filled(&current));
+                assert!(addr_reg_filled(&current));
+
+                if imm {
+                    destination.push(InstructionImpl::Simple(SimpleInstruction {
+                        istr: current,
+                        name: format!("sw {}, mem[imm16], {}", reg.name(), addr_reg.name()),
+                    }));
                 } else {
-                    &base_template
+                    destination.push(InstructionImpl::Simple(SimpleInstruction {
+                        istr: current,
+                        name: format!("sw {}, mem[{}]", reg.name(), addr_reg.name()),
+                    }));
                 }
             }
-            .clone();
-
-            fill_addr_reg0(&mut current, addr_reg);
-            fill_reg0(&mut current, reg);
-
-            assert!(all_regs_filled(&current));
-            assert!(addr_reg_filled(&current));
-
-            destination.push(InstructionImpl::Simple(SimpleInstruction {
-                istr: current,
-                name: format!("sw {}, mem[imm16], {}", reg.name, addr_reg.name),
-            }));
         }
     }
 }
@@ -279,12 +261,12 @@ fn push_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         [MEM.write, SP.addr, A.bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
     ];
 
-    for reg in READ_REGISTERS
-        .iter()
-        // excluded PC (useless op, can be replaced with imm8)
-        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    for reg in Register::read_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
     {
-        let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
+        let addr_bus_conflict = matches!(
+            reg,
+            Register::MarLo | Register::MarHi | Register::SpLo | Register::SpHi
+        );
 
         let mut current = {
             if addr_bus_conflict {
@@ -295,13 +277,13 @@ fn push_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         }
         .clone();
 
-        fill_reg0(&mut current, reg);
+        reg.fill_reg0(&mut current);
 
         assert!(all_regs_filled(&current));
 
         destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
-            name: format!("push {}", reg.name),
+            name: format!("push {}", reg.name()),
         }));
     }
 }
@@ -333,12 +315,14 @@ fn pop_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         [A.bout, Reg0Write, SP.inc, Reset].into(),   // cnt after popping value
     ];
 
-    for reg in WRITE_REGISTERS
-        .iter()
-        // excluded PC and SP (pop addr makes more sense in that context)
-        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi" | "SP.lo" | "SP.hi"))
-    {
-        let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi");
+    // excluded PC and SP (pop addr makes more sense in that context)
+    for reg in Register::write_iterator().filter(|e| {
+        !matches!(
+            e,
+            Register::PcLo | Register::PcHi | Register::SpLo | Register::SpHi
+        )
+    }) {
+        let addr_bus_conflict = matches!(reg, Register::MarLo | Register::MarHi);
 
         let mut current = {
             if addr_bus_conflict {
@@ -349,13 +333,13 @@ fn pop_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         }
         .clone();
 
-        fill_reg0(&mut current, reg);
+        reg.fill_reg0(&mut current);
 
         assert!(all_regs_filled(&current));
 
         destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
-            name: format!("pop {}", reg.name),
+            name: format!("pop {}", reg.name()),
         }));
     }
 }
@@ -413,16 +397,16 @@ fn lda_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
         [PC.cnt, Reset].into(), // pc cnt
     ];
 
-    for addr_reg in ADDR_REGISTERS.iter() {
+    for addr_reg in AddressRegisterEnum::iterator() {
         let mut current = base_template.clone();
 
-        fill_addr_reg0(&mut current, addr_reg);
+        addr_reg.fill_addr_reg0(&mut current);
 
         assert!(addr_reg_filled(&current));
 
         destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
-            name: format!("lda {}, imm16", addr_reg.name),
+            name: format!("lda {}, imm16", addr_reg.name()),
         }));
     }
 }
@@ -435,18 +419,18 @@ fn mv_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         [PC.cnt, Reset].into(),                            // pc cnt
     ];
 
-    for addr_reg0 in ADDR_REGISTERS.iter() {
-        for addr_reg1 in ADDR_REGISTERS.iter().filter(|e| e.name != addr_reg0.name) {
+    for addr_reg0 in AddressRegisterEnum::iterator() {
+        for addr_reg1 in AddressRegisterEnum::iterator().filter(|&e| e != addr_reg0) {
             let mut current = base_template.clone();
 
-            fill_addr_reg0(&mut current, addr_reg0);
-            fill_addr_reg1(&mut current, addr_reg1);
+            addr_reg0.fill_addr_reg0(&mut current);
+            addr_reg1.fill_addr_reg1(&mut current);
 
             assert!(addr_reg_filled(&current));
 
             destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
-                name: format!("mva {}, {}", addr_reg0.name, addr_reg1.name),
+                name: format!("mva {}, {}", addr_reg0.name(), addr_reg1.name()),
             }));
         }
     }
@@ -523,15 +507,14 @@ fn vram_read_instructions(destination: &mut Vec<InstructionImpl>) {
         [PC.cnt, Reset].into(),
     ];
 
-    for addr_reg in ADDR_REGISTERS.iter() {
-        for reg in WRITE_REGISTERS
-            .iter()
-            // excluded PC
-            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    for addr_reg in AddressRegisterEnum::iterator() {
+        for reg in Register::write_iterator()
+            // exclude PC
+            .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
         {
-            let conflict = match addr_reg.reg {
-                AddressRegisterImpl::Mar(_) => matches!(reg.name, "MAR.lo" | "MAR.hi"),
-                AddressRegisterImpl::Sp(_) => matches!(reg.name, "SP.lo" | "SP.hi"),
+            let conflict = match addr_reg.to_reg_impl() {
+                AddressRegisterImpl::Mar(_) => matches!(reg, Register::MarLo | Register::MarHi),
+                AddressRegisterImpl::Sp(_) => matches!(reg, Register::SpLo | Register::SpHi),
             };
 
             let mut odd_current = {
@@ -552,16 +535,16 @@ fn vram_read_instructions(destination: &mut Vec<InstructionImpl>) {
             }
             .clone();
 
-            fill_reg0(&mut odd_current, reg);
-            fill_reg0(&mut even_current, reg);
+            reg.fill_reg0(&mut odd_current);
+            reg.fill_reg0(&mut even_current);
 
-            fill_addr_reg0(&mut odd_current, addr_reg);
-            fill_addr_reg0(&mut even_current, addr_reg);
+            addr_reg.fill_addr_reg0(&mut odd_current);
+            addr_reg.fill_addr_reg0(&mut even_current);
 
             assert!(all_regs_filled(&odd_current));
             assert!(all_regs_filled(&even_current));
 
-            let name = format!("lw {}, vram[{}]", reg.name, addr_reg.name);
+            let name = format!("lw {}, vram[{}]", reg.name(), addr_reg.name());
 
             destination.push(InstructionImpl::Vram(VramInstruction {
                 active_odd: SimpleInstruction {
@@ -592,13 +575,15 @@ fn vram_write_instructions(destination: &mut Vec<InstructionImpl>) {
         [PC.cnt, Reset].into(),
     ];
 
-    for addr_reg in ADDR_REGISTERS.iter() {
-        for reg in READ_REGISTERS
-            .iter()
+    for addr_reg in AddressRegisterEnum::iterator() {
+        for reg in Register::read_iterator()
             // exclude PC
-            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
         {
-            let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
+            let addr_bus_conflict = matches!(
+                reg,
+                Register::MarLo | Register::MarHi | Register::SpLo | Register::SpHi
+            );
 
             let mut current = {
                 if addr_bus_conflict {
@@ -609,14 +594,14 @@ fn vram_write_instructions(destination: &mut Vec<InstructionImpl>) {
             }
             .clone();
 
-            fill_reg0(&mut current, reg);
-            fill_addr_reg0(&mut current, addr_reg);
+            reg.fill_reg0(&mut current);
+            addr_reg.fill_addr_reg0(&mut current);
 
             assert!(all_regs_filled(&current));
 
             destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
-                name: format!("sw {}, vram[{}]", reg.name, addr_reg.name),
+                name: format!("sw {}, vram[{}]", reg.name(), addr_reg.name()),
             }));
         }
     }
@@ -636,26 +621,23 @@ fn not_instructions(destination: &mut Vec<InstructionImpl>) {
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
     ];
 
-    for reg in WRITE_REGISTERS
-        .iter()
-        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    for reg in
+        Register::write_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
     {
-        let mut current = {
-            if matches!(reg.name, "A") {
-                &not_a
-            } else {
-                &not
-            }
+        let mut current = if matches!(reg, Register::A) {
+            &not_a
+        } else {
+            &not
         }
         .clone();
 
-        fill_reg0(&mut current, reg);
+        reg.fill_reg0(&mut current);
 
         assert!(all_regs_filled(&current));
 
         destination.push(InstructionImpl::Simple(SimpleInstruction {
             istr: current,
-            name: format!("not {}", reg.name),
+            name: format!("not {}", reg.name()),
         }));
     }
 }
@@ -675,19 +657,17 @@ fn not_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     ];
 
     // PC excluded
-    for reg0 in WRITE_REGISTERS
-        .iter()
-        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    for reg0 in
+        Register::write_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
     {
         // excludes PC, avoids duplicates
-        let rhs = READ_REGISTERS
-            .iter()
-            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
-            .filter(|e| e.name != reg0.name);
+        let rhs = Register::read_iterator()
+            .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
+            .filter(|&e| e != reg0);
         for reg1 in rhs {
             // avoid duplicates
             let mut current = {
-                if matches!(reg1.name, "A") {
+                if matches!(reg1, Register::A) {
                     &base_template_reg1_a
                 } else {
                     &base_template
@@ -695,14 +675,14 @@ fn not_reg_instructions(destination: &mut Vec<InstructionImpl>) {
             }
             .clone();
 
-            fill_reg0(&mut current, reg0);
-            fill_reg1(&mut current, reg1);
+            reg0.fill_reg0(&mut current);
+            reg1.fill_reg1(&mut current);
 
             assert!(all_regs_filled(&current));
 
             destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
-                name: format!("not {}, {}", reg0.name, reg1.name),
+                name: format!("not {}, {}", reg0.name(), reg1.name()),
             }));
         }
     }
@@ -757,14 +737,13 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
 
     for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
         for reversed in [false, true] {
-            for reg in WRITE_REGISTERS
-                .iter()
-                .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            for reg in Register::write_iterator()
+                .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
             {
                 let mut current = {
-                    if matches!(reg.name, "A") && !reversed {
+                    if matches!(reg, Register::A) && !reversed {
                         &math_imm_a
-                    } else if matches!(reg.name, "B") && reversed {
+                    } else if matches!(reg, Register::B) && reversed {
                         &math_imm_b_reverse
                     } else {
                         if reversed {
@@ -782,7 +761,7 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
                     replace_action(&mut current, FAluBout, Nop);
                 }
 
-                fill_reg0(&mut current, reg);
+                reg.fill_reg0(&mut current);
 
                 fill_flag_select(&mut current, math_type.get_action());
 
@@ -790,9 +769,9 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
                 assert!(flag_select_filled(&current));
 
                 let name = if reversed {
-                    format!("{} imm8, {}", math_type, reg.name)
+                    format!("{} imm8, {}", math_type, reg.name())
                 } else {
-                    format!("{} {}, imm8", math_type, reg.name)
+                    format!("{} {}, imm8", math_type, reg.name())
                 };
 
                 destination.push(InstructionImpl::Simple(SimpleInstruction {
@@ -840,22 +819,19 @@ fn math_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     ];
 
     for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
-        for reg0 in WRITE_REGISTERS.iter() {
-            // excludes PC, avoids duplicates
-            for reg1 in READ_REGISTERS
-                .iter()
-                .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+        for reg0 in Register::write_iterator() {
+            // excludes PC
+            for reg1 in Register::read_iterator()
+                .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
             {
-                // avoid duplicates
-
                 // impossible case
-                if matches!(reg1.name, "A") && matches!(reg0.name, "B") {
+                if matches!(reg1, Register::A) && matches!(reg0, Register::B) {
                     continue;
                 }
 
                 let mut current = {
-                    let reg0_a = matches!(reg0.name, "A");
-                    let reg1_b = matches!(reg1.name, "B");
+                    let reg0_a = matches!(reg0, Register::A);
+                    let reg1_b = matches!(reg1, Register::B);
 
                     if reg0_a && reg1_b {
                         &math_reg_a_b
@@ -874,14 +850,14 @@ fn math_reg_instructions(destination: &mut Vec<InstructionImpl>) {
                     replace_action(&mut current, Reg0Write, Nop);
                     replace_action(&mut current, FAluBout, Nop);
                 } else {
-                    if matches!(reg0.name, "PC.lo" | "PC.hi") {
+                    if matches!(reg0, Register::PcLo | Register::PcHi) {
                         // here we are writing to PC (since not cmp), so avoid pc.cnt
                         replace_action(&mut current, PC.cnt, Nop);
                     }
                 }
 
-                fill_reg0(&mut current, reg0);
-                fill_reg1(&mut current, reg1);
+                reg0.fill_reg0(&mut current);
+                reg1.fill_reg1(&mut current);
                 fill_flag_select(&mut current, math_type.get_action());
 
                 assert!(all_regs_filled(&current));
@@ -889,7 +865,7 @@ fn math_reg_instructions(destination: &mut Vec<InstructionImpl>) {
 
                 destination.push(InstructionImpl::Simple(SimpleInstruction {
                     istr: current,
-                    name: format!("{} {}, {}", math_type, reg0.name, reg1.name),
+                    name: format!("{} {}, {}", math_type, reg0.name(), reg1.name()),
                 }));
             }
         }
@@ -912,13 +888,12 @@ fn jnz_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         [Addr0LoBout, PC.lo.write, FlagNotZero, Reset].into(),
     ];
 
-    for addr_reg in ADDR_REGISTERS.iter() {
-        for reg in READ_REGISTERS
-            .iter()
-            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    for addr_reg in AddressRegisterEnum::iterator() {
+        for reg in
+            Register::read_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
         {
             let mut current = {
-                if matches!(reg.name, "A") {
+                if matches!(reg, Register::A) {
                     &jnz_template_reg_a
                 } else {
                     &jnz_template_reg
@@ -926,15 +901,15 @@ fn jnz_reg_instructions(destination: &mut Vec<InstructionImpl>) {
             }
             .clone();
 
-            fill_addr_reg0(&mut current, addr_reg);
-            fill_reg0(&mut current, reg);
+            addr_reg.fill_addr_reg0(&mut current);
+            reg.fill_reg0(&mut current);
 
             assert!(all_regs_filled(&current));
             assert!(addr_reg_filled(&current));
 
             destination.push(InstructionImpl::Simple(SimpleInstruction {
                 istr: current,
-                name: format!("jnz {}, {}", reg.name, addr_reg.name),
+                name: format!("jnz {}, {}", reg.name(), addr_reg.name()),
             }));
         }
     }
@@ -960,7 +935,7 @@ fn jmp_instructions(destination: &mut Vec<InstructionImpl>) {
     ];
 
     for imm in [false, true] {
-        for addr_reg in ADDR_REGISTERS.iter() {
+        for addr_reg in AddressRegisterEnum::iterator() {
             for flag in OutputFlags::iterator() {
                 let mut current = if imm {
                     &jmp_imm16_template
@@ -969,7 +944,7 @@ fn jmp_instructions(destination: &mut Vec<InstructionImpl>) {
                 }
                 .clone();
 
-                fill_addr_reg0(&mut current, addr_reg);
+                addr_reg.fill_addr_reg0(&mut current);
                 fill_flag_select(&mut current, flag.get_action());
 
                 assert!(all_regs_filled(&current));
@@ -977,9 +952,9 @@ fn jmp_instructions(destination: &mut Vec<InstructionImpl>) {
                 assert!(flag_select_filled(&current));
 
                 let name = if imm {
-                    format!("{} imm16, {}", flag.get_jump_name(), addr_reg.name)
+                    format!("{} imm16, {}", flag.get_jump_name(), addr_reg.name())
                 } else {
-                    format!("{} {}", flag.get_jump_name(), addr_reg.name)
+                    format!("{} {}", flag.get_jump_name(), addr_reg.name())
                 };
 
                 destination.push(InstructionImpl::Simple(SimpleInstruction {
@@ -999,8 +974,7 @@ pub fn build_all_instructions() -> Vec<InstructionImpl> {
     lw_template_addr_reg_instructions(&mut all_istrs);
     lw_template_imm16_instructions(&mut all_istrs);
 
-    sw_template_addr_reg_instructions(&mut all_istrs);
-    sw_template_imm16_instructions(&mut all_istrs);
+    sw_instructions(&mut all_istrs);
 
     push_reg_instructions(&mut all_istrs);
     push_imm8_instructions(&mut all_istrs);

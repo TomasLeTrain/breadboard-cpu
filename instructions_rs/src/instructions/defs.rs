@@ -60,20 +60,22 @@ fn set_reg1(istr_temp: &mut [StepTemplate], reg1: &(impl Bout + Write)) {
     set_reg1_bout(istr_temp, reg1);
 }
 
-pub fn fill_reg0(istr_temp: &mut [StepTemplate], reg: &NamedRegister) {
-    match reg.reg {
-        RegisterImpl::BoutWrite(reg) => set_reg0(istr_temp, reg),
-        RegisterImpl::Write(write_reg) => set_reg0_write(istr_temp, write_reg),
-        RegisterImpl::Bout(bout_reg) => set_reg0_bout(istr_temp, bout_reg),
-    };
-}
+impl Register {
+    pub fn fill_reg0(&self, istr_temp: &mut [StepTemplate]) {
+        match self.to_reg_impl() {
+            RegisterImpl::BoutWrite(reg) => set_reg0(istr_temp, reg),
+            RegisterImpl::Write(write_reg) => set_reg0_write(istr_temp, write_reg),
+            RegisterImpl::Bout(bout_reg) => set_reg0_bout(istr_temp, bout_reg),
+        };
+    }
 
-pub fn fill_reg1(istr_temp: &mut [StepTemplate], reg: &NamedRegister) {
-    match reg.reg {
-        RegisterImpl::BoutWrite(reg) => set_reg1(istr_temp, reg),
-        RegisterImpl::Write(write_reg) => set_reg1_write(istr_temp, write_reg),
-        RegisterImpl::Bout(bout_reg) => set_reg1_bout(istr_temp, bout_reg),
-    };
+    pub fn fill_reg1(&self, istr_temp: &mut [StepTemplate]) {
+        match self.to_reg_impl() {
+            RegisterImpl::BoutWrite(reg) => set_reg1(istr_temp, reg),
+            RegisterImpl::Write(write_reg) => set_reg1_write(istr_temp, write_reg),
+            RegisterImpl::Bout(bout_reg) => set_reg1_bout(istr_temp, bout_reg),
+        };
+    }
 }
 
 pub fn fill_flag_select(istr_temp: &mut [StepTemplate], flag: Action) {
@@ -141,18 +143,20 @@ fn replace_addr1(istr_temp: &mut [StepTemplate], reg: &impl AddressRegister) {
     replace_action(istr_temp, Addr1Out, reg.addr());
 }
 
-pub fn fill_addr_reg0(istr_temp: &mut [StepTemplate], reg: &NamedAddressRegister) {
-    match reg.reg {
-        AddressRegisterImpl::Mar(mar_register) => replace_addr0(istr_temp, mar_register),
-        AddressRegisterImpl::Sp(sp_register) => replace_addr0(istr_temp, sp_register),
-    };
-}
+impl AddressRegisterEnum {
+    pub fn fill_addr_reg0(&self, istr_temp: &mut [StepTemplate]) {
+        match self.to_reg_impl() {
+            AddressRegisterImpl::Mar(mar_register) => replace_addr0(istr_temp, mar_register),
+            AddressRegisterImpl::Sp(sp_register) => replace_addr0(istr_temp, sp_register),
+        };
+    }
 
-pub fn fill_addr_reg1(istr_temp: &mut [StepTemplate], reg: &NamedAddressRegister) {
-    match reg.reg {
-        AddressRegisterImpl::Mar(mar_register) => replace_addr1(istr_temp, mar_register),
-        AddressRegisterImpl::Sp(sp_register) => replace_addr1(istr_temp, sp_register),
-    };
+    pub fn fill_addr_reg1(&self, istr_temp: &mut [StepTemplate]) {
+        match self.to_reg_impl() {
+            AddressRegisterImpl::Mar(mar_register) => replace_addr1(istr_temp, mar_register),
+            AddressRegisterImpl::Sp(sp_register) => replace_addr1(istr_temp, sp_register),
+        };
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -196,14 +200,14 @@ pub enum Register {
     X,
     Y,
     Z,
-    MAR_lo,
-    MAR_hi,
-    PC_lo,
-    PC_hi,
-    SP_lo,
-    SP_hi,
-    FLAGS,
-    KEYB,
+    MarLo,
+    MarHi,
+    PcLo,
+    PcHi,
+    SpLo,
+    SpHi,
+    Flags,
+    Keyb,
 }
 
 impl Register {
@@ -214,32 +218,32 @@ impl Register {
             Register::X => "X",
             Register::Y => "Y",
             Register::Z => "Z",
-            Register::MAR_lo => "MAR.lo",
-            Register::MAR_hi => "MAR.hi",
-            Register::PC_lo => "PC.lo",
-            Register::PC_hi => "PC.hi",
-            Register::SP_lo => "SP.lo",
-            Register::SP_hi => "SP.hi",
-            Register::FLAGS => "FLAGS",
-            Register::KEYB => "KEYB",
+            Register::MarLo => "MAR.lo",
+            Register::MarHi => "MAR.hi",
+            Register::PcLo => "PC.lo",
+            Register::PcHi => "PC.hi",
+            Register::SpLo => "SP.lo",
+            Register::SpHi => "SP.hi",
+            Register::Flags => "FLAGS",
+            Register::Keyb => "KEYB",
         }
     }
 
-    pub fn to_reg_impl(&self) -> RegisterImpl {
+    pub fn to_reg_impl<'a>(&self) -> RegisterImpl<'a> {
         match self {
             Register::A => RegisterImpl::BoutWrite(&A),
             Register::B => RegisterImpl::BoutWrite(&B),
             Register::X => RegisterImpl::BoutWrite(&X.register),
             Register::Y => RegisterImpl::BoutWrite(&Y.register),
             Register::Z => RegisterImpl::BoutWrite(&Z),
-            Register::MAR_lo => RegisterImpl::BoutWrite(&MAR.lo),
-            Register::MAR_hi => RegisterImpl::BoutWrite(&MAR.hi),
-            Register::PC_lo => RegisterImpl::BoutWrite(&PC.lo),
-            Register::PC_hi => RegisterImpl::BoutWrite(&PC.hi),
-            Register::SP_lo => RegisterImpl::BoutWrite(&SP.lo),
-            Register::SP_hi => RegisterImpl::BoutWrite(&SP.hi),
-            Register::FLAGS => RegisterImpl::Bout(&FLAGS),
-            Register::KEYB => RegisterImpl::Bout(&KEYB),
+            Register::MarLo => RegisterImpl::BoutWrite(&MAR.lo),
+            Register::MarHi => RegisterImpl::BoutWrite(&MAR.hi),
+            Register::PcLo => RegisterImpl::BoutWrite(&PC.lo),
+            Register::PcHi => RegisterImpl::BoutWrite(&PC.hi),
+            Register::SpLo => RegisterImpl::BoutWrite(&SP.lo),
+            Register::SpHi => RegisterImpl::BoutWrite(&SP.hi),
+            Register::Flags => RegisterImpl::Bout(&FLAGS),
+            Register::Keyb => RegisterImpl::Bout(&KEYB),
         }
     }
 
@@ -257,14 +261,14 @@ impl Register {
             Register::X,
             Register::Y,
             Register::Z,
-            Register::MAR_lo,
-            Register::MAR_hi,
-            Register::PC_lo,
-            Register::PC_hi,
-            Register::SP_lo,
-            Register::SP_hi,
-            Register::FLAGS,
-            Register::KEYB,
+            Register::MarLo,
+            Register::MarHi,
+            Register::PcLo,
+            Register::PcHi,
+            Register::SpLo,
+            Register::SpHi,
+            Register::Flags,
+            Register::Keyb,
         ];
         ALL_REGISTERS.iter()
     }
