@@ -9,8 +9,6 @@ use crate::action::Action::*;
 mod instruction_defs;
 pub use instruction_defs::build_all_instructions;
 
-pub use defs::SimpleInstruction;
-
 use crate::opcode::Opcode;
 use crate::output::Output;
 
@@ -82,6 +80,11 @@ impl OpcodeToOutput for VramInstruction {
         }
         .to_output(opcode)
     }
+}
+
+pub struct SimpleInstruction {
+    pub istr: IstrTemplate,
+    pub name: String,
 }
 
 // where the chain ends for simple instructions

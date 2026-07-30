@@ -162,6 +162,15 @@ pub enum RegisterImpl<'a> {
     Bout(&'a BoutRegister),
 }
 
+impl<'a> RegisterImpl<'a> {
+    fn can_bout(&self) -> bool {
+        matches!(self, RegisterImpl::BoutWrite(_) | RegisterImpl::Bout(_))
+    }
+    fn can_write(&self) -> bool {
+        matches!(self, RegisterImpl::BoutWrite(_) | RegisterImpl::Write(_))
+    }
+}
+
 #[derive(Clone)]
 pub enum AddressRegisterImpl<'a> {
     Mar(&'a MarRegister),
@@ -180,16 +189,7 @@ pub struct NamedAddressRegister<'a> {
     pub name: &'a str,
 }
 
-pub struct SimpleInstruction {
-    pub istr: IstrTemplate,
-    pub name: String,
-}
-
-pub struct ExtendedInstruction {
-    pub istr: IstrTemplate,
-    pub name: String,
-}
-
+#[derive(PartialEq)]
 pub enum Register {
     A,
     B,
@@ -207,7 +207,7 @@ pub enum Register {
 }
 
 impl Register {
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         match self {
             Register::A => "A",
             Register::B => "B",
@@ -225,7 +225,7 @@ impl Register {
         }
     }
 
-    fn toRegImpl(&self) -> RegisterImpl {
+    pub fn to_reg_impl(&self) -> RegisterImpl {
         match self {
             Register::A => RegisterImpl::BoutWrite(&A),
             Register::B => RegisterImpl::BoutWrite(&B),
@@ -243,9 +243,9 @@ impl Register {
         }
     }
 
-    fn toReg(&self) -> NamedRegister {
+    pub fn to_reg(&self) -> NamedRegister {
         NamedRegister {
-            reg: self.toRegImpl(),
+            reg: self.to_reg_impl(),
             name: self.name(),
         }
     }
@@ -270,21 +270,46 @@ impl Register {
     }
 
     pub fn read_iterator() -> impl Iterator<Item = &'static Register> {
-        Register::iterator().filter(|e| {
-            matches!(
-                e.toRegImpl(),
-                RegisterImpl::Bout(_) | RegisterImpl::BoutWrite(_)
-            )
-        })
+        Register::iterator().filter(|e| e.to_reg_impl().can_bout())
     }
 
     pub fn write_iterator() -> impl Iterator<Item = &'static Register> {
-        Register::iterator().filter(|e| {
-            matches!(
-                e.toRegImpl(),
-                RegisterImpl::Write(_) | RegisterImpl::BoutWrite(_)
-            )
-        })
+        Register::iterator().filter(|e| e.to_reg_impl().can_write())
+    }
+}
+
+#[derive(PartialEq)]
+pub enum AddressRegisterEnum {
+    Mar,
+    Sp,
+}
+
+impl AddressRegisterEnum {
+    pub fn name(&self) -> &str {
+        match self {
+            AddressRegisterEnum::Mar => "MAR",
+            AddressRegisterEnum::Sp => "SP",
+        }
+    }
+
+    pub fn to_reg_impl(&self) -> AddressRegisterImpl {
+        match self {
+            AddressRegisterEnum::Mar => AddressRegisterImpl::Mar(&MAR),
+            AddressRegisterEnum::Sp => AddressRegisterImpl::Sp(&SP),
+        }
+    }
+
+    pub fn to_reg(&self) -> NamedAddressRegister {
+        NamedAddressRegister {
+            reg: self.to_reg_impl(),
+            name: self.name(),
+        }
+    }
+
+    pub fn iterator() -> std::slice::Iter<'static, AddressRegisterEnum> {
+        static ALL_REGISTERS: [AddressRegisterEnum; 2] =
+            [AddressRegisterEnum::Mar, AddressRegisterEnum::Sp];
+        ALL_REGISTERS.iter()
     }
 }
 
