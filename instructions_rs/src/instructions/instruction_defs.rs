@@ -1025,17 +1025,24 @@ impl<'a> InstructionWriter<'a> {
     }
 
     // allocates an extended instruction at the specified ir idx
-    fn allocate_extended_idx(&self, idx: u8) {}
+    fn allocate_extended_idx(&mut self, idx: u8) {
+        assert!(self.is_empty(idx));
+
+        *self.istr_set.get_istr_mut(idx) = InstructionEntry::Extended(Box::new(Extended::new()));
+    }
 
     // returns true if idx is free OR idx is an extended istr and there are spots available
     fn extended_available(&self, idx: u8) -> bool {
-        // TODO: impl
-        self.is_empty(idx) || (self.is_used(idx) && true)
+        match self.istr_set.get_istr(idx) {
+            InstructionEntry::Single(_) => false,
+            InstructionEntry::Extended(extended) => !extended.is_full(),
+            InstructionEntry::Empty => true,
+        }
     }
 
     // attempts to place extended at specified ir idx in first spot in the extended instruction
     // returns true if operation succeeded
-    fn place_extended_idx(&self, instr: &InstructionImpl, idx: u8) -> Option<()> {
+    fn place_extended_idx(&mut self, istr: InstructionImpl, idx: u8) -> Option<()> {
         // not allocated or no spaces available here
         if !self.extended_available(idx) {
             return None;
@@ -1046,13 +1053,24 @@ impl<'a> InstructionWriter<'a> {
             self.allocate_extended_idx(idx);
         }
 
-        // TODO: implement logic
+        if let InstructionEntry::Extended(extended) = self.istr_set.get_istr_mut(idx) {
+            for extended_istr in extended.instructions.iter_mut() {
+                if extended_istr.is_some() {
+                    *extended_istr = Some(istr);
+                    return Some(());
+                }
+            }
+        }
 
-        Some(())
+        unreachable!();
     }
 
     // attempts to place simple at specified ir idx
-    fn place_simple_idx(&self, istr: &InstructionImpl, idx: u8) -> Option<()> {
+    fn place_simple_idx(&mut self, istr: InstructionImpl, idx: u8) -> Option<()> {
+        if !self.simple_available(idx) {
+            return None;
+        }
+        *self.istr_set.get_istr_mut(idx) = InstructionEntry::Single(Box::new(Single::new(istr)));
         Some(())
     }
 
@@ -1060,7 +1078,7 @@ impl<'a> InstructionWriter<'a> {
     // all instructions are extended
     //
     // removes all instructions placed from the given vector in a front to back order.
-    fn place_extended_ranges(&self, istrs: &mut Vec<InstructionImpl>, ranges: Vec<(u8, u8)>) {
+    fn place_extended_ranges(&mut self, istrs: &mut Vec<InstructionImpl>, ranges: Vec<(u8, u8)>) {
         if istrs.is_empty() {
             return;
         }
@@ -1073,13 +1091,16 @@ impl<'a> InstructionWriter<'a> {
                     continue;
                 }
 
-                while self.place_extended_idx(&curr_istr, idx).is_some() {
+                while self.extended_available(idx) {
+                    let res = self.place_extended_idx(curr_istr, idx);
+                    assert!(res.is_some());
+
                     if let Some(istr) = istrs.pop() {
                         curr_istr = istr;
                     } else {
-                        // no more instructions, placing done
+                        // no more values to place
                         return;
-                    }
+                    };
                 }
             }
         }
@@ -1087,25 +1108,30 @@ impl<'a> InstructionWriter<'a> {
 
     // places simple instruction in first available slot
     // if none available returns ?
-    fn place_simple(&self, istr: InstructionImpl) -> Option<()> {
+    fn place_simple(&mut self, istr: InstructionImpl) -> Option<()> {
         // TODO: optimize by saving smallest valid pointers
         // TODO: move hardcoded values elsewhere
         for idx in 0..=255 {
             if self.simple_available(idx) {
-                return self.place_simple_idx(&istr, idx);
+                return self.place_simple_idx(istr, idx);
             }
         }
         None
     }
 
     // places extended in first available slot
-    // if none available, returns ?
-    fn place_extended(&self, istr: InstructionImpl) -> Option<()> {
+    // returns none if no spots available
+    fn place_extended(&mut self, istr: InstructionImpl) -> Option<()> {
         // TODO: optimize by saving smallest valid pointers
         // TODO: move hardcoded values elsewhere
         for idx in 0..=255 {
             if self.extended_available(idx) {
-                return self.place_extended_idx(&istr, idx);
+                let res = self.place_extended_idx(istr, idx);
+
+                assert!(res.is_some());
+
+                // found a spot to place the istr
+                return Some(());
             }
         }
         None
@@ -1114,11 +1140,13 @@ impl<'a> InstructionWriter<'a> {
 
 pub fn build_all_instructions() -> Vec<InstructionImpl> {
     let mut istr_set = IstrSet::new();
-    let writer = InstructionWriter::new(&mut istr_set);
+    let mut writer = InstructionWriter::new(&mut istr_set);
 
     let mut all_istrs: Vec<InstructionImpl> = Vec::new();
 
-    all_istrs.append(&mut move_word_reg_instructions());
+    for istr in move_word_reg_instructions().into_iter() {
+        writer.place_simple(istr);
+    }
 
     move_word_imm_instructions(&mut all_istrs);
 

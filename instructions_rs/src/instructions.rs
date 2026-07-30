@@ -12,10 +12,34 @@ pub use instruction_defs::build_all_instructions;
 use crate::opcode::Opcode;
 use crate::output::Output;
 
+// TODO: move out hardcoded length to somewhere?
 struct Extended<I> {
-    instructions: [I; 16],
+    instructions: [Option<I>; 16],
+    num_used_istrs: u8,
 }
 
+impl<I> Extended<I> {
+    fn new() -> Self {
+        Self {
+            instructions: [const { None }; 16],
+            num_used_istrs: 0,
+        }
+    }
+
+    fn is_full(&self) -> bool {
+        self.num_used_istrs >= 16
+    }
+
+    fn get_istr(&self, idx: u8) -> &Option<I> {
+        self.instructions.get(idx as usize).unwrap()
+    }
+
+    fn get_istr_mut(&mut self, idx: u8) -> &mut Option<I> {
+        self.instructions.get_mut(idx as usize).unwrap()
+    }
+}
+
+// TODO: determine what to do in empty case
 impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
     fn to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
@@ -28,7 +52,11 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
 
         opcode.step -= extended_prelude.len() as u8;
 
-        self.instructions[opcode.ir2 as usize].to_output(opcode)
+        if let Some(istr) = self.get_istr(opcode.ir2) {
+            istr.to_output(opcode)
+        } else {
+            Halt.to_output()
+        }
     }
 }
 
@@ -40,15 +68,28 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
     fn to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
-        let simple_prelude = [*UNIVERSAL_STEP_0];
+        let single_prelude = [*UNIVERSAL_STEP_0];
 
-        if step < simple_prelude.len() {
-            return simple_prelude[step].to_output();
+        if step < single_prelude.len() {
+            return single_prelude[step].to_output();
         }
 
-        opcode.step -= simple_prelude.len() as u8;
+        opcode.step -= single_prelude.len() as u8;
 
         self.instruction.to_output(opcode)
+    }
+}
+
+impl<I> Single<I> {
+    fn get_istr(&self) -> &I {
+        &self.instruction
+    }
+    fn get_istr_mut(&mut self) -> &mut I {
+        &mut self.instruction
+    }
+
+    fn new(istr: I) -> Self {
+        Self { instruction: istr }
     }
 }
 
@@ -123,11 +164,6 @@ impl OpcodeToOutput for InstructionImpl {
     }
 }
 
-// struct InstructionEntryData<T> {
-//     data: T,
-//     num_available_istrs: u8,
-// }
-
 enum InstructionEntry {
     Single(Box<Single<InstructionImpl>>),
     Extended(Box<Extended<InstructionImpl>>),
@@ -145,7 +181,7 @@ pub trait OpcodeToOutput {
 // TODO: determine how to handle empty case
 impl OpcodeToOutput for IstrSet {
     fn to_output(&self, opcode: Opcode) -> Output {
-        match &self.istrs[opcode.ir as usize] {
+        match self.get_istr(opcode.ir) {
             InstructionEntry::Single(single) => single.to_output(opcode),
             InstructionEntry::Extended(extended) => extended.to_output(opcode),
             InstructionEntry::Empty => Halt.to_output(),
@@ -170,5 +206,13 @@ impl IstrSet {
 
     pub fn is_empty(&self, idx: u8) -> bool {
         matches!(self.get_istr(idx), InstructionEntry::Empty)
+    }
+
+    pub fn is_extended(&self, idx: u8) -> bool {
+        matches!(self.get_istr(idx), InstructionEntry::Extended(_))
+    }
+
+    pub fn is_single(&self, idx: u8) -> bool {
+        matches!(self.get_istr(idx), InstructionEntry::Single(_))
     }
 }
