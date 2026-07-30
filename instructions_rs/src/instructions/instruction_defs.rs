@@ -1,0 +1,1037 @@
+use crate::{action::Action::*, instructions::*};
+
+// move register to register (reg0 = reg1)
+fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        [Reg1Bout, Reg0Write, PC.cnt, Reset].into(), // read from reg1 to reg0, pc cnt
+    ];
+
+    for reg0 in Register::write_iterator() {}
+
+    // PC is not excluded for writing to
+    for reg0 in WRITE_REGISTERS.iter() {
+        // excludes PC, avoids duplicates
+        let rhs = READ_REGISTERS
+            .iter()
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            .filter(|e| e.name != reg0.name);
+        for reg1 in rhs {
+            let mut current = base_template.clone();
+
+            // if writing to PC then don't increment
+            if matches!(reg0.name, "PC.lo" | "PC.hi") {
+                replace_action(&mut current, PC.cnt, Nop);
+            }
+
+            fill_reg0(&mut current, reg0);
+            fill_reg1(&mut current, reg1);
+
+            assert!(all_regs_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("mv {}, {}", reg0.name, reg1.name),
+            }));
+        }
+    }
+}
+
+// move imm8 to register (reg0 = imm8)
+fn move_word_imm_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        *UNIVERSAL_STEP_1,
+        [MEM.bout, PC.addr, Reg0Write].into(), // write immediate to reg0
+        [PC.cnt, Reset].into(),                // pc cnt
+    ];
+
+    // writes to A first to be able to then write to reg0
+    let base_template_pc = vec![
+        *UNIVERSAL_STEP_1,
+        [MEM.bout, PC.addr, A.write].into(), // write immediate to A
+        [A.bout, Reg0Write, Reset].into(),   // write A contents to PC reg
+    ];
+
+    for reg in WRITE_REGISTERS.iter() {
+        let mut current = {
+            if reg.name == "PC.lo" || reg.name == "PC.hi" {
+                &base_template_pc
+            } else {
+                &base_template
+            }
+        }
+        .clone();
+
+        fill_reg0(&mut current, reg);
+        assert!(all_regs_filled(&current));
+
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
+            istr: current,
+            name: format!("mv {}, imm8", reg.name),
+        }));
+    }
+}
+
+// reg = [mar]
+fn lw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        [MEM.bout, Addr0Out, Reg0Write, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
+    ];
+
+    // does not include the pc.cnt since PC is getting written to
+    let base_template_pc = vec![
+        [MEM.bout, Addr0Out, Reg0Write, Reset].into(), // read from addr mar into register, pc cnt
+    ];
+
+    // write to A to be able to write to addr reg
+    let base_template_conflict = vec![
+        [MEM.bout, Addr0Out, A.write, PC.cnt].into(), // read from addr mar into register, pc cnt
+        [A.bout, Reg0Write, Reset].into(),            // read from addr mar into register, pc cnt
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        for reg in WRITE_REGISTERS.iter() {
+            let conflict = match addr_reg.reg {
+                AddressRegisterImpl::Mar(_) => matches!(reg.name, "MAR.lo" | "MAR.hi"),
+                AddressRegisterImpl::Sp(_) => matches!(reg.name, "SP.lo" | "SP.hi"),
+            };
+
+            let mut current = {
+                if reg.name == "PC.lo" || reg.name == "PC.hi" {
+                    &base_template_pc
+                } else if conflict {
+                    &base_template_conflict
+                } else {
+                    &base_template
+                }
+            }
+            .clone();
+
+            fill_addr_reg0(&mut current, addr_reg);
+            fill_reg0(&mut current, reg);
+
+            assert!(all_regs_filled(&current));
+            assert!(addr_reg_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("lw {}, mem[{}]", reg.name, addr_reg.name),
+            }));
+        }
+    }
+}
+
+// reg = [imm16]
+fn lw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        IMM_TO_ADDR_REG[1],
+        IMM_TO_ADDR_REG[2],
+        IMM_TO_ADDR_REG[3],
+        IMM_TO_ADDR_REG[4],
+        [MEM.bout, Addr0Out, Reg0Write, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
+    ];
+
+    // does not include the pc.cnt since PC is getting written to
+    let base_template_pc = vec![
+        IMM_TO_ADDR_REG[1],
+        IMM_TO_ADDR_REG[2],
+        IMM_TO_ADDR_REG[3],
+        IMM_TO_ADDR_REG[4],
+        [MEM.bout, Addr0Out, Reg0Write, Reset].into(), // read from addr mar into register, pc cnt
+    ];
+
+    // write to A to be able to write to addr reg
+    let base_template_conflict = vec![
+        IMM_TO_ADDR_REG[1],
+        IMM_TO_ADDR_REG[2],
+        IMM_TO_ADDR_REG[3],
+        IMM_TO_ADDR_REG[4],
+        [MEM.bout, Addr0Out, A.write, PC.cnt].into(), // read from addr mar into register, pc cnt
+        [A.bout, Reg0Write, Reset].into(),            // read from addr mar into register, pc cnt
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        for reg in WRITE_REGISTERS.iter() {
+            let conflict = match addr_reg.reg {
+                AddressRegisterImpl::Mar(_) => matches!(reg.name, "MAR.lo" | "MAR.hi"),
+                AddressRegisterImpl::Sp(_) => matches!(reg.name, "SP.lo" | "SP.hi"),
+            };
+
+            let mut current = {
+                if reg.name == "PC.lo" || reg.name == "PC.hi" {
+                    &base_template_pc
+                } else if conflict {
+                    &base_template_conflict
+                } else {
+                    &base_template
+                }
+            }
+            .clone();
+
+            fill_addr_reg0(&mut current, addr_reg);
+            fill_reg0(&mut current, reg);
+
+            assert!(all_regs_filled(&current));
+            assert!(addr_reg_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("lw {}, mem[imm16], {}", reg.name, addr_reg.name),
+            }));
+        }
+    }
+}
+
+// mem[mar] = reg
+fn sw_template_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![[MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into()];
+
+    // writes to a first to avoid addr bus conflicts
+    let base_template_addr_reg = vec![
+        [A.write, Reg0Bout].into(),
+        [MEM.write, Addr0Out, A.bout, PC.cnt, Reset].into(),
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        for reg in READ_REGISTERS
+            .iter()
+            // excluded PC (useless op, can be replaced with imm8)
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+        {
+            let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
+
+            let mut current = {
+                if addr_bus_conflict {
+                    &base_template_addr_reg
+                } else {
+                    &base_template
+                }
+            }
+            .clone();
+
+            fill_addr_reg0(&mut current, addr_reg);
+            fill_reg0(&mut current, reg);
+
+            assert!(all_regs_filled(&current));
+            assert!(addr_reg_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("sw {}, mem[{}]", reg.name, addr_reg.name),
+            }));
+        }
+    }
+}
+
+// mem[imm16] = reg
+fn sw_template_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        IMM_TO_ADDR_REG[1],
+        IMM_TO_ADDR_REG[2],
+        IMM_TO_ADDR_REG[3],
+        IMM_TO_ADDR_REG[4],
+        [MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
+    ];
+
+    // writes to a first to avoid bus conflicts
+    let base_template_addr_reg = vec![
+        IMM_TO_ADDR_REG[1],
+        IMM_TO_ADDR_REG[2],
+        IMM_TO_ADDR_REG[3],
+        IMM_TO_ADDR_REG[4],
+        [A.write, Reg0Bout].into(),
+        [MEM.write, Addr0Out, A.bout, PC.cnt, Reset].into(),
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        for reg in READ_REGISTERS
+            .iter()
+            // excluded PC (useless op, can be replaced with imm8)
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+        {
+            let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
+
+            let mut current = {
+                if addr_bus_conflict {
+                    &base_template_addr_reg
+                } else {
+                    &base_template
+                }
+            }
+            .clone();
+
+            fill_addr_reg0(&mut current, addr_reg);
+            fill_reg0(&mut current, reg);
+
+            assert!(all_regs_filled(&current));
+            assert!(addr_reg_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("sw {}, mem[imm16], {}", reg.name, addr_reg.name),
+            }));
+        }
+    }
+}
+
+// [sp--] = reg
+fn push_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        [PC.cnt, SP.dec].into(), // decrement before pushing value
+        [MEM.write, SP.addr, Reg0Bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
+    ];
+
+    // have to write to A first to avoid addr bus contention
+    let base_template_addr_reg = vec![
+        [A.write, Reg0Bout, PC.cnt, SP.dec].into(), // decrement before pushing value
+        [MEM.write, SP.addr, A.bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
+    ];
+
+    for reg in READ_REGISTERS
+        .iter()
+        // excluded PC (useless op, can be replaced with imm8)
+        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    {
+        let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
+
+        let mut current = {
+            if addr_bus_conflict {
+                &base_template_addr_reg
+            } else {
+                &base_template
+            }
+        }
+        .clone();
+
+        fill_reg0(&mut current, reg);
+
+        assert!(all_regs_filled(&current));
+
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
+            istr: current,
+            name: format!("push {}", reg.name),
+        }));
+    }
+}
+
+// [sp--] = imm8, overrides a reg
+fn push_imm8_instructions(destination: &mut Vec<InstructionImpl>) {
+    let current = vec![
+        [PC.cnt, SP.dec].into(),             // decrement before pushing value
+        [MEM.bout, PC.addr, A.write].into(), // write into ir2
+        [MEM.write, SP.addr, A.bout, PC.cnt, Reset].into(), // read from ir2 into [sp], pc cnt
+    ];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: current,
+        name: "push imm8".to_string(),
+    }));
+}
+
+// Reg0 = [sp++]
+fn pop_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        [MEM.bout, SP.addr, Reg0Write, PC.cnt].into(), // write from [sp] into Reg0, pc cnt
+        [SP.inc, Reset].into(),                        // cnt after popping value
+    ];
+
+    // have to write to A first to avoid addr bus contention
+    let base_template_addr_reg = vec![
+        [MEM.bout, SP.addr, A.write, PC.cnt].into(), // write from [sp] into A, pc cnt
+        [A.bout, Reg0Write, SP.inc, Reset].into(),   // cnt after popping value
+    ];
+
+    for reg in WRITE_REGISTERS
+        .iter()
+        // excluded PC and SP (pop addr makes more sense in that context)
+        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi" | "SP.lo" | "SP.hi"))
+    {
+        let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi");
+
+        let mut current = {
+            if addr_bus_conflict {
+                &base_template_addr_reg
+            } else {
+                &base_template
+            }
+        }
+        .clone();
+
+        fill_reg0(&mut current, reg);
+
+        assert!(all_regs_filled(&current));
+
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
+            istr: current,
+            name: format!("pop {}", reg.name),
+        }));
+    }
+}
+
+// AddrReg = mem[SP], SP += 2
+fn pop_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    let sp_to_mar = vec![
+        [MEM.bout, SP.addr, MAR.hi.write, PC.cnt].into(),
+        [SP.inc].into(),
+        [MEM.bout, SP.addr, MAR.lo.write].into(),
+        [SP.inc, Reset].into(),
+    ];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: sp_to_mar,
+        name: "pop MAR".to_string(),
+    }));
+
+    let sp_to_sp_through_mar = vec![
+        [MEM.bout, SP.addr, MAR.hi.write, PC.cnt].into(),
+        [SP.inc].into(),
+        [MEM.bout, SP.addr, MAR.lo.write].into(),
+        [MAR.hi.bout, SP.hi.write].into(),
+        [MAR.lo.bout, SP.lo.write].into(),
+        [SP.inc, Reset].into(),
+    ];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: sp_to_sp_through_mar,
+        name: "pop SP, MAR".to_string(),
+    }));
+
+    let sp_to_sp_through_ab = vec![
+        [MEM.bout, SP.addr, B.write, PC.cnt].into(),
+        [SP.inc].into(),
+        [MEM.bout, SP.addr, A.write].into(),
+        [B.bout, SP.hi.write].into(),
+        [A.bout, SP.lo.write].into(),
+        [SP.inc, Reset].into(),
+    ];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: sp_to_sp_through_ab,
+        name: "pop SP, AB".to_string(),
+    }));
+}
+
+// mar/sp = imm16
+fn lda_imm16_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        IMM_TO_ADDR_REG[1],
+        IMM_TO_ADDR_REG[2],
+        IMM_TO_ADDR_REG[3],
+        IMM_TO_ADDR_REG[4],
+        [PC.cnt, Reset].into(), // pc cnt
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        let mut current = base_template.clone();
+
+        fill_addr_reg0(&mut current, addr_reg);
+
+        assert!(addr_reg_filled(&current));
+
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
+            istr: current,
+            name: format!("lda {}, imm16", addr_reg.name),
+        }));
+    }
+}
+
+// mar/sp = imm16
+fn mv_addr_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    let base_template = vec![
+        [MEM.bout, Addr1Out, Addr0HiWrite, PC.cnt].into(), // first byte has msb
+        [MEM.bout, Addr1Out, Addr0LoWrite].into(),         // second byte has lsb
+        [PC.cnt, Reset].into(),                            // pc cnt
+    ];
+
+    for addr_reg0 in ADDR_REGISTERS.iter() {
+        for addr_reg1 in ADDR_REGISTERS.iter().filter(|e| e.name != addr_reg0.name) {
+            let mut current = base_template.clone();
+
+            fill_addr_reg0(&mut current, addr_reg0);
+            fill_addr_reg1(&mut current, addr_reg1);
+
+            assert!(addr_reg_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("mva {}, {}", addr_reg0.name, addr_reg1.name),
+            }));
+        }
+    }
+}
+
+fn misc_instructions(destination: &mut Vec<InstructionImpl>) {
+    // sp dec
+    let sp_dec = vec![
+        [PC.cnt, SP.dec, Reset].into(), // decrement sp
+    ];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: sp_dec,
+        name: "dec SP".to_string(),
+    }));
+
+    // sp cnt
+    let sp_inc = vec![*UNIVERSAL_STEP_0, [PC.cnt, SP.inc, Reset].into()];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: sp_inc,
+        name: "inc SP".to_string(),
+    }));
+
+    // mar cnt
+    let mar_inc = vec![
+        [PC.cnt, MAR.cnt, Reset].into(), // cntrement mar
+    ];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: mar_inc,
+        name: "inc MAR".to_string(),
+    }));
+
+    let halt = vec![[Halt].into()];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: halt,
+        name: "halt".to_string(),
+    }));
+
+    // 2 instruction nop
+    let nop = vec![[PC.cnt, Reset].into()];
+
+    destination.push(InstructionImpl::Simple(SimpleInstruction {
+        istr: nop,
+        name: "nop".to_string(),
+    }));
+}
+
+fn vram_read_instructions(destination: &mut Vec<InstructionImpl>) {
+    let vram_read_template_odd = vec![
+        [VramRead, Addr0Out, Reg0Write].into(),
+        [Nop].into(),
+        [PC.cnt, Reset].into(),
+    ];
+
+    let vram_read_template_even = vec![
+        [Nop].into(),
+        [VramRead, Addr0Out, Reg0Write].into(),
+        [PC.cnt, Reset].into(),
+    ];
+
+    let vram_read_template_odd_conflict = vec![
+        [VramRead, Addr0Out, A.write].into(),
+        [A.bout, Reg0Write].into(),
+        [PC.cnt, Reset].into(),
+    ];
+
+    let vram_read_template_even_conflict = vec![
+        [Nop].into(),
+        [VramRead, Addr0Out, A.write].into(),
+        [A.bout, Reg0Write].into(),
+        [PC.cnt, Reset].into(),
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        for reg in WRITE_REGISTERS
+            .iter()
+            // excluded PC
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+        {
+            let conflict = match addr_reg.reg {
+                AddressRegisterImpl::Mar(_) => matches!(reg.name, "MAR.lo" | "MAR.hi"),
+                AddressRegisterImpl::Sp(_) => matches!(reg.name, "SP.lo" | "SP.hi"),
+            };
+
+            let mut odd_current = {
+                if conflict {
+                    &vram_read_template_odd_conflict
+                } else {
+                    &vram_read_template_odd
+                }
+            }
+            .clone();
+
+            let mut even_current = {
+                if conflict {
+                    &vram_read_template_even_conflict
+                } else {
+                    &vram_read_template_even
+                }
+            }
+            .clone();
+
+            fill_reg0(&mut odd_current, reg);
+            fill_reg0(&mut even_current, reg);
+
+            fill_addr_reg0(&mut odd_current, addr_reg);
+            fill_addr_reg0(&mut even_current, addr_reg);
+
+            assert!(all_regs_filled(&odd_current));
+            assert!(all_regs_filled(&even_current));
+
+            let name = format!("lw {}, vram[{}]", reg.name, addr_reg.name);
+
+            destination.push(InstructionImpl::Vram(VramInstruction {
+                active_odd: SimpleInstruction {
+                    istr: odd_current,
+                    name: format!("{}; odd", name.clone()),
+                },
+                active_even: SimpleInstruction {
+                    istr: even_current,
+                    name: format!("{}; even", name.clone()),
+                },
+                name,
+            }));
+        }
+    }
+}
+
+fn vram_write_instructions(destination: &mut Vec<InstructionImpl>) {
+    let vram_write_template = vec![
+        [VramWrite, Addr0Out, Reg0Bout].into(),
+        [VramWrite, Addr0Out, Reg0Bout].into(),
+        [PC.cnt, Reset].into(),
+    ];
+
+    let vram_write_template_conflict = vec![
+        [Reg0Bout, A.write].into(),
+        [VramWrite, Addr0Out, A.bout].into(),
+        [VramWrite, Addr0Out, A.bout].into(),
+        [PC.cnt, Reset].into(),
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        for reg in READ_REGISTERS
+            .iter()
+            // exclude PC
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+        {
+            let addr_bus_conflict = matches!(reg.name, "MAR.lo" | "MAR.hi" | "SP.lo" | "SP.hi");
+
+            let mut current = {
+                if addr_bus_conflict {
+                    &vram_write_template_conflict
+                } else {
+                    &vram_write_template
+                }
+            }
+            .clone();
+
+            fill_reg0(&mut current, reg);
+            fill_addr_reg0(&mut current, addr_reg);
+
+            assert!(all_regs_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("sw {}, vram[{}]", reg.name, addr_reg.name),
+            }));
+        }
+    }
+}
+
+fn not_instructions(destination: &mut Vec<InstructionImpl>) {
+    // Reg0 = ~Reg0
+    let not = vec![
+        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a, pc cnt
+        [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // no need to write to a since we are opping directly on A
+    let not_a = vec![
+        [FAluBout, FlagWriteAlu, Reg0Write, PC.cnt].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    for reg in WRITE_REGISTERS
+        .iter()
+        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    {
+        let mut current = {
+            if matches!(reg.name, "A") {
+                &not_a
+            } else {
+                &not
+            }
+        }
+        .clone();
+
+        fill_reg0(&mut current, reg);
+
+        assert!(all_regs_filled(&current));
+
+        destination.push(InstructionImpl::Simple(SimpleInstruction {
+            istr: current,
+            name: format!("not {}", reg.name),
+        }));
+    }
+}
+
+fn not_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    // Reg0 = ~Reg1
+    let base_template = vec![
+        [Reg1Bout, A.write, PC.cnt].into(),         // load Reg1 into a
+        [FAluBout, FlagWriteAlu, Reg0Write].into(), // do math op, save to Reg1, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // a = reg1, so no need to load reg1 into a
+    let base_template_reg1_a = vec![
+        [FAluBout, FlagWriteAlu, Reg0Write, PC.cnt].into(), // do math op, save to Reg1, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // PC excluded
+    for reg0 in WRITE_REGISTERS
+        .iter()
+        .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+    {
+        // excludes PC, avoids duplicates
+        let rhs = READ_REGISTERS
+            .iter()
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            .filter(|e| e.name != reg0.name);
+        for reg1 in rhs {
+            // avoid duplicates
+            let mut current = {
+                if matches!(reg1.name, "A") {
+                    &base_template_reg1_a
+                } else {
+                    &base_template
+                }
+            }
+            .clone();
+
+            fill_reg0(&mut current, reg0);
+            fill_reg1(&mut current, reg1);
+
+            assert!(all_regs_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("not {}, {}", reg0.name, reg1.name),
+            }));
+        }
+    }
+}
+
+fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
+    // Reg0 = Reg0 op imm
+    let math_imm = vec![
+        [Reg0Bout, A.write, PC.cnt].into(),  // load Reg0 into A, pc cnt
+        [MEM.bout, PC.addr, B.write].into(), // load imm into B
+        [
+            FAluBout,
+            FlagWriteAlu,
+            Reg0Write,
+            OutputFlagsSelector,
+            PC.cnt,
+        ]
+        .into(), // save f to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // Reg0 = imm op Reg0
+    let math_imm_reverse = vec![
+        [Reg0Bout, B.write, PC.cnt].into(),  // load Reg0 into B, pc cnt
+        [MEM.bout, PC.addr, A.write].into(), // load imm into A
+        [
+            FAluBout,
+            FlagWriteAlu,
+            Reg0Write,
+            OutputFlagsSelector,
+            PC.cnt,
+        ]
+        .into(), // save f to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    // edge cases where register gets loaded to itself
+    // all other cases have good register overwrite order
+    let math_imm_a = vec![
+        [PC.cnt].into(),                     // load A into A (nop), pc cnt
+        [MEM.bout, PC.addr, B.write].into(), // load imm into B
+        [FAluBout, FlagWriteAlu, A.write, OutputFlagsSelector, PC.cnt].into(), // save f to Reg0, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    let math_imm_b_reverse = vec![
+        [PC.cnt].into(),                     // load B into B (nop), pc cnt
+        [MEM.bout, PC.addr, A.write].into(), // load imm into A
+        [FAluBout, FlagWriteAlu, B.write, OutputFlagsSelector, PC.cnt].into(), // save f to B, writes to flag reg
+        [Reset].into(), // must reset on separate instruction since it shares bits with flag write
+    ];
+
+    for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
+        for reversed in [false, true] {
+            for reg in WRITE_REGISTERS
+                .iter()
+                .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            {
+                let mut current = {
+                    if matches!(reg.name, "A") && !reversed {
+                        &math_imm_a
+                    } else if matches!(reg.name, "B") && reversed {
+                        &math_imm_b_reverse
+                    } else {
+                        if reversed {
+                            &math_imm_reverse
+                        } else {
+                            &math_imm
+                        }
+                    }
+                }
+                .clone();
+
+                if matches!(math_type, MathIstrTypes::Cmp) {
+                    // on cmp, replace writing actions to nothing
+                    replace_action(&mut current, Reg0Write, Nop);
+                    replace_action(&mut current, FAluBout, Nop);
+                }
+
+                fill_reg0(&mut current, reg);
+
+                fill_flag_select(&mut current, math_type.get_action());
+
+                assert!(all_regs_filled(&current));
+                assert!(flag_select_filled(&current));
+
+                let name = if reversed {
+                    format!("{} imm8, {}", math_type, reg.name)
+                } else {
+                    format!("{} {}, imm8", math_type, reg.name)
+                };
+
+                destination.push(InstructionImpl::Simple(SimpleInstruction {
+                    istr: current,
+                    name,
+                }));
+            }
+        }
+    }
+}
+
+fn math_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    // possible edge cases:
+    // reg0 = A, reg1 = ? -> remove a load step
+    // reg0 = ?, reg1 = B -> remove b load step
+    // reg0 = A, reg1 = B -> remove both load steps
+    // reg0 = B, reg1 = A -> impossible
+
+    // NOTE: all istrs here must be able to work if no pc.cnt happens
+
+    // Reg0 = Reg0 op Reg1
+    let math_reg = vec![
+        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a
+        [Reg1Bout, B.write].into(),         // load Reg1 into b
+        [FAluBout, FlagWriteAlu, Reg0Write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(),
+    ];
+
+    // a and b already loaded
+    let math_reg_a_b = vec![
+        [FAluBout, FlagWriteAlu, A.write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset, PC.cnt].into(),
+    ];
+
+    let math_reg_a = vec![
+        [Reg1Bout, B.write, PC.cnt].into(), // load Reg1 into b
+        [FAluBout, FlagWriteAlu, Reg0Write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(),
+    ];
+
+    let math_reg_b = vec![
+        [Reg0Bout, A.write, PC.cnt].into(), // load Reg0 into a
+        [FAluBout, FlagWriteAlu, Reg0Write, OutputFlagsSelector].into(), // do math op, save to Reg0, writes to flag reg
+        [Reset].into(),
+    ];
+
+    for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
+        for reg0 in WRITE_REGISTERS.iter() {
+            // excludes PC, avoids duplicates
+            for reg1 in READ_REGISTERS
+                .iter()
+                .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+            {
+                // avoid duplicates
+
+                // impossible case
+                if matches!(reg1.name, "A") && matches!(reg0.name, "B") {
+                    continue;
+                }
+
+                let mut current = {
+                    let reg0_a = matches!(reg0.name, "A");
+                    let reg1_b = matches!(reg1.name, "B");
+
+                    if reg0_a && reg1_b {
+                        &math_reg_a_b
+                    } else if reg0_a {
+                        &math_reg_a
+                    } else if reg1_b {
+                        &math_reg_b
+                    } else {
+                        &math_reg
+                    }
+                }
+                .clone();
+
+                if matches!(math_type, MathIstrTypes::Cmp) {
+                    // on cmp, replace writing actions to nothing
+                    replace_action(&mut current, Reg0Write, Nop);
+                    replace_action(&mut current, FAluBout, Nop);
+                } else {
+                    if matches!(reg0.name, "PC.lo" | "PC.hi") {
+                        // here we are writing to PC (since not cmp), so avoid pc.cnt
+                        replace_action(&mut current, PC.cnt, Nop);
+                    }
+                }
+
+                fill_reg0(&mut current, reg0);
+                fill_reg1(&mut current, reg1);
+                fill_flag_select(&mut current, math_type.get_action());
+
+                assert!(all_regs_filled(&current));
+                assert!(flag_select_filled(&current));
+
+                destination.push(InstructionImpl::Simple(SimpleInstruction {
+                    istr: current,
+                    name: format!("{} {}, {}", math_type, reg0.name, reg1.name),
+                }));
+            }
+        }
+    }
+}
+
+fn jnz_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+    // jnz reg -> pc = mar if reg != 0 else nop
+    let jnz_template_reg = vec![
+        [A.write, Reg0Bout, PC.cnt].into(), // note: pc cnt happens in case jump doesn't happens
+        [FlagWriteAlu].into(),              // write zero result to flag register
+        [Addr0HiBout, PC.hi.write, FlagNotZero].into(),
+        [Addr0LoBout, PC.lo.write, FlagNotZero, Reset].into(),
+    ];
+
+    // can save instruction if a is already loaded
+    let jnz_template_reg_a = vec![
+        [FlagWriteAlu, PC.cnt].into(), // update flag register
+        [Addr0HiBout, PC.hi.write, FlagNotZero].into(),
+        [Addr0LoBout, PC.lo.write, FlagNotZero, Reset].into(),
+    ];
+
+    for addr_reg in ADDR_REGISTERS.iter() {
+        for reg in READ_REGISTERS
+            .iter()
+            .filter(|e| !matches!(e.name, "PC.lo" | "PC.hi"))
+        {
+            let mut current = {
+                if matches!(reg.name, "A") {
+                    &jnz_template_reg_a
+                } else {
+                    &jnz_template_reg
+                }
+            }
+            .clone();
+
+            fill_addr_reg0(&mut current, addr_reg);
+            fill_reg0(&mut current, reg);
+
+            assert!(all_regs_filled(&current));
+            assert!(addr_reg_filled(&current));
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name: format!("jnz {}, {}", reg.name, addr_reg.name),
+            }));
+        }
+    }
+}
+
+fn jmp_instructions(destination: &mut Vec<InstructionImpl>) {
+    // jump if equal flag is carry flag is true
+    let jmp_imm16_template = vec![
+        IMM_TO_ADDR_REG[1],
+        IMM_TO_ADDR_REG[2],
+        IMM_TO_ADDR_REG[3],
+        IMM_TO_ADDR_REG[4],
+        [PC.cnt].into(), // note: pc cnt happens in case jump doesn't happens
+        [Addr0HiBout, PC.hi.write, OutputFlagsSelector].into(), // load from mar into pc if flag
+        [Addr0LoBout, PC.lo.write, OutputFlagsSelector, Reset].into(), // load from mar into pc if flag
+    ];
+
+    // jump if equal flag is true
+    let jmp_addr_reg_template = vec![
+        [PC.cnt].into(), // note: pc cnt in case jump doesn't happen
+        [Addr0HiBout, PC.hi.write, OutputFlagsSelector].into(),
+        [Addr0LoBout, PC.lo.write, OutputFlagsSelector, Reset].into(),
+    ];
+
+    for imm in [false, true] {
+        for addr_reg in ADDR_REGISTERS.iter() {
+            for flag in OutputFlags::iterator() {
+                let mut current = if imm {
+                    &jmp_imm16_template
+                } else {
+                    &jmp_addr_reg_template
+                }
+                .clone();
+
+                fill_addr_reg0(&mut current, addr_reg);
+                fill_flag_select(&mut current, flag.get_action());
+
+                assert!(all_regs_filled(&current));
+                assert!(addr_reg_filled(&current));
+                assert!(flag_select_filled(&current));
+
+                let name = if imm {
+                    format!("{} imm16, {}", flag.get_jump_name(), addr_reg.name)
+                } else {
+                    format!("{} {}", flag.get_jump_name(), addr_reg.name)
+                };
+
+                destination.push(InstructionImpl::Simple(SimpleInstruction {
+                    istr: current,
+                    name,
+                }));
+            }
+        }
+    }
+}
+
+pub fn build_all_instructions() -> Vec<InstructionImpl> {
+    let mut all_istrs: Vec<InstructionImpl> = Vec::new();
+    move_word_reg_instructions(&mut all_istrs);
+    move_word_imm_instructions(&mut all_istrs);
+
+    lw_template_addr_reg_instructions(&mut all_istrs);
+    lw_template_imm16_instructions(&mut all_istrs);
+
+    sw_template_addr_reg_instructions(&mut all_istrs);
+    sw_template_imm16_instructions(&mut all_istrs);
+
+    push_reg_instructions(&mut all_istrs);
+    push_imm8_instructions(&mut all_istrs);
+
+    pop_reg_instructions(&mut all_istrs);
+    pop_addr_reg_instructions(&mut all_istrs);
+
+    lda_imm16_instructions(&mut all_istrs);
+    mv_addr_reg_instructions(&mut all_istrs);
+
+    misc_instructions(&mut all_istrs);
+
+    vram_read_instructions(&mut all_istrs);
+    vram_write_instructions(&mut all_istrs);
+
+    not_instructions(&mut all_istrs);
+    not_reg_instructions(&mut all_istrs);
+
+    math_imm_instructions(&mut all_istrs);
+
+    jnz_reg_instructions(&mut all_istrs);
+    jmp_instructions(&mut all_istrs);
+
+    math_reg_instructions(&mut all_istrs);
+
+    all_istrs
+}
