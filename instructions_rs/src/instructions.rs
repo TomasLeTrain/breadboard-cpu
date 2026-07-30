@@ -123,9 +123,15 @@ impl OpcodeToOutput for InstructionImpl {
     }
 }
 
+// struct InstructionEntryData<T> {
+//     data: T,
+//     num_available_istrs: u8,
+// }
+
 enum InstructionEntry {
-    Single(Single<InstructionImpl>),
+    Single(Box<Single<InstructionImpl>>),
     Extended(Box<Extended<InstructionImpl>>),
+    Empty,
 }
 
 pub struct IstrSet {
@@ -136,11 +142,33 @@ pub trait OpcodeToOutput {
     fn to_output(&self, opcode: Opcode) -> Output;
 }
 
+// TODO: determine how to handle empty case
 impl OpcodeToOutput for IstrSet {
     fn to_output(&self, opcode: Opcode) -> Output {
         match &self.istrs[opcode.ir as usize] {
             InstructionEntry::Single(single) => single.to_output(opcode),
             InstructionEntry::Extended(extended) => extended.to_output(opcode),
+            InstructionEntry::Empty => Halt.to_output(),
         }
+    }
+}
+
+impl IstrSet {
+    pub fn new() -> IstrSet {
+        IstrSet {
+            istrs: [const { InstructionEntry::Empty }; 256],
+        }
+    }
+
+    pub fn get_istr(&self, idx: u8) -> &InstructionEntry {
+        self.istrs.get(idx as usize).unwrap()
+    }
+
+    pub fn get_istr_mut(&mut self, idx: u8) -> &mut InstructionEntry {
+        self.istrs.get_mut(idx as usize).unwrap()
+    }
+
+    pub fn is_empty(&self, idx: u8) -> bool {
+        matches!(self.get_istr(idx), InstructionEntry::Empty)
     }
 }

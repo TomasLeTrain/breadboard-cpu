@@ -1,7 +1,9 @@
 use crate::instructions::*;
 
 // move register to register (reg0 = reg1)
-fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
+fn move_word_reg_instructions() -> Vec<InstructionImpl> {
+    let mut destination: Vec<InstructionImpl> = Vec::new();
+
     let base_template = vec![
         [Reg1Bout, Reg0Write, PC.cnt, Reset].into(), // read from reg1 to reg0, pc cnt
     ];
@@ -30,6 +32,7 @@ fn move_word_reg_instructions(destination: &mut Vec<InstructionImpl>) {
             }));
         }
     }
+    destination
 }
 
 // move imm8 to register (reg0 = imm8)
@@ -261,8 +264,7 @@ fn push_reg_instructions(destination: &mut Vec<InstructionImpl>) {
         [MEM.write, SP.addr, A.bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
     ];
 
-    for reg in Register::read_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
-    {
+    for reg in Register::read_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi)) {
         let addr_bus_conflict = matches!(
             reg,
             Register::MarLo | Register::MarHi | Register::SpLo | Register::SpHi
@@ -621,8 +623,7 @@ fn not_instructions(destination: &mut Vec<InstructionImpl>) {
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
     ];
 
-    for reg in
-        Register::write_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
+    for reg in Register::write_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
     {
         let mut current = if matches!(reg, Register::A) {
             &not_a
@@ -657,8 +658,7 @@ fn not_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     ];
 
     // PC excluded
-    for reg0 in
-        Register::write_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
+    for reg0 in Register::write_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
     {
         // excludes PC, avoids duplicates
         let rhs = Register::read_iterator()
@@ -737,8 +737,8 @@ fn math_imm_instructions(destination: &mut Vec<InstructionImpl>) {
 
     for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
         for reversed in [false, true] {
-            for reg in Register::write_iterator()
-                .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
+            for reg in
+                Register::write_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
             {
                 let mut current = {
                     if matches!(reg, Register::A) && !reversed {
@@ -821,8 +821,8 @@ fn math_reg_instructions(destination: &mut Vec<InstructionImpl>) {
     for math_type in MathIstrTypes::iterator().filter(|e| !matches!(e, MathIstrTypes::Not)) {
         for reg0 in Register::write_iterator() {
             // excludes PC
-            for reg1 in Register::read_iterator()
-                .filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
+            for reg1 in
+                Register::read_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi))
             {
                 // impossible case
                 if matches!(reg1, Register::A) && matches!(reg0, Register::B) {
@@ -966,9 +966,160 @@ fn jmp_instructions(destination: &mut Vec<InstructionImpl>) {
     }
 }
 
+// TODO: add instruction to update flag reg on op
+fn shift_instructions(destination: &mut Vec<InstructionImpl>) {
+    let shift_left = vec![[X.shift_left, PC.cnt, Reset].into()];
+    let shift_right = vec![[X.shift_right, PC.cnt, Reset].into()];
+
+    for dir_left in [false, true] {
+        for reg in [Register::X, Register::Y] {
+            let mut current = if dir_left { &shift_left } else { &shift_right }.clone();
+
+            if matches!(reg, Register::Y) {
+                replace_action(&mut current, X.shift_left, Y.shift_left);
+                replace_action(&mut current, X.shift_right, Y.shift_right);
+            }
+
+            let name = if dir_left {
+                format!("shl {}", reg.name())
+            } else {
+                format!("shr {}", reg.name())
+            };
+
+            destination.push(InstructionImpl::Simple(SimpleInstruction {
+                istr: current,
+                name,
+            }));
+        }
+    }
+}
+
+use std::option::Option;
+
+// responsible for placing instructions in opcodes based on constraints
+struct InstructionWriter<'a> {
+    istr_set: &'a mut IstrSet,
+}
+
+// all functions are greedy, meaning they allocated the first spots they can given their constraints
+// this means that the caller must use the functions in order of importance (for example if certain
+// instructions require a specific order place those first)
+//
+// caller also does not need to worry about the allocation of extended or simple instructions, only
+// in the case the constraints cannot be satisfied (which should crash the program)
+impl<'a> InstructionWriter<'a> {
+    fn new(istr_set: &mut IstrSet) -> InstructionWriter {
+        InstructionWriter { istr_set }
+    }
+
+    fn is_empty(&self, idx: u8) -> bool {
+        self.istr_set.is_empty(idx)
+    }
+
+    fn is_used(&self, idx: u8) -> bool {
+        !self.is_empty(idx)
+    }
+
+    fn simple_available(&self, idx: u8) -> bool {
+        self.is_empty(idx)
+    }
+
+    // allocates an extended instruction at the specified ir idx
+    fn allocate_extended_idx(&self, idx: u8) {}
+
+    // returns true if idx is free OR idx is an extended istr and there are spots available
+    fn extended_available(&self, idx: u8) -> bool {
+        // TODO: impl
+        self.is_empty(idx) || (self.is_used(idx) && true)
+    }
+
+    // attempts to place extended at specified ir idx in first spot in the extended instruction
+    // returns true if operation succeeded
+    fn place_extended_idx(&self, instr: &InstructionImpl, idx: u8) -> Option<()> {
+        // not allocated or no spaces available here
+        if !self.extended_available(idx) {
+            return None;
+        }
+
+        // allocate first if needed
+        if self.is_empty(idx) {
+            self.allocate_extended_idx(idx);
+        }
+
+        // TODO: implement logic
+
+        Some(())
+    }
+
+    // attempts to place simple at specified ir idx
+    fn place_simple_idx(&self, istr: &InstructionImpl, idx: u8) -> Option<()> {
+        Some(())
+    }
+
+    // places given instructions in specified ranges of IR, if possible
+    // all instructions are extended
+    //
+    // removes all instructions placed from the given vector in a front to back order.
+    fn place_extended_ranges(&self, istrs: &mut Vec<InstructionImpl>, ranges: Vec<(u8, u8)>) {
+        if istrs.is_empty() {
+            return;
+        }
+
+        let mut curr_istr = istrs.pop().unwrap();
+
+        for (start, end) in ranges.into_iter() {
+            for idx in start..=end {
+                if !self.extended_available(idx) {
+                    continue;
+                }
+
+                while self.place_extended_idx(&curr_istr, idx).is_some() {
+                    if let Some(istr) = istrs.pop() {
+                        curr_istr = istr;
+                    } else {
+                        // no more instructions, placing done
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // places simple instruction in first available slot
+    // if none available returns ?
+    fn place_simple(&self, istr: InstructionImpl) -> Option<()> {
+        // TODO: optimize by saving smallest valid pointers
+        // TODO: move hardcoded values elsewhere
+        for idx in 0..=255 {
+            if self.simple_available(idx) {
+                return self.place_simple_idx(&istr, idx);
+            }
+        }
+        None
+    }
+
+    // places extended in first available slot
+    // if none available, returns ?
+    fn place_extended(&self, istr: InstructionImpl) -> Option<()> {
+        // TODO: optimize by saving smallest valid pointers
+        // TODO: move hardcoded values elsewhere
+        for idx in 0..=255 {
+            if self.extended_available(idx) {
+                return self.place_extended_idx(&istr, idx);
+            }
+        }
+        None
+    }
+}
+
 pub fn build_all_instructions() -> Vec<InstructionImpl> {
+    let mut istr_set = IstrSet::new();
+    let writer = InstructionWriter::new(&mut istr_set);
+
     let mut all_istrs: Vec<InstructionImpl> = Vec::new();
-    move_word_reg_instructions(&mut all_istrs);
+
+    all_istrs.append(&mut move_word_reg_instructions());
+
     move_word_imm_instructions(&mut all_istrs);
 
     lw_template_addr_reg_instructions(&mut all_istrs);
@@ -999,6 +1150,7 @@ pub fn build_all_instructions() -> Vec<InstructionImpl> {
     jmp_instructions(&mut all_istrs);
 
     math_reg_instructions(&mut all_istrs);
+    shift_instructions(&mut all_istrs);
 
     all_istrs
 }
