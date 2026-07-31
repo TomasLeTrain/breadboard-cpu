@@ -3,15 +3,13 @@ mod instruction_defs;
 mod istr_writer;
 mod register_defs;
 
-pub use istr_utils::InstructionImpl;
+pub use istr_utils::{InstructionImpl, OpcodeToOutput};
 pub use istr_writer::build_all_instructions;
 
 mod istr_utils {
     use crate::action::Action::*;
 
-    use crate::instructions;
     use crate::instructions::defs::*;
-    use crate::instructions::register_defs::*;
     use crate::opcode::Opcode;
     use crate::output::Output;
 
@@ -78,7 +76,8 @@ mod istr_utils {
             let extended_prelude = [*UNIVERSAL_STEP_0, *UNIVERSAL_STEP_1, *LOAD_IR2];
 
             if step < extended_prelude.len() {
-                return extended_prelude[step].to_output();
+                // universal steps should not be conflicting!
+                return extended_prelude[step].to_output().unwrap();
             }
 
             opcode.step -= extended_prelude.len() as u8;
@@ -108,7 +107,7 @@ mod istr_utils {
             let single_prelude = [*UNIVERSAL_STEP_0];
 
             if step < single_prelude.len() {
-                return single_prelude[step].to_output();
+                return single_prelude[step].to_output().unwrap();
             }
 
             opcode.step -= single_prelude.len() as u8;
@@ -170,10 +169,16 @@ mod istr_utils {
         fn to_output(&self, opcode: Opcode) -> Output {
             let step = opcode.step as usize;
 
-            if self.istr.len() < step {
+            if self.istr.len() <= step {
                 Halt.to_output()
             } else {
-                self.istr[step].to_output()
+                match self.istr[step].to_output() {
+                    Ok(result) => result,
+                    Err(err) => {
+                        eprintln!("Got error on instruction \"{}\": {}", self.name, err);
+                        Halt.to_output()
+                    }
+                }
             }
         }
     }

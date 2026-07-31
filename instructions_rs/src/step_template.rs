@@ -1,7 +1,6 @@
-use crate::{
-    Action,
-    output::Output,
-};
+use std::{error::Error, fmt};
+
+use crate::{Action, output::Output};
 
 // custom max-capacity runtime-size implementation that fits in 8 bytes
 #[derive(Clone, Copy)]
@@ -142,8 +141,23 @@ impl<'a> IntoIterator for &'a mut StepTemplate {
     }
 }
 
+#[derive(Debug)]
+pub struct MergingActionsError(Action, Action);
+
+impl Error for MergingActionsError {}
+
+impl fmt::Display for MergingActionsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Failed when merging actions {:?} and {:?}",
+            self.0, self.1
+        )
+    }
+}
+
 impl StepTemplate {
-    pub fn to_output(self) -> Output {
+    pub fn to_output(self) -> Result<Output, MergingActionsError> {
         let mut result = Output::new();
 
         let actions: Vec<_> = self.iter().collect();
@@ -153,21 +167,17 @@ impl StepTemplate {
         for i in 1..outputs.len() - 1 {
             for j in i + 1..outputs.len() {
                 if outputs[i].intersect(&outputs[j]) {
-                    eprintln!(
-                        "Failed when merging actions {:?} and {:?}",
-                        *actions[i], *actions[j]
-                    );
-
-                    // TODO: print error?
-                    return result;
+                    return Err(MergingActionsError(*actions[i], *actions[j]));
                 }
             }
         }
 
-        for output in &outputs {
-            result.merge(output);
+        for (output, action) in outputs.iter().zip(actions) {
+            result.merge(output).inspect_err(|err| {
+                eprintln!("Error when merging action {:?}: {}", action, err);
+            });
         }
 
-        result
+        Ok(result)
     }
 }

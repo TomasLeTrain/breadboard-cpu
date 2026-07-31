@@ -286,6 +286,8 @@ pub fn sw_instructions() -> Vec<(InstructionImpl, AddressRegisterEnum)> {
 pub fn push_reg_instructions() -> Vec<InstructionImpl> {
     let mut result = Vec::new();
 
+    // NOTE: sp dec uses bout so it must be before Reg0Bout in all cases!
+
     let base_template = vec![
         [PC.cnt, SP.dec].into(), // decrement before pushing value
         [MEM.write, SP.addr, Reg0Bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
@@ -293,7 +295,8 @@ pub fn push_reg_instructions() -> Vec<InstructionImpl> {
 
     // have to write to A first to avoid addr bus contention
     let base_template_addr_reg = vec![
-        [A.write, Reg0Bout, PC.cnt, SP.dec].into(), // decrement before pushing value
+        [PC.cnt, SP.dec].into(),
+        [A.write, Reg0Bout].into(),
         [MEM.write, SP.addr, A.bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
     ];
 

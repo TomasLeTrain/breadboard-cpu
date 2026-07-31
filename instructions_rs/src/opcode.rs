@@ -9,7 +9,7 @@ fn bit_transform(x: u32, x_bit: u32, y_bit: u32) -> u32 {
     if x & (1 << x_bit) == 0 { 0 } else { 1 << y_bit }
 }
 
-fn addr_to_opcode(addr: u32) -> Opcode {
+pub fn addr_to_opcode(addr: u32) -> Opcode {
     let not_vram_active = bit_transform(addr, 0, 0) != 0;
 
     let step = (bit_transform(addr, 13, 0)

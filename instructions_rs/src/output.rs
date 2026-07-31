@@ -1,5 +1,8 @@
+use core::fmt;
+use std::error::Error;
+
 // TODO: ensure values created are within their max sizes
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Output {
     bout: u8,
     write: u8,
@@ -7,6 +10,27 @@ pub struct Output {
     misc: u8,
     flag_select: u8,
     pc_cnt: bool,
+}
+
+#[derive(Debug)]
+pub enum MergeOutputError {
+    CategorySizeExceeded(Output),
+    CategoryIntersection(Output, Output),
+}
+
+impl Error for MergeOutputError {}
+
+impl fmt::Display for MergeOutputError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MergeOutputError::CategorySizeExceeded(output) => {
+                write!(f, "Output exceeds category size: {:#?}", output)
+            }
+            MergeOutputError::CategoryIntersection(output1, output2) => {
+                write!(f, "Outputs intersect: {:#?}, {:#?}", output1, output2)
+            }
+        }
+    }
 }
 
 impl Output {
@@ -60,7 +84,7 @@ impl Output {
     pub fn from_arr(arr: &[Self]) -> Output {
         let mut result = Self::new();
         for curr in arr {
-            result.merge(curr)
+            result.merge(curr).unwrap()
         }
         result
     }
@@ -91,9 +115,18 @@ impl Output {
             || category_intersects(self.pc_cnt as u8, other.pc_cnt as u8)
     }
 
-    pub fn merge(&mut self, other: &Self) {
-        assert!(!self.sizes_exceeded());
-        assert!(!self.intersect(other));
+    pub fn merge(&mut self, other: &Self) -> Result<(), MergeOutputError> {
+        if self.sizes_exceeded() {
+            return Err(MergeOutputError::CategorySizeExceeded(*self));
+        }
+
+        if other.sizes_exceeded() {
+            return Err(MergeOutputError::CategorySizeExceeded(*other));
+        }
+
+        if self.intersect(other) {
+            return Err(MergeOutputError::CategoryIntersection(*self, *other));
+        }
 
         self.bout |= other.bout;
         self.write |= other.write;
@@ -101,6 +134,7 @@ impl Output {
         self.misc |= other.misc;
         self.flag_select |= other.flag_select;
         self.pc_cnt |= other.pc_cnt;
+        Ok(())
     }
 }
 
@@ -108,7 +142,7 @@ impl<const N: usize> From<[Output; N]> for Output {
     fn from(arr: [Output; N]) -> Self {
         let mut result = Self::new();
         for curr in arr.iter() {
-            result.merge(curr)
+            result.merge(curr).unwrap()
         }
         result
     }

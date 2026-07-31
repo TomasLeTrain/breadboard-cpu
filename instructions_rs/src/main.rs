@@ -6,9 +6,14 @@ mod step_template;
 
 use action::Action;
 
-use crate::instructions::InstructionImpl;
+use crate::instructions::{InstructionImpl, OpcodeToOutput};
 
 fn main() {
     let istr_set = instructions::build_all_instructions();
     println!("{istr_set}");
+
+    for i in 0..(1 << 17) {
+        let opcode = opcode::addr_to_opcode(i);
+        istr_set.to_output(opcode);
+    }
 }
