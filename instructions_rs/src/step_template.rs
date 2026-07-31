@@ -164,7 +164,7 @@ impl StepTemplate {
         let outputs: Vec<_> = self.iter().map(Action::to_output).collect();
 
         // loop through all unique pairs
-        for i in 1..outputs.len() - 1 {
+        for i in 0..outputs.len() - 1 {
             for j in i + 1..outputs.len() {
                 if outputs[i].intersect(&outputs[j]) {
                     return Err(MergingActionsError(*actions[i], *actions[j]));
@@ -172,10 +172,9 @@ impl StepTemplate {
             }
         }
 
-        for (output, action) in outputs.iter().zip(actions) {
-            result.merge(output).inspect_err(|err| {
-                eprintln!("Error when merging action {:?}: {}", action, err);
-            });
+        for output in outputs.iter() {
+            // FIXME: can fail on an out of size output
+            result.merge(output).unwrap();
         }
 
         Ok(result)

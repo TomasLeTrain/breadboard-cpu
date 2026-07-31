@@ -348,6 +348,8 @@ pub fn push_imm8_instructions() -> Vec<InstructionImpl> {
 pub fn pop_reg_instructions() -> Vec<InstructionImpl> {
     let mut result = Vec::new();
 
+    // NOTE: sp inc uses bout so it must be after Reg0Write in all cases!
+
     let base_template = vec![
         [MEM.bout, SP.addr, Reg0Write, PC.cnt].into(), // write from [sp] into Reg0, pc cnt
         [SP.inc, Reset].into(),                        // cnt after popping value
@@ -356,7 +358,8 @@ pub fn pop_reg_instructions() -> Vec<InstructionImpl> {
     // have to write to A first to avoid addr bus contention
     let base_template_addr_reg = vec![
         [MEM.bout, SP.addr, A.write, PC.cnt].into(), // write from [sp] into A, pc cnt
-        [A.bout, Reg0Write, SP.inc, Reset].into(),   // cnt after popping value
+        [A.bout, Reg0Write].into(),                  // cnt after popping value
+        [SP.inc, Reset].into(),                      // cnt after popping value
     ];
 
     // excluded PC and SP (pop addr makes more sense in that context)
