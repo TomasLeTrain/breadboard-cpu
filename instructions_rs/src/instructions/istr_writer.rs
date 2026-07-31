@@ -151,68 +151,38 @@ pub fn build_all_instructions() -> IstrSet {
         writer.place_extended(istr).unwrap();
     }
 
-    for istr in move_word_imm_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
+    // set of functions that all abstract over addr_reg. SP variants are placed as extended to save
+    // in simple spaces
+    let addr_reg_iters = lw_template_addr_reg_instructions()
+        .into_iter()
+        .chain(lw_template_imm16_instructions())
+        .chain(sw_instructions())
+        .chain(jnz_reg_instructions())
+        .chain(jmp_instructions());
+
+    for (istr, addr_reg) in addr_reg_iters {
+        // sp variant less common, place on extended to save simple slots
+        match addr_reg {
+            defs::AddressRegisterEnum::Mar => writer.place_simple(istr).unwrap(),
+            defs::AddressRegisterEnum::Sp => writer.place_extended(istr).unwrap(),
+        }
     }
 
-    for istr in lw_template_addr_reg_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
+    // from here on there's enough space for all simple
+    let simple_istrs = move_word_imm_instructions()
+        .into_iter()
+        .chain(push_reg_instructions())
+        .chain(push_imm8_instructions())
+        .chain(pop_reg_instructions())
+        .chain(pop_addr_reg_instructions())
+        .chain(lda_imm16_instructions())
+        .chain(mv_addr_reg_instructions())
+        .chain(misc_instructions())
+        .chain(vram_read_instructions())
+        .chain(vram_write_instructions())
+        .chain(shift_instructions());
 
-    for istr in lw_template_imm16_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-
-    for istr in sw_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-
-    for istr in push_reg_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-    for istr in push_imm8_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-
-    for istr in pop_reg_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-    for istr in pop_addr_reg_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-
-    let lda_imm16 = lda_imm16_instructions();
-    println!("istrs of: lda_imm16 {}", lda_imm16.len());
-
-    for istr in lda_imm16.into_iter() {
-        writer.place_simple(istr);
-    }
-
-    let mw_addr_reg = mv_addr_reg_instructions();
-    println!("istrs of: mw_addr_reg {}", mw_addr_reg.len());
-    for istr in mw_addr_reg.into_iter() {
-        writer.place_simple(istr);
-    }
-
-    for istr in misc_instructions().into_iter() {
-        writer.place_simple(istr);
-    }
-
-    for istr in vram_read_instructions().into_iter() {
-        writer.place_simple(istr);
-    }
-    for istr in vram_write_instructions().into_iter() {
-        writer.place_simple(istr);
-    }
-
-    for istr in jnz_reg_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-    for istr in jmp_instructions().into_iter() {
-        writer.place_simple(istr).unwrap();
-    }
-
-    for istr in shift_instructions().into_iter() {
+    for istr in simple_istrs {
         writer.place_simple(istr).unwrap();
     }
 

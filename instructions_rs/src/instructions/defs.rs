@@ -261,7 +261,7 @@ impl Register {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum AddressRegisterEnum {
     Mar,
     Sp,
