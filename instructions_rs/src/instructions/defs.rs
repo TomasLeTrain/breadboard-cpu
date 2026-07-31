@@ -163,7 +163,7 @@ pub enum AddressRegisterImpl<'a> {
     Sp(&'a SpRegister),
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Register {
     A,
     B,
@@ -290,6 +290,7 @@ impl AddressRegisterEnum {
 }
 
 // in order of associated bits (0 is first, 7 is last)
+#[derive(Clone)]
 pub enum MathIstrTypes {
     SubNoCarry,
     SubCarry,
@@ -335,11 +336,24 @@ impl MathIstrTypes {
         DIRECTIONS.iter()
     }
 
-    pub fn get_action(&self) -> Action {
+    pub fn to_action(&self) -> Action {
         if matches!(self, MathIstrTypes::SubCarry | MathIstrTypes::AddCarry) {
             FlagCarry
         } else {
             FlagDirect
+        }
+    }
+
+    pub fn to_ir_bits(&self) -> u8 {
+        match self {
+            MathIstrTypes::SubNoCarry | MathIstrTypes::Cmp => 0,
+            MathIstrTypes::SubCarry => 1,
+            MathIstrTypes::AddNoCarry => 2,
+            MathIstrTypes::AddCarry => 3,
+            MathIstrTypes::Not => 4,
+            MathIstrTypes::Xor => 5,
+            MathIstrTypes::Or => 6,
+            MathIstrTypes::And => 7,
         }
     }
 }

@@ -8,19 +8,21 @@ use action::Action;
 
 use crate::instructions::InstructionImpl;
 
-fn print_istrs(istrs: &Vec<InstructionImpl>) {
-    for istr in istrs {
-        println!("istr: {}", istr.name());
-        // istr.to_output(opcode)
-        // istrfirst().unwrap().to_output();
-    }
-}
+// fn print_istrs(istrs: &Vec<InstructionImpl>) {
+//     for istr in istrs {
+//         println!("istr: {}", istr.name());
+//         // istr.to_output(opcode)
+//         // istrfirst().unwrap().to_output();
+//     }
+// }
 
 fn main() {
     println!("Hello, world!");
-    let istrs = instructions::build_all_instructions();
-    print_istrs(&istrs);
-    println!("total num instructions: {}", istrs.len());
+    let istr_set = instructions::build_all_instructions();
+
+    println!("{istr_set}");
+    // print_istrs(&istrs);
+    // println!("total num instructions: {}", istrs.len());
 
     // let num_single = istrs
     //     .iter()
