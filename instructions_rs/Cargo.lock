@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "instructions"
+name = "opcode_gen"
 version = "0.1.0"

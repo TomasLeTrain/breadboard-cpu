@@ -4,7 +4,7 @@ use crate::{
     step_template::StepTemplate,
 };
 
-use std::sync::LazyLock;
+use std::{iter::MapWhile, os::fd::FromRawFd, ptr::fn_addr_eq, sync::LazyLock};
 
 pub type IstrTemplate = Vec<StepTemplate>;
 
@@ -14,6 +14,7 @@ pub static UNIVERSAL_STEP_1: LazyLock<StepTemplate> = LazyLock::new(|| [PC.cnt].
 pub static LOAD_IR2: LazyLock<StepTemplate> =
     LazyLock::new(|| [MEM.bout, PC.addr, IR2.write].into());
 
+// FIXME: remove unused first step, make use of new pc.cnt impl
 pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplate> = LazyLock::new(|| {
     vec![
         *UNIVERSAL_STEP_0,
@@ -24,7 +25,9 @@ pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplate> = LazyLock::new(|| {
     ]
 });
 
+
 pub fn replace_action(istr_temp: &mut [StepTemplate], pattern: Action, replacement: Action) {
+
     for step in istr_temp {
         for action in step.iter_mut() {
             if *action == pattern {
