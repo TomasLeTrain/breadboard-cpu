@@ -1,4 +1,4 @@
-use core::fmt;
+use std::fmt;
 use std::error::Error;
 
 // TODO: ensure values created are within their max sizes

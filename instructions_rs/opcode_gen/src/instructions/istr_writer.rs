@@ -1,14 +1,40 @@
+//! Utils for placing instructions in an instruction set while following given constraints.
+
 use crate::instructions::{
     instruction_defs::*,
     istr_utils::{Extended, InstructionEntry, IstrSet, Single},
     *,
 };
 
-use std::option::Option;
+use std::{error::Error, option::Option};
+use std::{fmt};
 
-// responsible for placing instructions in opcodes based on constraints
+/// Responsible for placing instructions in opcodes while following constraints
+///
+/// * `istr_set`: Instruction set to modify
 struct InstructionWriter<'a> {
     istr_set: &'a mut IstrSet,
+}
+
+#[derive(Debug)]
+enum ExtendedPlacementError {
+    IndexNotFree(u8),
+    IndexFull(u8),
+}
+
+impl Error for ExtendedPlacementError {}
+
+impl fmt::Display for ExtendedPlacementError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExtendedPlacementError::IndexNotFree(idx) => {
+                write!(f, "Opcode is already taken at ir: {}", idx)
+            }
+            ExtendedPlacementError::IndexFull(idx) => {
+                write!(f, "All extended instructions filled at ir: {}", idx)
+            }
+        }
+    }
 }
 
 // all functions are greedy, meaning they allocated the first spots they can given their constraints
@@ -22,22 +48,24 @@ impl<'a> InstructionWriter<'a> {
         InstructionWriter { istr_set }
     }
 
+    /// True if no instruction exists at ir index
     fn is_empty(&self, idx: u8) -> bool {
         self.istr_set.is_empty(idx)
     }
 
+    /// True if can place simple instruction at ir index (i.e. the opcode is empty)
     fn simple_available(&self, idx: u8) -> bool {
         self.is_empty(idx)
     }
 
-    // allocates an extended instruction at the specified ir idx
+    /// Allocates an extended instruction at the specified ir index
     fn allocate_extended_idx(&mut self, idx: u8) {
         assert!(self.is_empty(idx));
 
         *self.istr_set.get_istr_mut(idx) = InstructionEntry::Extended(Box::new(Extended::new()));
     }
 
-    // returns true if idx is free OR idx is an extended istr and there are spots available
+    /// Returns true if idx is empty OR idx is an extended istr and there are spots available
     fn extended_available(&self, idx: u8) -> bool {
         match self.istr_set.get_istr(idx) {
             InstructionEntry::Single(_) => false,
@@ -46,12 +74,29 @@ impl<'a> InstructionWriter<'a> {
         }
     }
 
-    // attempts to place extended at specified ir idx in first spot in the extended instruction
-    // returns true if operation succeeded
-    fn place_extended_idx(&mut self, istr: InstructionImpl, idx: u8) -> Option<()> {
+    // Attempts to place extended at specified ir idx in first spot in the extended instruction
+    // returning if the operation was successful.
+    ///
+    /// * `istr`: Instruction to place
+    /// * `idx`: ir index
+    fn place_extended_idx(
+        &mut self,
+        istr: InstructionImpl,
+        idx: u8,
+    ) -> Result<(), ExtendedPlacementError> {
         // not allocated or no spaces available here
         if !self.extended_available(idx) {
-            return None;
+            return match self.istr_set.get_istr(idx) {
+                InstructionEntry::Single(_) => Err(ExtendedPlacementError::IndexNotFree(idx)),
+                InstructionEntry::Extended(extended) => {
+                    if extended.is_full() {
+                        Err(ExtendedPlacementError::IndexFull(idx))
+                    } else {
+                        unreachable!()
+                    }
+                }
+                InstructionEntry::Empty => unreachable!(),
+            };
         }
 
         // allocate first if needed
@@ -61,7 +106,7 @@ impl<'a> InstructionWriter<'a> {
 
         if let InstructionEntry::Extended(extended) = self.istr_set.get_istr_mut(idx) {
             extended.push(istr);
-            Some(())
+            Ok(())
         } else {
             unreachable!()
         }
@@ -72,6 +117,7 @@ impl<'a> InstructionWriter<'a> {
         if !self.simple_available(idx) {
             return None;
         }
+
         *self.istr_set.get_istr_mut(idx) = InstructionEntry::Single(Box::new(Single::new(istr)));
         Some(())
     }
@@ -85,7 +131,7 @@ impl<'a> InstructionWriter<'a> {
             for idx in start..=end {
                 if self.extended_available(idx) {
                     let res = self.place_extended_idx(istrs, idx);
-                    assert!(res.is_some());
+                    assert!(res.is_ok());
                     return;
                 }
             }
@@ -114,7 +160,7 @@ impl<'a> InstructionWriter<'a> {
             if self.extended_available(idx) {
                 let res = self.place_extended_idx(istr, idx);
 
-                assert!(res.is_some());
+                assert!(res.is_ok());
 
                 // found a spot to place the istr
                 return Some(());

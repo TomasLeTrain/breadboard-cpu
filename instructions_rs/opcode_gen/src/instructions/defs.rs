@@ -1,10 +1,12 @@
+//! Definitions of various utils and static vars used mainly for instruction defs
+
 use crate::{
     action::Action::{self, *},
     instructions::register_defs::*,
     step_template::StepTemplate,
 };
 
-use std::{iter::MapWhile, os::fd::FromRawFd, ptr::fn_addr_eq, sync::LazyLock};
+use std::sync::LazyLock;
 
 pub type IstrTemplate = Vec<StepTemplate>;
 
@@ -25,9 +27,12 @@ pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplate> = LazyLock::new(|| {
     ]
 });
 
-
+/// Replaces all instances of pattern for replacement.
+///
+/// * `istr_temp`: template to modify
+/// * `pattern`: pattern to look for
+/// * `replacement`: replacement to replace pattern
 pub fn replace_action(istr_temp: &mut [StepTemplate], pattern: Action, replacement: Action) {
-
     for step in istr_temp {
         for action in step.iter_mut() {
             if *action == pattern {
@@ -78,6 +83,9 @@ pub fn all_regs_filled(istr_temp: &[StepTemplate]) -> bool {
     true
 }
 
+/// Returns true if no addr related placeholders exist in istr_temp.
+///
+/// * `istr_temp`: template to verify
 pub fn addr_reg_filled(istr_temp: &[StepTemplate]) -> bool {
     for step in istr_temp {
         for action in step.iter() {
@@ -101,6 +109,9 @@ pub fn addr_reg_filled(istr_temp: &[StepTemplate]) -> bool {
     true
 }
 
+/// returns true if template has no instances of output flag placeholder.
+///
+/// * `istr_temp`: template to verify
 pub fn flag_select_filled(istr_temp: &[StepTemplate]) -> bool {
     for step in istr_temp {
         for action in step.iter() {
@@ -145,6 +156,7 @@ impl AddressRegisterEnum {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+#[allow(dead_code)]
 pub enum RegisterImpl<'a> {
     BoutWrite(&'a BoutWriteRegister),
     Write(&'a WriteRegister),
