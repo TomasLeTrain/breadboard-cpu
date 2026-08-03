@@ -268,6 +268,11 @@ impl Output {
         self.merge_pc_cnt(other.get_pc_cnt())?;
         Ok(())
     }
+
+    /// Returns rom data that would output the desired actions
+    pub fn get_output_data(&self) -> u16 {
+        self.data
+    }
 }
 
 impl<const N: usize> From<[Output; N]> for Output {
