@@ -7,24 +7,26 @@ COMMENT    = _{ ";" ~ (!NEWLINE ~ ANY)* }
 Identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Program is a sequence of statements/expressions
-Program = _{ SOI ~ (Stmt)* ~ EOI }
+Program = _{ SOI ~ (Statement)* ~ EOI }
 
 // Statements
-Stmt                  = { LabelStatement | BlockedLabel | IstrStatement }
-IstrStatement         = { Instruction ~ InstructionParameters? }
+Statement             = { LabelStatement | BlockLabel | InstructionStatement }
+
+InstructionStatement  = { InstructionLabel ~ InstructionParameters? }
 InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
-Instruction           = { Identifier }
-InstructionParameter = _{  Expr }
+InstructionLabel      = { Identifier }
+InstructionParameter  = _{  Expr }
 
 LabelStatement = { Identifier ~ ":" }
-BlockedLabel = { Identifier ~ Block }
+
+BlockLabel = { Identifier ~ Block }
 
 // Function definition: def name(params) { body }
 Function =  { "fn" ~ Identifier ~ Block }
 Params   = _{ Identifier ~ ("," ~ Identifier)* }
 
 // Block: { statements }
-Block = { "{" ~ Stmt* ~ "}" }
+Block = { "{" ~ Statement* ~ "}" }
 
 // Expressions (ordered by precedence - lowest to highest)
 Expr = { Comparison }
