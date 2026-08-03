@@ -4,8 +4,6 @@ mod opcode;
 mod output;
 mod step_template;
 
-use action::Action;
-
 use crate::instructions::OpcodeToOutput;
 
 fn main() {

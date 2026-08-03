@@ -1,6 +1,6 @@
 //! Definitions for all implemented instructions
 
-use crate::Action::*;
+use crate::action::Action::*;
 use crate::instructions::defs::*;
 use crate::instructions::istr_utils::{InstructionImpl, SimpleInstruction, VramInstruction};
 use crate::instructions::register_defs::*;

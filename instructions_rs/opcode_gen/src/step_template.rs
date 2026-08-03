@@ -1,6 +1,6 @@
 use std::{error::Error, fmt};
 
-use crate::{Action, output::Output};
+use crate::{action::Action, output::Output};
 
 // custom max-capacity runtime-size implementation that fits in 8 bytes
 #[derive(Clone, Copy)]
