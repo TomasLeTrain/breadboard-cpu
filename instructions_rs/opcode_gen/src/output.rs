@@ -1,77 +1,162 @@
-use std::fmt;
 use std::error::Error;
+use std::fmt;
 
-// TODO: ensure values created are within their max sizes
 #[derive(Clone, Copy, Debug)]
 pub struct Output {
-    bout: u8,
-    write: u8,
-    addr: u8,
-    misc: u8,
-    flag_select: u8,
-    pc_cnt: bool,
+    // output only needs 16 bytes, can compactly represent all categories
+    // also has bonus of representing same as hardware so converting between is trivial
+    data: u16,
+    // // 4 bits wide
+    // bout: u8,
+    // // 4 bits wide
+    // write: u8,
+    // // 2 bits wide
+    // addr: u8,
+    // // 3 bits wide
+    // misc: u8,
+    // // 3 bits wide
+    // flag_select: u8,
+    // // 1 bit wide
+    // pc_cnt: bool,
 }
 
 #[derive(Debug)]
-pub enum MergeOutputError {
-    CategorySizeExceeded(Output),
-    CategoryIntersection(Output, Output),
+enum OutputCategory {
+    Bout,
+    Write,
+    Addr,
+    Misc,
+    FlagSelect,
+    PcCnt,
 }
 
-impl Error for MergeOutputError {}
+#[derive(Debug)]
+pub enum SetCategoryError {
+    CategorySizeExceeded(OutputCategory, u8),
+    CategoryIntersection(OutputCategory, u8, u8),
+}
 
-impl fmt::Display for MergeOutputError {
+impl Error for SetCategoryError {}
+
+impl fmt::Display for SetCategoryError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MergeOutputError::CategorySizeExceeded(output) => {
-                write!(f, "Output exceeds category size: {:#?}", output)
+            SetCategoryError::CategorySizeExceeded(category, value) => {
+                write!(
+                    f,
+                    "Category {:#?} had its size exceeded by value {:#?}",
+                    category, value
+                )
             }
-            MergeOutputError::CategoryIntersection(output1, output2) => {
-                write!(f, "Outputs intersect: {:#?}, {:#?}", output1, output2)
+            SetCategoryError::CategoryIntersection(category, prev_value, new_value) => {
+                write!(
+                    f,
+                    "Category has intersection - previous value: {:#?}, new value: {:#?}",
+                    category, prev_value, new_value
+                )
             }
         }
     }
 }
 
+// uint32_t result = 0;
+// result |= bus_out;                                  // 4 bits wide
+// result |= static_cast<uint32_t>(bus_write) << 4;    // 4 bits wide
+// result |= static_cast<uint32_t>(addr_out) << 8;     // 2 bits wide
+// result |= static_cast<uint32_t>(other) << 10;       // 2 bits wide
+// result |= static_cast<uint32_t>(flag_select) << 12; // 3 bits wide
+// result |= static_cast<uint32_t>(pc_cnt) << 15;      // 1 bit wide
+// return static_cast<uint16_t>(result);
+
 impl Output {
-    pub fn new() -> Self {
-        Self {
-            bout: 0,
-            write: 0,
-            addr: 0,
-            misc: 0,
-            flag_select: 0,
-            pc_cnt: false,
+    fn get_bout(&self) -> u8 {
+        let mut result = self.data;
+        result &= Self::MAX_BOUT_VAL as u16;
+        result as u8
+    }
+
+    fn get_write(&self) -> u8 {
+        let mut result = self.data;
+        result >>= Self::MAX_BOUT_VAL;
+        result &= Self::MAX_WRITE_VAL as u16;
+        result as u8
+    }
+
+    fn get_addr(&self) -> u8 {
+        let mut result = self.data;
+        result >>= Self::MAX_BOUT_VAL;
+        result >>= Self::MAX_WRITE_VAL;
+        result &= Self::MAX_ADDR_VAL as u16;
+        result as u8
+    }
+
+    fn get_misc(&self) -> u8 {
+        let mut result = self.data;
+        result >>= Self::MAX_BOUT_VAL;
+        result >>= Self::MAX_WRITE_VAL;
+        result >>= Self::MAX_ADDR_VAL;
+        result &= Self::MAX_MISC_VAL as u16;
+        result as u8
+    }
+
+    fn set_bout(&mut self, val: u8) -> Result<(), SetCategoryError> {
+        if val > Self::MAX_BOUT_VAL {
+            Err(SetCategoryError::CategorySizeExceeded(
+                OutputCategory::Bout,
+                val,
+            ))
+        } else if self.get_bout() != 0 && val != 0 {
+            Err(SetCategoryError::CategoryIntersection(
+                OutputCategory::Bout,
+                self.get_bout(),
+                val,
+            ))
+        } else {
+            self.data |= (val as u16) << Self::WRITE_BITS;
+            Ok(())
         }
+    }
+
+    pub fn new() -> Self {
+        Self { data: 0 }
     }
 
     pub fn from_write(val: u8) -> Self {
         let mut result = Self::new();
         result.write = val;
+        assert!(
+            !result.sizes_exceeded(),
+            "write value outside category size"
+        );
         result
     }
 
     pub fn from_bout(val: u8) -> Self {
         let mut result = Self::new();
         result.bout = val;
+        assert!(!result.sizes_exceeded(), "bout value outside category size");
         result
     }
 
     pub fn from_addr(val: u8) -> Self {
         let mut result = Self::new();
         result.addr = val;
+        assert!(!result.sizes_exceeded(), "addr value outside category size");
         result
     }
 
     pub fn from_other(val: u8) -> Self {
         let mut result = Self::new();
         result.misc = val;
+        assert!(!result.sizes_exceeded(), "misc value outside category size");
         result
     }
 
     pub fn from_flag_select(val: u8) -> Self {
         let mut result = Self::new();
         result.flag_select = val;
+        assert!(!result.sizes_exceeded());
+        assert!(!result.sizes_exceeded(), "misc value outside category size");
         result
     }
 
@@ -89,14 +174,20 @@ impl Output {
         result
     }
 
+    const BOUT_BITS: u8 = 4;
+    const WRITE_BITS: u8 = 4;
+    const ADDR_BITS: u8 = 2;
+    const MISC_BITS: u8 = 2;
+    const FLAG_SELECT_BITS: u8 = 3;
+
+    // these also function as masks
+    const MAX_BOUT_VAL: u8 = (1 << Self::BOUT_BITS) - 1;
+    const MAX_WRITE_VAL: u8 = (1 << Self::WRITE_BITS) - 1;
+    const MAX_ADDR_VAL: u8 = (1 << Self::ADDR_BITS) - 1;
+    const MAX_MISC_VAL: u8 = (1 << Self::MISC_BITS) - 1;
+    const MAX_FLAG_SELECT_VAL: u8 = (1 << Self::FLAG_SELECT_BITS) - 1;
+
     // returns true if one of the fields has a value greater than allowed
-
-    const MAX_BOUT_VAL: u8 = (1 << 4) - 1;
-    const MAX_WRITE_VAL: u8 = (1 << 4) - 1;
-    const MAX_ADDR_VAL: u8 = (1 << 2) - 1;
-    const MAX_MISC_VAL: u8 = (1 << 2) - 1;
-    const MAX_FLAG_SELECT_VAL: u8 = (1 << 3) - 1;
-
     fn sizes_exceeded(&self) -> bool {
         self.bout > Self::MAX_BOUT_VAL
             || self.write > Self::MAX_WRITE_VAL
@@ -115,17 +206,9 @@ impl Output {
             || category_intersects(self.pc_cnt as u8, other.pc_cnt as u8)
     }
 
-    pub fn merge(&mut self, other: &Self) -> Result<(), MergeOutputError> {
-        if self.sizes_exceeded() {
-            return Err(MergeOutputError::CategorySizeExceeded(*self));
-        }
-
-        if other.sizes_exceeded() {
-            return Err(MergeOutputError::CategorySizeExceeded(*other));
-        }
-
+    pub fn merge(&mut self, other: &Self) -> Result<(), SetCategoryError> {
         if self.intersect(other) {
-            return Err(MergeOutputError::CategoryIntersection(*self, *other));
+            return Err(SetCategoryError::CategoryIntersection(*self, *other));
         }
 
         self.bout |= other.bout;

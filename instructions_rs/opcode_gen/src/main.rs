@@ -6,7 +6,7 @@ mod step_template;
 
 use action::Action;
 
-use crate::instructions::{InstructionImpl, OpcodeToOutput};
+use crate::instructions::OpcodeToOutput;
 
 fn main() {
     let istr_set = instructions::build_all_instructions();

@@ -6,34 +6,49 @@ use crate::instructions::{
     *,
 };
 
+use std::fmt;
 use std::{error::Error, option::Option};
-use std::{fmt};
 
 /// Responsible for placing instructions in opcodes while following constraints
 ///
 /// * `istr_set`: Instruction set to modify
+/// * `simple_istr_ptr`: index at which its guaranteed all instructions before it are filled. gets used to avoid unnecessary looping through already used indexes.
+/// * `extended_istr_ptr`: index at which its guaranteed all instructions before it are filled including all extended instruction slots.
 struct InstructionWriter<'a> {
     istr_set: &'a mut IstrSet,
+    simple_istr_ptr: u16,
+    extended_istr_ptr: u16,
 }
 
 #[derive(Debug)]
-enum ExtendedPlacementError {
+enum ExtPlacementError {
     IndexNotFree(u8),
     IndexFull(u8),
 }
 
-impl Error for ExtendedPlacementError {}
+// TODO: make error
+#[derive(Debug)]
+struct FilledRangesError;
 
-impl fmt::Display for ExtendedPlacementError {
+impl Error for ExtPlacementError {}
+impl Error for FilledRangesError {}
+
+impl fmt::Display for ExtPlacementError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ExtendedPlacementError::IndexNotFree(idx) => {
+            ExtPlacementError::IndexNotFree(idx) => {
                 write!(f, "Opcode is already taken at ir: {}", idx)
             }
-            ExtendedPlacementError::IndexFull(idx) => {
+            ExtPlacementError::IndexFull(idx) => {
                 write!(f, "All extended instructions filled at ir: {}", idx)
             }
         }
+    }
+}
+
+impl fmt::Display for FilledRangesError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "No spot available in given ranges!")
     }
 }
 
@@ -45,7 +60,11 @@ impl fmt::Display for ExtendedPlacementError {
 // in the case the constraints cannot be satisfied (which should crash the program)
 impl<'a> InstructionWriter<'a> {
     fn new(istr_set: &mut IstrSet) -> InstructionWriter<'_> {
-        InstructionWriter { istr_set }
+        InstructionWriter {
+            istr_set,
+            simple_istr_ptr: 0,
+            extended_istr_ptr: 0,
+        }
     }
 
     /// True if no instruction exists at ir index
@@ -83,14 +102,14 @@ impl<'a> InstructionWriter<'a> {
         &mut self,
         istr: InstructionImpl,
         idx: u8,
-    ) -> Result<(), ExtendedPlacementError> {
+    ) -> Result<(), ExtPlacementError> {
         // not allocated or no spaces available here
         if !self.extended_available(idx) {
             return match self.istr_set.get_istr(idx) {
-                InstructionEntry::Single(_) => Err(ExtendedPlacementError::IndexNotFree(idx)),
+                InstructionEntry::Single(_) => Err(ExtPlacementError::IndexNotFree(idx)),
                 InstructionEntry::Extended(extended) => {
                     if extended.is_full() {
-                        Err(ExtendedPlacementError::IndexFull(idx))
+                        Err(ExtPlacementError::IndexFull(idx))
                     } else {
                         unreachable!()
                     }
@@ -122,51 +141,68 @@ impl<'a> InstructionWriter<'a> {
         Some(())
     }
 
-    // places given instructions in specified ranges of IR, if possible
-    // all instructions are extended
-    //
-    // removes all instructions placed from the given vector in a front to back order.
-    fn place_extended_ranges(&mut self, istrs: InstructionImpl, ranges: &[(u8, u8)]) {
+    /// places given instructions in specified ranges of IR, if possible
+    /// all instructions are extended
+    ///
+    /// removes all instructions placed from the given vector in a front to back order.
+    ///
+    /// * `istr`: Instruction to place
+    /// * `ranges`: Inclusive ranges [start, end] of ir indexes where istr is allowed to be placed
+    fn place_extended_ranges(
+        &mut self,
+        istr: InstructionImpl,
+        ranges: &[(u8, u8)],
+    ) -> Result<(), FilledRangesError> {
         for &(start, end) in ranges.iter() {
             for idx in start..=end {
                 if self.extended_available(idx) {
-                    let res = self.place_extended_idx(istrs, idx);
+                    let res = self.place_extended_idx(istr, idx);
                     assert!(res.is_ok());
-                    return;
+                    return Ok(());
                 }
             }
         }
+        Err(FilledRangesError)
     }
 
     // places simple instruction in first available slot
     // if none available returns ?
     fn place_simple(&mut self, istr: InstructionImpl) -> Option<()> {
-        // TODO: optimize by saving smallest valid pointers
         // TODO: move hardcoded values elsewhere
-        for idx in 0..=255 {
-            if self.simple_available(idx) {
-                return self.place_simple_idx(istr, idx);
-            }
+
+        // finds smallest index at which a valid spot is available
+        while self.simple_istr_ptr < 256 && !self.simple_available(self.simple_istr_ptr as u8) {
+            self.simple_istr_ptr += 1;
         }
-        None
+
+        // no available slots
+        if self.simple_istr_ptr >= 256 {
+            return None;
+        }
+
+        self.place_simple_idx(istr, self.simple_istr_ptr as u8)
     }
 
     // places extended in first available slot
     // returns none if no spots available
     fn place_extended(&mut self, istr: InstructionImpl) -> Option<()> {
-        // TODO: optimize by saving smallest valid pointers
         // TODO: move hardcoded values elsewhere
-        for idx in 0..=255 {
-            if self.extended_available(idx) {
-                let res = self.place_extended_idx(istr, idx);
 
-                assert!(res.is_ok());
-
-                // found a spot to place the istr
-                return Some(());
-            }
+        // finds smallest index at which a valid spot is available
+        while self.extended_istr_ptr < 256 && !self.extended_available(self.extended_istr_ptr as u8)
+        {
+            self.extended_istr_ptr += 1;
         }
-        None
+
+        // no available slots
+        if self.extended_istr_ptr >= 256 {
+            return None;
+        }
+
+        match self.place_extended_idx(istr, self.extended_istr_ptr as u8) {
+            Ok(_) => Some(()),
+            Err(_) => unreachable!(),
+        }
     }
 }
 
@@ -184,12 +220,14 @@ pub fn build_all_instructions() -> IstrSet {
     for (istr, math_type) in all_math_istrs_iter {
         let math_given_bits = math_type.to_ir_bits();
 
-        let math_range = (math_given_bits << 4) as u8;
-        let math_end_range = (((math_given_bits + 1) << 4) - 1) as u8;
+        let math_range = math_given_bits << 4;
+        let math_end_range = ((math_given_bits + 1) << 4) - 1;
         let first_range = (math_range, math_end_range);
         let second_range = (math_range | 1 << 7, math_end_range | 1 << 7);
 
-        writer.place_extended_ranges(istr, &[first_range, second_range]);
+        writer
+            .place_extended_ranges(istr, &[first_range, second_range])
+            .unwrap();
     }
 
     // has approx 120-ish instructions, need to make extended

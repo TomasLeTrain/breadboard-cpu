@@ -4,7 +4,6 @@ use crate::Action::*;
 use crate::instructions::defs::*;
 use crate::instructions::istr_utils::{InstructionImpl, SimpleInstruction, VramInstruction};
 use crate::instructions::register_defs::*;
-use crate::instructions::*;
 
 // move register to register (reg0 = reg1)
 pub fn move_word_reg_instructions() -> Vec<InstructionImpl> {
