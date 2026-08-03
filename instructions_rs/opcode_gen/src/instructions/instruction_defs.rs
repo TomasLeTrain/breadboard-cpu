@@ -1073,8 +1073,9 @@ pub fn jmp_instructions() -> Vec<(InstructionImpl, AddressRegisterEnum)> {
 pub fn shift_instructions() -> Vec<InstructionImpl> {
     let mut result = Vec::new();
 
-    let shift_left = vec![[X.shift_left, PC.cnt, Reset].into()];
-    let shift_right = vec![[X.shift_right, PC.cnt, Reset].into()];
+    // NOTE: Reset and shift actions intersect in misc category
+    let shift_left = vec![[X.shift_left, PC.cnt].into(), [Reset].into()];
+    let shift_right = vec![[X.shift_right, PC.cnt].into(), [Reset].into()];
 
     for dir_left in [false, true] {
         for reg in [Register::X, Register::Y] {
