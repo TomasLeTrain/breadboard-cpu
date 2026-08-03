@@ -5,22 +5,59 @@ mod output;
 mod step_template;
 
 use crate::instructions::OpcodeToOutput;
-use std::{fs::File, fs::OpenOptions, io::Write};
+use std::{fs::OpenOptions, io::Write};
+
+fn write_contents_logisim(data: &(Vec<u8>, Vec<u8>)) -> std::io::Result<()> {
+    let mut rom0_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("rom0_logisim.img")?;
+    let mut rom1_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("rom1_logisim.img")?;
+
+    rom0_file.write_all(b"v3.0 hex words plain\n")?;
+    rom1_file.write_all(b"v3.0 hex words plain\n")?;
+
+    for (i, curr) in data.0.iter().zip(data.1.iter()).enumerate() {
+        write!(rom0_file, "{:02x}", curr.0)?;
+        write!(rom1_file, "{:02x}", curr.1)?;
+
+        if i % 16 == 15 {
+            writeln!(rom0_file)?;
+            writeln!(rom1_file)?;
+        } else {
+            write!(rom0_file, " ")?;
+            write!(rom1_file, " ")?;
+        }
+    }
+    Ok(())
+}
+
+fn write_contents_binary(data: &(Vec<u8>, Vec<u8>)) -> std::io::Result<()> {
+    let mut rom0_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("rom0.bin")?;
+    let mut rom1_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("rom1.bin")?;
+
+    rom0_file.write_all(&data.0)?;
+    rom1_file.write_all(&data.1)?;
+
+    Ok(())
+}
 
 fn main() -> std::io::Result<()> {
     let istr_set = instructions::build_all_instructions();
     println!("{istr_set}");
-
-    let mut rom0_file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("rom0.bin")
-        .unwrap();
-    let mut rom1_file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("rom1.bin")
-        .unwrap();
 
     let rom_data: (Vec<_>, Vec<_>) = (0..(1 << 17))
         .into_iter()
@@ -30,10 +67,8 @@ fn main() -> std::io::Result<()> {
             (data as u8, (data >> 8) as u8)
         })
         .unzip();
-
-    // FIXME: deal with errors
-    rom0_file.write_all(&rom_data.0)?;
-    rom1_file.write_all(&rom_data.1)?;
+    write_contents_binary(&rom_data)?;
+    write_contents_logisim(&rom_data)?;
 
     Ok(())
 }
