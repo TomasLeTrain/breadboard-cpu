@@ -215,7 +215,7 @@ fn parse_literal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
         }
         Rule::Character => {
             let s = inner.as_str();
-            let c = unescape(&s[1..s.len() - 1]);
+            let c = unescape_char(&s[1..s.len() - 1]);
 
             println!("c is {}", c);
 
@@ -237,7 +237,9 @@ fn parse_hexadecimal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
     }
 }
 
-fn unescape(string: &str) -> char {
+/// Turns string of length <= 2 into corresponding character.
+/// Turns literal escape sequences like "\\n" into the actual character '\n'.
+fn unescape_char(string: &str) -> char {
     println!("got string {}", string);
     assert!(string.chars().count() <= 2);
 

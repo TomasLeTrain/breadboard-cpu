@@ -1,7 +1,14 @@
 use crate::types::Type;
 
-/// A program is a list of top-level items (classes and statements)
 pub type Program = Vec<Statement>;
+
+struct AddressRegister {}
+
+use opcode_gen::instructions::Register;
+
+enum Instruction {
+    MvRegReg(Register, Register),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -18,7 +25,7 @@ pub enum Statement {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypedExpr {
     pub expr: Expr,
     pub ty: Type,
@@ -37,7 +44,7 @@ impl TypedExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     /// Integer literal
     Int(i64),
@@ -59,14 +66,14 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Neg,         // -
     Not,         // !
     BitNegation, // ~
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
     // Arithmetic
     Add,

@@ -1,11 +1,9 @@
-mod action;
-mod instructions;
-mod opcode;
-mod output;
-mod step_template;
-
-use crate::instructions::OpcodeToOutput;
 use std::{fs::OpenOptions, io::Write};
+
+use opcode_gen::{
+    instructions::{self, OpcodeToOutput},
+    opcode::addr_to_opcode,
+};
 
 fn write_contents_logisim(data: &(Vec<u8>, Vec<u8>)) -> std::io::Result<()> {
     let mut rom0_file = OpenOptions::new()
@@ -62,7 +60,7 @@ fn main() -> std::io::Result<()> {
     let rom_data: (Vec<_>, Vec<_>) = (0..(1 << 17))
         .into_iter()
         .map(|i| {
-            let opcode = opcode::addr_to_opcode(i);
+            let opcode = addr_to_opcode(i);
             let data = istr_set.to_output(opcode).get_output_data();
             (data as u8, (data >> 8) as u8)
         })

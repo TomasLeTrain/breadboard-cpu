@@ -4,6 +4,7 @@ mod istr_utils;
 mod istr_writer;
 mod register_defs;
 
+pub use defs::{AddressRegister, Register};
 pub use istr_utils::{InstructionImpl, OpcodeToOutput};
 
 use crate::instructions::{
@@ -51,8 +52,8 @@ pub fn build_all_instructions() -> IstrSet {
     for (istr, addr_reg) in addr_reg_iters {
         // sp variant less common, place on extended to save simple slots
         match addr_reg {
-            defs::AddressRegisterEnum::Mar => writer.place_simple(istr).unwrap(),
-            defs::AddressRegisterEnum::Sp => writer.place_extended(istr).unwrap(),
+            defs::AddressRegister::Mar => writer.place_simple(istr).unwrap(),
+            defs::AddressRegister::Sp => writer.place_extended(istr).unwrap(),
         }
     }
 

@@ -4,10 +4,12 @@ pub enum Type {
     Int,
     /// Boolean type
     Bool,
-    /// Unit type (for statements with no value)
     Unit,
     String,
     Character,
-    /// Unknown type (for type inference)
+    Register,
+    AddressRegister,
+    Address,
+    /// Unknown type
     Unknown,
 }

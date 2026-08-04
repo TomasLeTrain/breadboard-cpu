@@ -109,15 +109,15 @@ impl<I> Single<I> {
     }
 }
 
-pub struct VramInstruction {
+pub struct VramInstructionTemplate {
     // vram is active on odd numbered instructions (0 indexed)
-    pub active_even: SimpleInstruction,
+    pub active_even: NamedInstructionTemplate,
     // vram is active on even numbered instructions (0 indexed)
-    pub active_odd: SimpleInstruction,
+    pub active_odd: NamedInstructionTemplate,
     pub name: String,
 }
 
-impl OpcodeToOutput for VramInstruction {
+impl OpcodeToOutput for VramInstructionTemplate {
     fn to_output(&self, opcode: Opcode) -> Output {
         let step = opcode.step as usize;
         let vram_active = opcode.not_vram_active as usize;
@@ -139,13 +139,13 @@ impl OpcodeToOutput for VramInstruction {
     }
 }
 
-pub struct SimpleInstruction {
+pub struct NamedInstructionTemplate {
     pub istr: IstrTemplate,
     pub name: String,
 }
 
 // where the chain ends for simple instructions
-impl OpcodeToOutput for SimpleInstruction {
+impl OpcodeToOutput for NamedInstructionTemplate {
     fn to_output(&self, opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
@@ -164,8 +164,8 @@ impl OpcodeToOutput for SimpleInstruction {
 }
 
 pub enum InstructionImpl {
-    Simple(SimpleInstruction),
-    Vram(VramInstruction),
+    Simple(NamedInstructionTemplate),
+    Vram(VramInstructionTemplate),
 }
 
 impl std::fmt::Display for InstructionImpl {

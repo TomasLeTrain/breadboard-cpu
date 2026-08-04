@@ -123,7 +123,7 @@ pub fn flag_select_filled(istr_temp: &[StepTemplate]) -> bool {
     true
 }
 
-fn replace_addr0(istr_temp: &mut [StepTemplate], reg: &impl AddressRegister) {
+fn replace_addr0(istr_temp: &mut [StepTemplate], reg: &impl AddressRegisterTrait) {
     replace_action(istr_temp, Addr0HiBout, reg.hi().bout());
     replace_action(istr_temp, Addr0HiWrite, reg.hi().write());
     replace_action(istr_temp, Addr0LoBout, reg.lo().bout());
@@ -131,7 +131,7 @@ fn replace_addr0(istr_temp: &mut [StepTemplate], reg: &impl AddressRegister) {
     replace_action(istr_temp, Addr0Out, reg.addr());
 }
 
-fn replace_addr1(istr_temp: &mut [StepTemplate], reg: &impl AddressRegister) {
+fn replace_addr1(istr_temp: &mut [StepTemplate], reg: &impl AddressRegisterTrait) {
     replace_action(istr_temp, Addr1HiBout, reg.hi().bout());
     replace_action(istr_temp, Addr1HiWrite, reg.hi().write());
     replace_action(istr_temp, Addr1LoBout, reg.lo().bout());
@@ -139,7 +139,7 @@ fn replace_addr1(istr_temp: &mut [StepTemplate], reg: &impl AddressRegister) {
     replace_action(istr_temp, Addr1Out, reg.addr());
 }
 
-impl AddressRegisterEnum {
+impl AddressRegister {
     pub fn fill_addr_reg0(&self, istr_temp: &mut [StepTemplate]) {
         match self.to_reg_impl() {
             AddressRegisterImpl::Mar(mar_register) => replace_addr0(istr_temp, mar_register),
@@ -277,29 +277,29 @@ impl Register {
 }
 
 #[derive(PartialEq, Clone)]
-pub enum AddressRegisterEnum {
+pub enum AddressRegister {
     Mar,
     Sp,
 }
 
-impl AddressRegisterEnum {
+impl AddressRegister {
     pub fn name(&self) -> &str {
         match self {
-            AddressRegisterEnum::Mar => "MAR",
-            AddressRegisterEnum::Sp => "SP",
+            AddressRegister::Mar => "MAR",
+            AddressRegister::Sp => "SP",
         }
     }
 
     pub fn to_reg_impl(&self) -> AddressRegisterImpl<'_> {
         match self {
-            AddressRegisterEnum::Mar => AddressRegisterImpl::Mar(&MAR),
-            AddressRegisterEnum::Sp => AddressRegisterImpl::Sp(&SP),
+            AddressRegister::Mar => AddressRegisterImpl::Mar(&MAR),
+            AddressRegister::Sp => AddressRegisterImpl::Sp(&SP),
         }
     }
 
-    pub fn iterator() -> std::slice::Iter<'static, AddressRegisterEnum> {
-        static ALL_REGISTERS: [AddressRegisterEnum; 2] =
-            [AddressRegisterEnum::Mar, AddressRegisterEnum::Sp];
+    pub fn iterator() -> std::slice::Iter<'static, AddressRegister> {
+        static ALL_REGISTERS: [AddressRegister; 2] =
+            [AddressRegister::Mar, AddressRegister::Sp];
         ALL_REGISTERS.iter()
     }
 }

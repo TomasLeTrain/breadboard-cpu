@@ -138,7 +138,7 @@ pub trait Write {
     fn write(&self) -> Action;
 }
 
-pub trait AddressRegister {
+pub trait AddressRegisterTrait {
     fn hi(&self) -> &(impl Bout + Write);
     fn lo(&self) -> &(impl Bout + Write);
     fn addr(&self) -> Action;
@@ -168,7 +168,7 @@ impl Write for WriteRegister {
     }
 }
 
-impl AddressRegister for PcRegister {
+impl AddressRegisterTrait for PcRegister {
     fn hi(&self) -> &(impl Bout + Write) {
         &self.hi
     }
@@ -180,7 +180,7 @@ impl AddressRegister for PcRegister {
     }
 }
 
-impl AddressRegister for SpRegister {
+impl AddressRegisterTrait for SpRegister {
     fn hi(&self) -> &(impl Bout + Write) {
         &self.hi
     }
@@ -192,7 +192,7 @@ impl AddressRegister for SpRegister {
     }
 }
 
-impl AddressRegister for MarRegister {
+impl AddressRegisterTrait for MarRegister {
     fn hi(&self) -> &(impl Bout + Write) {
         &self.hi
     }
