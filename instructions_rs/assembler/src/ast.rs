@@ -5,7 +5,6 @@ pub type Program = Vec<Statement>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
-    /// Class definition
     Label {
         name: String,
     },
@@ -13,14 +12,12 @@ pub enum Statement {
         name: String,
         body: Vec<Statement>,
     },
-    /// Statement (function definition or expression)
     Instruction {
         name: String,
         params: Vec<TypedExpr>,
     },
 }
 
-/// A typed expression: expression + its inferred type
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedExpr {
     pub expr: Expr,
@@ -40,7 +37,6 @@ impl TypedExpr {
     }
 }
 
-/// Expressions in our language
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     /// Integer literal
@@ -51,10 +47,8 @@ pub enum Expr {
     String(String),
     /// Char literal
     Char(u8),
-    /// Variable reference
-    Var(String),
-    /// Self reference (inside methods)
-    SelfRef,
+    /// Identity (could be var, reg, etc.)
+    Identity(String),
     /// Unary operation
     Unary { op: UnaryOp, expr: Box<TypedExpr> },
     /// Binary operation
@@ -63,8 +57,6 @@ pub enum Expr {
         left: Box<TypedExpr>,
         right: Box<TypedExpr>,
     },
-    /// Block
-    Block(Vec<Statement>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -136,7 +136,9 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<TypedExpr, String> {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
             Rule::Literal => parse_literal(primary),
-            Rule::Identifier => Ok(TypedExpr::unknown(Expr::Var(primary.as_str().to_string()))),
+            Rule::Identifier => Ok(TypedExpr::unknown(Expr::Identity(
+                primary.as_str().to_string(),
+            ))),
             Rule::Expr => parse_expr(primary.into_inner()),
             r => Err(format!("Unexpected primary: {:?}", r)),
         })
@@ -205,15 +207,19 @@ fn parse_literal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
         )),
         Rule::String => {
             let s = inner.as_str();
-            println!("s is {s}");
-            // Remove surrounding quotes
+            // removes "" quotes
             Ok(TypedExpr::new(
                 Expr::String(s[1..s.len() - 1].to_string()),
                 Type::String,
             ))
         }
         Rule::Character => {
-            todo!()
+            let s = inner.as_str();
+            let c = unescape(&s[1..s.len() - 1]);
+
+            println!("c is {}", c);
+
+            Ok(TypedExpr::new(Expr::Char(c as u8), Type::Character))
         }
         r => Err(format!("Unexpected literal rule: {:?}", r)),
     }
@@ -228,5 +234,29 @@ fn parse_hexadecimal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
             Type::Int,
         )),
         r => Err(format!("Unexpected hexadecimal rule: {:?}", r)),
+    }
+}
+
+fn unescape(string: &str) -> char {
+    println!("got string {}", string);
+    assert!(string.chars().count() <= 2);
+
+    let mut iter = string.chars();
+
+    let first_char = iter.next().unwrap();
+
+    if first_char == '\\' {
+        let second_char = iter.next().unwrap();
+        match second_char {
+            't' => '\t',
+            'r' => '\r',
+            'n' => '\n',
+            '\'' => '\'',
+            '"' => '"',
+            '\\' => '\\',
+            c => c,
+        }
+    } else {
+        first_char
     }
 }

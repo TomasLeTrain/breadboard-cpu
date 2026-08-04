@@ -9,5 +9,10 @@ fn main() {
 
     let program = parser::parse(&asm_file);
 
-    println!("{:#?}", program);
+    // pretty print the parse error
+    if let Err(e) = program {
+        println!("{}", e);
+    }else{
+        println!("{:#?}", program);
+    }
 }

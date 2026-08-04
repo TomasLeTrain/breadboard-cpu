@@ -5,4 +5,6 @@ cool_label:
 block_label {
 	math x, y ; this is a comment detailing where we jumping to
 	move this, to, that ; this is a comment detailing another thing
+	char_test '\n'
+	string_test "hello world!"
 }
