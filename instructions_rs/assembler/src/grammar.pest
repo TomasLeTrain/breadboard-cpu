@@ -1,10 +1,5 @@
-// Adapted from https://github.com/ehsanmok/create-your-own-lang-with-rust/blob/master/thirdlang/src/grammar.pest
-
 WHITESPACE = _{ " " | "\t" | NEWLINE }
 COMMENT    = _{ ";" ~ (!NEWLINE ~ ANY)* }
-
-// Identifiers (variable/function names)
-Identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Program is a sequence of statements/expressions
 Program = _{ SOI ~ (Statement)* ~ EOI }
@@ -17,40 +12,75 @@ InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
 InstructionLabel      = { Identifier }
 InstructionParameter  = _{  Expr }
 
-LabelStatement = { Identifier ~ ":" }
+// label:
+LabelStatement = { LabelIdentifier ~ ":" }
 
-BlockLabel = { Identifier ~ Block }
+/// label { /* body (statements) */ }
+BlockLabel = { LabelIdentifier ~ Block }
 
-// Function definition: def name(params) { body }
-Function =  { "fn" ~ Identifier ~ Block }
-Params   = _{ Identifier ~ ("," ~ Identifier)* }
+// atomic to avoid having to dig into identifier
+LabelIdentifier = { Identifier }
 
-// Block: { statements }
 Block = { "{" ~ Statement* ~ "}" }
 
-// Expressions (ordered by precedence - lowest to highest)
-Expr = { Comparison }
+// Arithmetic operators
+add = { "+" }
+subtract = { "-" }
+multiply = { "*" }
+divide = { "/" }
+modulo = { "%" }
+power = { "**" }
+
+shift_left = { "<<" }
+shift_right = { ">>" }
+bit_and = { "&" }
+bit_xor = { "^" }
+bit_or = { "|" }
+
 
 // Comparison operators
-Comparison = { Additive ~ (CompOp ~ Additive)* }
-CompOp     = { "<=" | ">=" | "<" | ">" | "==" | "!=" }
+eq = { "==" }
+ne = { "!=" }
+le = { "<=" }  // Must come before "<" to avoid tokenizing "<=" as "<" + "=" in the `infix_op` rule later
+ge = { ">=" }  // Must come before ">" to avoid tokenizing ">=" as ">" + "=" in the `infix_op` rule later
+lt = { "<" }
+gt = { ">" }
 
-// Addition/Subtraction
-Additive = { Multiplicative ~ (AddOp ~ Multiplicative)* }
-AddOp    = { "+" | "-" }
+// Logical operators
+logical_and = { "&&" }
+logical_or = { "||" }
 
-// Multiplication/Division
-Multiplicative = { Unary ~ (MulOp ~ Unary)* }
-MulOp          = { "*" | "/" | "%" }
+// Expression structure for Pratt parser
+Expr = { prefix_op? ~ Primary ~ (infix_op ~ prefix_op? ~ Primary )* }
+
+// All infix operations that the Pratt parser will handle
+infix_op = _{
+    add | subtract | multiply | divide | modulo | power |
+    shift_left | shift_right | bit_and | bit_or |
+    eq | ne | le | ge | lt | gt | logical_and | logical_or
+}
+
+prefix_op = _{ negation | bit_negation | logical_not }
 
 // Unary operators
-Unary   = { UnaryOp ~ Unary | Primary }
-UnaryOp = { "-" | "!" }
+negation = { "-" }
+bit_negation = { "~" }
+logical_not = { "!" }
 
 // Primary expressions
 Primary = _{ Literal | Identifier | "(" ~ Expr ~ ")" }
 
 // Literals
-Literal =  { Bool | Int }
+// Hex must have higher precedence otherwise gets recognized as int
+Literal =  { Bool | Hexadecimal | Int  | String | Character }
+
+Hexadecimal       = { ^"0x" ~ Int }
+
 Int     = @{ ASCII_DIGIT+ }
+
 Bool    = @{ "true" | "false" }
+String = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+Character = @{ "'" ~ ("\\"? ~ ANY) ~ "'" }
+
+// Identifiers (variable/function names)
+Identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }

@@ -27,6 +27,19 @@ pub struct TypedExpr {
     pub ty: Type,
 }
 
+impl TypedExpr {
+    pub fn new(expr: Expr, ty: Type) -> Self {
+        TypedExpr { expr, ty }
+    }
+
+    pub fn unknown(expr: Expr) -> Self {
+        TypedExpr {
+            expr,
+            ty: Type::Unknown,
+        }
+    }
+}
+
 /// Expressions in our language
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -34,6 +47,10 @@ pub enum Expr {
     Int(i64),
     /// Boolean literal
     Bool(bool),
+    /// String literal
+    String(String),
+    /// Char literal
+    Char(u8),
     /// Variable reference
     Var(String),
     /// Self reference (inside methods)
@@ -52,8 +69,9 @@ pub enum Expr {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
-    Neg, // -
-    Not, // !
+    Neg,         // -
+    Not,         // !
+    BitNegation, // ~
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +82,14 @@ pub enum BinaryOp {
     Mul,
     Div,
     Mod,
+    Pow,
+
+    ShiftLeft,
+    ShiftRight,
+    BitAnd,
+    BitXor,
+    BitOr,
+
     // Comparison
     Lt,
     Gt,
@@ -71,4 +97,8 @@ pub enum BinaryOp {
     Ge,
     Eq,
     Ne,
+
+    // bool operations
+    And,
+    Or,
 }
