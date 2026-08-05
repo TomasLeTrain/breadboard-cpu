@@ -120,9 +120,9 @@ impl<'a, I> Single<'a, I> {
 
 pub struct VramInstructionTemplate {
     // vram is active on odd numbered instructions (0 indexed)
-    pub active_even: NamedInstructionTemplate,
+    pub active_even: InstructionTemplate,
     // vram is active on even numbered instructions (0 indexed)
-    pub active_odd: NamedInstructionTemplate,
+    pub active_odd: InstructionTemplate,
     pub name: String,
 }
 
@@ -148,20 +148,17 @@ impl OpcodeToOutput for VramInstructionTemplate {
     }
 }
 
-pub struct NamedInstructionTemplate {
-    pub istr: IstrTemplate,
-    pub name: String,
-}
+pub struct InstructionTemplate(pub IstrTemplateVec);
 
 // where the chain ends for simple instructions
-impl OpcodeToOutput for NamedInstructionTemplate {
+impl OpcodeToOutput for InstructionTemplate {
     fn to_output(&self, opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
-        if self.istr.len() <= step {
+        if self.0.len() <= step {
             Halt.to_output()
         } else {
-            match self.istr[step].to_output() {
+            match self.0[step].to_output() {
                 Ok(result) => result,
                 Err(err) => {
                     eprintln!("Got error on instruction \"{}\": {}", self.name, err);
@@ -173,23 +170,8 @@ impl OpcodeToOutput for NamedInstructionTemplate {
 }
 
 pub enum InstructionImpl {
-    Simple(NamedInstructionTemplate),
+    Simple(InstructionTemplate),
     Vram(VramInstructionTemplate),
-}
-
-// impl std::fmt::Display for InstructionImpl {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.name())
-//     }
-// }
-
-impl InstructionImpl {
-    pub fn name(&self) -> &String {
-        match self {
-            InstructionImpl::Simple(simple_instruction) => &simple_instruction.name,
-            InstructionImpl::Vram(vram_instruction) => &vram_instruction.name,
-        }
-    }
 }
 
 impl OpcodeToOutput for InstructionImpl {

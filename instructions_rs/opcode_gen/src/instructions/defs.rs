@@ -8,7 +8,7 @@ use crate::{
 
 use std::sync::LazyLock;
 
-pub type IstrTemplate = Vec<StepTemplate>;
+pub type IstrTemplateVec = Vec<StepTemplate>;
 
 pub static UNIVERSAL_STEP_0: LazyLock<StepTemplate> =
     LazyLock::new(|| [MEM.bout, PC.addr, IrWrite].into());
@@ -17,7 +17,7 @@ pub static LOAD_IR2: LazyLock<StepTemplate> =
     LazyLock::new(|| [MEM.bout, PC.addr, IR2.write].into());
 
 // FIXME: remove unused first step, make use of new pc.cnt impl
-pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplate> = LazyLock::new(|| {
+pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplateVec> = LazyLock::new(|| {
     vec![
         *UNIVERSAL_STEP_0,
         [PC.cnt].into(),

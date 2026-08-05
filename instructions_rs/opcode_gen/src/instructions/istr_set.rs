@@ -1,8 +1,11 @@
 //! Utils for placing instructions in an instruction set while following given constraints.
 
-use crate::instructions::InstructionImpl;
+use crate::action::Action::*;
 use crate::instructions::instruction::Instruction;
-use crate::instructions::istr_utils::{Extended, InstructionEntry, IstrSet, Single};
+use crate::instructions::istr_utils::{Extended, InstructionEntry, Single};
+use crate::instructions::{InstructionImpl, OpcodeToOutput};
+use crate::opcode::Opcode;
+use crate::output::Output;
 
 use std::error::Error;
 use std::fmt;
@@ -38,7 +41,7 @@ impl<'a> IstrSet<'a> {
         self.istrs.get(idx as usize).unwrap()
     }
 
-    pub fn get_istr_mut(&mut self, idx: u8) -> &'a mut InstructionEntry {
+    pub fn get_istr_mut(&'a mut self, idx: u8) -> &'a mut InstructionEntry {
         self.istrs.get_mut(idx as usize).unwrap()
     }
 

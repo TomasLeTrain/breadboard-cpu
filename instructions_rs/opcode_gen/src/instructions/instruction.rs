@@ -4,26 +4,50 @@ use crate::{
     opcode::InstructionOpcode,
 };
 
-enum Imm {
-    Imm8,
-    ImmAddr,
+pub enum Imm {
+    Byte,
+    Addr,
     None,
+}
+
+pub enum OverrideBehavior {
+    A,
+    B,
+    Mar,
+    Sp,
 }
 
 pub struct Instruction {
     istr_type: InstructionType,
-    opcode: InstructionOpcode,
+    opcode: Option<InstructionOpcode>,
     imm: Imm,
+    overrides: Vec<OverrideBehavior>,
     name: String,
     template: InstructionImpl,
 }
 
 impl Instruction {
+    pub fn new(
+        istr_type: InstructionType,
+        imm: Imm,
+        name: String,
+        template: InstructionImpl,
+    ) -> Self {
+        Instruction {
+            istr_type,
+            name,
+            imm,
+            template,
+            opcode: None,
+            overrides: Vec::new(),
+        }
+    }
+
     fn istr_type(&self) -> &InstructionType {
         &self.istr_type
     }
 
-    fn opcode(&self) -> &InstructionOpcode {
+    fn opcode(&self) -> &Option<InstructionOpcode> {
         &self.opcode
     }
 
@@ -37,6 +61,19 @@ impl Instruction {
 
     fn template(&self) -> &InstructionImpl {
         &self.template
+    }
+
+    fn overrides(&self) -> &[OverrideBehavior] {
+        &self.overrides
+    }
+
+    fn set_opcode(&mut self, opcode: Option<InstructionOpcode>) {
+        self.opcode = opcode;
+    }
+
+    pub fn set_overrides(mut self, overrides: Vec<OverrideBehavior>) -> Self {
+        self.overrides = overrides;
+        self
     }
 }
 
