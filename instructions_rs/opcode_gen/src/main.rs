@@ -54,7 +54,7 @@ fn write_contents_binary(data: &(Vec<u8>, Vec<u8>)) -> std::io::Result<()> {
 }
 
 fn main() -> std::io::Result<()> {
-    let istr_set = instructions::build_all_instructions();
+    let (all_istrs, istr_set) = instructions::build_all_instructions();
     println!("{istr_set}");
 
     let rom_data: (Vec<_>, Vec<_>) = (0..(1 << 17))

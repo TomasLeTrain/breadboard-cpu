@@ -178,7 +178,7 @@ pub enum AddressRegisterImpl<'a> {
     Sp(&'a SpRegister),
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum Register {
     A,
     B,
@@ -276,7 +276,7 @@ impl Register {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum AddressRegister {
     Mar,
     Sp,
@@ -298,14 +298,13 @@ impl AddressRegister {
     }
 
     pub fn iterator() -> std::slice::Iter<'static, AddressRegister> {
-        static ALL_REGISTERS: [AddressRegister; 2] =
-            [AddressRegister::Mar, AddressRegister::Sp];
+        static ALL_REGISTERS: [AddressRegister; 2] = [AddressRegister::Mar, AddressRegister::Sp];
         ALL_REGISTERS.iter()
     }
 }
 
 // in order of associated bits (0 is first, 7 is last)
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum MathIstrTypes {
     SubNoCarry,
     SubCarry,
@@ -374,6 +373,7 @@ impl MathIstrTypes {
 }
 
 // in order of associated bits (0 is first, 7 is last)
+#[derive(Clone, Copy)]
 pub enum OutputFlags {
     Direct,
     Carry,

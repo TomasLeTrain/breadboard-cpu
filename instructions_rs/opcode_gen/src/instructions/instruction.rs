@@ -73,7 +73,7 @@ impl Instruction {
         self.opcode = opcode;
     }
 
-    pub fn set_overrides(mut self, overrides: Vec<OverrideBehavior>) -> Self {
+    pub fn with_overrides(mut self, overrides: Vec<OverrideBehavior>) -> Self {
         self.overrides = overrides;
         self
     }

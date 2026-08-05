@@ -127,7 +127,6 @@ pub struct VramInstructionTemplate {
     pub active_even: InstructionTemplate,
     // vram is active on even numbered instructions (0 indexed)
     pub active_odd: InstructionTemplate,
-    pub name: String,
 }
 
 impl VramInstructionTemplate {

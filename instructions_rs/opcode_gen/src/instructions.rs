@@ -5,13 +5,16 @@ mod istr_set;
 mod istr_utils;
 mod register_defs;
 
+use std::{rc::Rc, vec::Vec};
+
 pub use defs::{AddressRegister, Register};
 pub use istr_utils::{InstructionImpl, OpcodeToOutput};
 
-use crate::instructions::{instruction_defs::*, istr_set::IstrSet};
+use crate::instructions::{instruction::Instruction, instruction_defs::*, istr_set::IstrSet};
 
-pub fn build_all_instructions() -> IstrSet {
+pub fn build_all_instructions() -> (Vec<Rc<Instruction>>, IstrSet) {
     let mut istr_set = IstrSet::new();
+    let mut all_istrs = Vec::new();
 
     // math types can only exist in specific ranges, need to place those first
     let all_math_istrs_iter = math_reg_instructions()
@@ -28,14 +31,19 @@ pub fn build_all_instructions() -> IstrSet {
         let first_range = (math_range, math_end_range);
         let second_range = (math_range | 1 << 7, math_end_range | 1 << 7);
 
+        let istr = Rc::new(istr);
+        all_istrs.push(Rc::clone(&istr));
+
         istr_set
-            .place_extended_ranges(&istr, &[first_range, second_range])
+            .place_extended_ranges(Rc::clone(&istr), &[first_range, second_range])
             .unwrap();
     }
 
     // has approx 120-ish instructions, need to make extended
     for istr in move_word_reg_instructions().into_iter() {
-        istr_set.place_extended(&istr).unwrap();
+        let istr = Rc::new(istr);
+        all_istrs.push(Rc::clone(&istr));
+        istr_set.place_extended(Rc::clone(&istr)).unwrap();
     }
 
     // set of functions that all abstract over addr_reg. SP variants are placed as extended to save
@@ -48,10 +56,12 @@ pub fn build_all_instructions() -> IstrSet {
         .chain(jmp_instructions());
 
     for (istr, addr_reg) in addr_reg_iters {
+        let istr = Rc::new(istr);
+        all_istrs.push(Rc::clone(&istr));
         // sp variant less common, place on extended to save simple slots
         match addr_reg {
-            defs::AddressRegister::Mar => istr_set.place_simple(istr).unwrap(),
-            defs::AddressRegister::Sp => istr_set.place_extended(istr).unwrap(),
+            defs::AddressRegister::Mar => istr_set.place_simple(Rc::clone(&istr)).unwrap(),
+            defs::AddressRegister::Sp => istr_set.place_extended(Rc::clone(&istr)).unwrap(),
         }
     }
 
@@ -70,8 +80,10 @@ pub fn build_all_instructions() -> IstrSet {
         .chain(shift_instructions());
 
     for istr in simple_istrs {
-        istr_set.place_simple(istr).unwrap();
+        let istr = Rc::new(istr);
+        all_istrs.push(Rc::clone(&istr));
+        istr_set.place_simple(Rc::clone(&istr)).unwrap();
     }
 
-    istr_set
+    (all_istrs, istr_set)
 }
