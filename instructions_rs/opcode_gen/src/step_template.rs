@@ -3,7 +3,7 @@ use std::{error::Error, fmt};
 use crate::{action::Action, output::Output};
 
 // custom max-capacity runtime-size implementation that fits in 8 bytes
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct StepTemplate {
     arr: [Action; 7],
     size: u8,

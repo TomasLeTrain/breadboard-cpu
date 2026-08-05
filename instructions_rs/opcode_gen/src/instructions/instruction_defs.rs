@@ -8,6 +8,7 @@ use crate::instructions::istr_utils::{
 };
 use crate::instructions::register_defs::*;
 
+#[derive(Debug)]
 pub enum InstructionType {
     MoveWordReg {
         dest: Register,

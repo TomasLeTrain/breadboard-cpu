@@ -6,12 +6,14 @@ use crate::{
     output::{self, Output},
 };
 
+#[derive(Debug)]
 pub enum Imm {
     Byte,
     Addr,
     None,
 }
 
+#[derive(Debug)]
 pub enum OverrideBehavior {
     A,
     B,
@@ -19,6 +21,7 @@ pub enum OverrideBehavior {
     Sp,
 }
 
+#[derive(Debug)]
 pub struct Instruction {
     istr_type: InstructionType,
     opcode: Option<InstructionOpcode>,
@@ -69,7 +72,7 @@ impl Instruction {
         &self.overrides
     }
 
-    fn set_opcode(&mut self, opcode: Option<InstructionOpcode>) {
+    pub fn set_opcode(&mut self, opcode: Option<InstructionOpcode>) {
         self.opcode = opcode;
     }
 

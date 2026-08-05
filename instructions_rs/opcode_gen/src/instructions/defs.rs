@@ -178,7 +178,7 @@ pub enum AddressRegisterImpl<'a> {
     Sp(&'a SpRegister),
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Register {
     A,
     B,
@@ -276,7 +276,7 @@ impl Register {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum AddressRegister {
     Mar,
     Sp,
@@ -304,7 +304,7 @@ impl AddressRegister {
 }
 
 // in order of associated bits (0 is first, 7 is last)
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum MathIstrTypes {
     SubNoCarry,
     SubCarry,
@@ -373,7 +373,7 @@ impl MathIstrTypes {
 }
 
 // in order of associated bits (0 is first, 7 is last)
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum OutputFlags {
     Direct,
     Carry,

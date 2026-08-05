@@ -56,6 +56,7 @@ fn write_contents_binary(data: &(Vec<u8>, Vec<u8>)) -> std::io::Result<()> {
 fn main() -> std::io::Result<()> {
     let (all_istrs, istr_set) = instructions::build_all_instructions();
     println!("{istr_set}");
+    println!("constructed instruction set, generating rom data...");
 
     let rom_data: (Vec<_>, Vec<_>) = (0..(1 << 17))
         .into_iter()
@@ -65,6 +66,9 @@ fn main() -> std::io::Result<()> {
             (data as u8, (data >> 8) as u8)
         })
         .unzip();
+
+    println!("generated rom data, writing to files...");
+
     write_contents_binary(&rom_data)?;
     write_contents_logisim(&rom_data)?;
 

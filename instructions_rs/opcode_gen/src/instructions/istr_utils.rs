@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::error::Error;
 use std::rc::Rc;
 
@@ -17,7 +18,7 @@ pub trait OpcodeToOutput {
 
 // TODO: move out hardcoded length to somewhere?
 pub struct Extended<I> {
-    instructions: [Option<Rc<I>>; 16],
+    instructions: [Option<Rc<RefCell<I>>>; 16],
     num_used_istrs: u8,
 }
 
@@ -26,7 +27,7 @@ impl<I: std::fmt::Display> std::fmt::Display for Extended<I> {
         for istr in self.instructions.iter() {
             let name = istr
                 .as_ref()
-                .map_or("Empty".to_string(), |e| Rc::clone(e).to_string());
+                .map_or("Empty".to_string(), |e| e.borrow().to_string());
             write!(f, "{name} | ")?;
         }
 
@@ -46,25 +47,29 @@ impl<I> Extended<I> {
         self.num_used_istrs >= 16
     }
 
-    pub fn get_istr(&self, idx: u8) -> &Option<Rc<I>> {
+    pub fn get_istr(&self, idx: u8) -> &Option<Rc<RefCell<I>>> {
         self.instructions.get(idx as usize).unwrap()
     }
 
-    pub fn push(&mut self, istr: Rc<I>) {
+    /// returns extended_idx at which instruction was placed
+    pub fn push(&mut self, istr: Rc<RefCell<I>>) -> u8 {
         if self.is_full() {
             panic!();
         }
 
-        let available_position = self
+        let (extended_idx, available_position) = self
             .instructions
             .iter_mut()
-            .filter(|e| e.is_none())
+            .enumerate()
+            .filter(|(_i, e)| e.is_none())
             .take(1)
             .next()
             .unwrap();
 
         *available_position = Some(istr);
         self.num_used_istrs += 1;
+
+        extended_idx as u8
     }
 }
 
@@ -83,7 +88,7 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
         opcode.step -= extended_prelude.len() as u8;
 
         if let Some(istr) = self.get_istr(opcode.ir2) {
-            istr.to_output(opcode)
+            istr.borrow().to_output(opcode)
         } else {
             Halt.to_output()
         }
@@ -91,12 +96,12 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
 }
 
 pub struct Single<I> {
-    instruction: Rc<I>,
+    instruction: Rc<RefCell<I>>,
 }
 
 impl<I: std::fmt::Display> std::fmt::Display for Single<I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.instruction)
+        write!(f, "{}", self.instruction.borrow())
     }
 }
 
@@ -112,16 +117,17 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
 
         opcode.step -= single_prelude.len() as u8;
 
-        self.instruction.to_output(opcode)
+        self.instruction.borrow().to_output(opcode)
     }
 }
 
 impl<I> Single<I> {
-    pub fn new(istr: Rc<I>) -> Self {
+    pub fn new(istr: Rc<RefCell<I>>) -> Self {
         Self { instruction: istr }
     }
 }
 
+#[derive(Debug)]
 pub struct VramInstructionTemplate {
     // vram is active on odd numbered instructions (0 indexed)
     pub active_even: InstructionTemplate,
@@ -151,6 +157,7 @@ impl VramInstructionTemplate {
     }
 }
 
+#[derive(Debug)]
 pub struct InstructionTemplate(pub IstrTemplateVec);
 
 // where the chain ends for simple instructions
@@ -166,6 +173,7 @@ impl InstructionTemplate {
     }
 }
 
+#[derive(Debug)]
 pub enum InstructionImpl {
     Simple(InstructionTemplate),
     Vram(VramInstructionTemplate),

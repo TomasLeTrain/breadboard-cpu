@@ -4,9 +4,10 @@ use crate::action::Action::*;
 use crate::instructions::instruction::Instruction;
 use crate::instructions::istr_utils::{Extended, InstructionEntry, Single};
 use crate::instructions::{InstructionImpl, OpcodeToOutput};
-use crate::opcode::Opcode;
+use crate::opcode::{InstructionOpcode, Opcode};
 use crate::output::Output;
 
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
@@ -107,9 +108,9 @@ impl IstrSet {
     /// * `idx`: ir index
     fn place_extended_idx(
         &mut self,
-        istr: Rc<Instruction>,
+        istr: Rc<RefCell<Instruction>>,
         idx: u8,
-    ) -> Result<(), ExtPlacementError> {
+    ) -> Result<InstructionOpcode, ExtPlacementError> {
         // make sure the idx is available
         self.extended_available(idx)?;
 
@@ -120,21 +121,28 @@ impl IstrSet {
         }
 
         if let InstructionEntry::Extended(extended) = self.get_istr_mut(idx) {
-            extended.push(istr);
-            Ok(())
+            let extended_idx = extended.push(istr);
+            Ok(InstructionOpcode {
+                ir: idx,
+                ir2: Some(extended_idx),
+            })
         } else {
             unreachable!()
         }
     }
 
     // attempts to place simple at specified ir idx
-    fn place_simple_idx(&mut self, istr: Rc<Instruction>, idx: u8) -> Result<(), AllocationError> {
+    fn place_simple_idx(
+        &mut self,
+        istr: Rc<RefCell<Instruction>>,
+        idx: u8,
+    ) -> Result<InstructionOpcode, AllocationError> {
         if !self.simple_available(idx) {
             return Err(AllocationError);
         }
 
         *self.get_istr_mut(idx) = InstructionEntry::Single(Single::new(istr));
-        Ok(())
+        Ok(InstructionOpcode { ir: idx, ir2: None })
     }
 
     /// places given instructions in specified ranges of IR, if possible
@@ -146,15 +154,13 @@ impl IstrSet {
     /// * `ranges`: Inclusive ranges [start, end] of ir indexes where istr is allowed to be placed
     pub fn place_extended_ranges(
         &mut self,
-        istr: Rc<Instruction>,
+        istr: Rc<RefCell<Instruction>>,
         ranges: &[(u8, u8)],
-    ) -> Result<(), FilledRangesError> {
+    ) -> Result<InstructionOpcode, FilledRangesError> {
         for &(start, end) in ranges.iter() {
             for idx in start..=end {
                 if self.extended_available(idx).is_ok() {
-                    // expected to not fail
-                    self.place_extended_idx(istr, idx).unwrap();
-                    return Ok(());
+                    return Ok(self.place_extended_idx(istr, idx).unwrap());
                 }
             }
         }
@@ -163,7 +169,10 @@ impl IstrSet {
 
     // places simple instruction in first available slot
     // if none available returns ?
-    pub fn place_simple(&mut self, istr: Rc<Instruction>) -> Result<(), PlacementError> {
+    pub fn place_simple(
+        &mut self,
+        istr: Rc<RefCell<Instruction>>,
+    ) -> Result<InstructionOpcode, PlacementError> {
         // TODO: move hardcoded values elsewhere
 
         // finds smallest index at which a valid spot is available
@@ -177,15 +186,17 @@ impl IstrSet {
         }
 
         // expected not to fail
-        self.place_simple_idx(istr, self.simple_istr_ptr as u8)
-            .unwrap();
-
-        Ok(())
+        Ok(self
+            .place_simple_idx(istr, self.simple_istr_ptr as u8)
+            .unwrap())
     }
 
     // places extended in first available slot
     // returns none if no spots available
-    pub fn place_extended(&mut self, istr: Rc<Instruction>) -> Result<(), PlacementError> {
+    pub fn place_extended(
+        &mut self,
+        istr: Rc<RefCell<Instruction>>,
+    ) -> Result<InstructionOpcode, PlacementError> {
         // TODO: move hardcoded values elsewhere
 
         // finds smallest index at which a valid spot is available
@@ -203,10 +214,9 @@ impl IstrSet {
         }
 
         // expected not to fail
-        self.place_extended_idx(istr, self.extended_istr_ptr as u8)
-            .unwrap();
-
-        Ok(())
+        Ok(self
+            .place_extended_idx(istr, self.extended_istr_ptr as u8)
+            .unwrap())
     }
 }
 

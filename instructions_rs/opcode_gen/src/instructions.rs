@@ -5,14 +5,17 @@ mod istr_set;
 mod istr_utils;
 mod register_defs;
 
-use std::{rc::Rc, vec::Vec};
+use std::{cell::RefCell, rc::Rc, vec::Vec};
 
 pub use defs::{AddressRegister, Register};
+pub use instruction::Instruction;
+pub use istr_set::IstrSet;
 pub use istr_utils::{InstructionImpl, OpcodeToOutput};
 
-use crate::instructions::{instruction::Instruction, instruction_defs::*, istr_set::IstrSet};
+use crate::instructions::instruction_defs::*;
 
-pub fn build_all_instructions() -> (Vec<Rc<Instruction>>, IstrSet) {
+/// Generates list of instructions and also allocates all opcodes
+pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
     let mut istr_set = IstrSet::new();
     let mut all_istrs = Vec::new();
 
@@ -31,19 +34,24 @@ pub fn build_all_instructions() -> (Vec<Rc<Instruction>>, IstrSet) {
         let first_range = (math_range, math_end_range);
         let second_range = (math_range | 1 << 7, math_end_range | 1 << 7);
 
-        let istr = Rc::new(istr);
+        let istr = Rc::new(RefCell::new(istr));
+
         all_istrs.push(Rc::clone(&istr));
 
-        istr_set
+        let istr_opcode = istr_set
             .place_extended_ranges(Rc::clone(&istr), &[first_range, second_range])
             .unwrap();
+
+        istr.borrow_mut().set_opcode(Some(istr_opcode));
     }
 
     // has approx 120-ish instructions, need to make extended
     for istr in move_word_reg_instructions().into_iter() {
-        let istr = Rc::new(istr);
+        let istr = Rc::new(RefCell::new(istr));
+
         all_istrs.push(Rc::clone(&istr));
-        istr_set.place_extended(Rc::clone(&istr)).unwrap();
+        let istr_opcode = istr_set.place_extended(Rc::clone(&istr)).unwrap();
+        istr.borrow_mut().set_opcode(Some(istr_opcode));
     }
 
     // set of functions that all abstract over addr_reg. SP variants are placed as extended to save
@@ -56,13 +64,17 @@ pub fn build_all_instructions() -> (Vec<Rc<Instruction>>, IstrSet) {
         .chain(jmp_instructions());
 
     for (istr, addr_reg) in addr_reg_iters {
-        let istr = Rc::new(istr);
+        let istr = Rc::new(RefCell::new(istr));
+
         all_istrs.push(Rc::clone(&istr));
+
         // sp variant less common, place on extended to save simple slots
-        match addr_reg {
+        let istr_opcode = match addr_reg {
             defs::AddressRegister::Mar => istr_set.place_simple(Rc::clone(&istr)).unwrap(),
             defs::AddressRegister::Sp => istr_set.place_extended(Rc::clone(&istr)).unwrap(),
-        }
+        };
+
+        istr.borrow_mut().set_opcode(Some(istr_opcode));
     }
 
     // from here on there's enough space for all simple
@@ -80,9 +92,10 @@ pub fn build_all_instructions() -> (Vec<Rc<Instruction>>, IstrSet) {
         .chain(shift_instructions());
 
     for istr in simple_istrs {
-        let istr = Rc::new(istr);
+        let istr = Rc::new(RefCell::new(istr));
         all_istrs.push(Rc::clone(&istr));
-        istr_set.place_simple(Rc::clone(&istr)).unwrap();
+        let istr_opcode = istr_set.place_simple(Rc::clone(&istr)).unwrap();
+        istr.borrow_mut().set_opcode(Some(istr_opcode));
     }
 
     (all_istrs, istr_set)
