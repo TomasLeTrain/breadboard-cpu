@@ -7,10 +7,7 @@ use crate::instructions::istr_utils::{
 };
 use crate::instructions::register_defs::*;
 
-struct Imm8;
-struct ImmAddr;
-
-enum InstructionType {
+pub enum InstructionType {
     MoveWordReg {
         dest: Register,
         origin: Register,
@@ -27,10 +24,8 @@ enum InstructionType {
     },
     MathImm {
         dest: Register,
-        origin: Imm8,
     },
     MathImmReverse {
-        dest: Imm8,
         origin: Register,
     },
 
@@ -41,14 +36,13 @@ enum InstructionType {
     },
 
     PushReg(Register),
-    PushImm(Imm8),
+    PushImm,
 
     PopReg(Register),
     PopAddrReg(AddressRegister),
 
     LdaImmAddr {
         dest: AddressRegister,
-        origin: ImmAddr,
     },
 
     MoveAddrReg {
@@ -86,7 +80,6 @@ enum InstructionType {
 
     StoreWordRegImmAddr {
         origin: Register,
-        dest: ImmAddr,
         scrath_addr_reg: AddressRegister,
     },
 
@@ -102,7 +95,6 @@ enum InstructionType {
 
     JmpImmAddr {
         flag: OutputFlags,
-        addr: ImmAddr,
         scrath_addr_reg: AddressRegister,
     },
 

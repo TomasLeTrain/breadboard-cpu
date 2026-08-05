@@ -1,19 +1,17 @@
 mod defs;
+mod instruction;
 mod instruction_defs;
+mod istr_set;
 mod istr_utils;
-mod istr_writer;
 mod register_defs;
 
 pub use defs::{AddressRegister, Register};
 pub use istr_utils::{InstructionImpl, OpcodeToOutput};
 
-use crate::instructions::{
-    instruction_defs::*, istr_utils::IstrSet, istr_writer::InstructionWriter,
-};
+use crate::instructions::{instruction_defs::*, istr_set::IstrSet};
 
 pub fn build_all_instructions() -> IstrSet {
     let mut istr_set = IstrSet::new();
-    let mut writer = InstructionWriter::new(&mut istr_set);
 
     // math types can only exist in specific ranges, need to place those first
     let all_math_istrs_iter = math_reg_instructions()
@@ -30,14 +28,14 @@ pub fn build_all_instructions() -> IstrSet {
         let first_range = (math_range, math_end_range);
         let second_range = (math_range | 1 << 7, math_end_range | 1 << 7);
 
-        writer
-            .place_extended_ranges(istr, &[first_range, second_range])
+        istr_set
+            .place_extended_ranges(&istr, &[first_range, second_range])
             .unwrap();
     }
 
     // has approx 120-ish instructions, need to make extended
     for istr in move_word_reg_instructions().into_iter() {
-        writer.place_extended(istr).unwrap();
+        istr_set.place_extended(&istr).unwrap();
     }
 
     // set of functions that all abstract over addr_reg. SP variants are placed as extended to save
@@ -52,8 +50,8 @@ pub fn build_all_instructions() -> IstrSet {
     for (istr, addr_reg) in addr_reg_iters {
         // sp variant less common, place on extended to save simple slots
         match addr_reg {
-            defs::AddressRegister::Mar => writer.place_simple(istr).unwrap(),
-            defs::AddressRegister::Sp => writer.place_extended(istr).unwrap(),
+            defs::AddressRegister::Mar => istr_set.place_simple(istr).unwrap(),
+            defs::AddressRegister::Sp => istr_set.place_extended(istr).unwrap(),
         }
     }
 
@@ -72,7 +70,7 @@ pub fn build_all_instructions() -> IstrSet {
         .chain(shift_instructions());
 
     for istr in simple_istrs {
-        writer.place_simple(istr).unwrap();
+        istr_set.place_simple(istr).unwrap();
     }
 
     istr_set

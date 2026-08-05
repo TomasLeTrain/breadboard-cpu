@@ -39,3 +39,9 @@ pub fn addr_to_opcode(addr: u32) -> Opcode {
         not_vram_active,
     }
 }
+
+// one instruction opcode per instruction
+pub struct InstructionOpcode {
+    pub ir: u8,
+    pub ir2: Option<u8>,
+}

@@ -1,19 +1,28 @@
+use std::error::Error;
+
+/// Structures used to represent how instructions are placed in opcodes
 use crate::action::Action::*;
 
 use crate::instructions::defs::*;
+use crate::instructions::instruction::Instruction;
 use crate::opcode::Opcode;
 use crate::output::Output;
 
+/// Trait defining generating an output for some opcode
+pub trait OpcodeToOutput {
+    fn to_output(&self, opcode: Opcode) -> Output;
+}
+
 // TODO: move out hardcoded length to somewhere?
-pub struct Extended<I> {
-    instructions: [Option<I>; 16],
+pub struct Extended<'a, I> {
+    instructions: [Option<&'a I>; 16],
     num_used_istrs: u8,
 }
 
-impl<I: std::fmt::Display> std::fmt::Display for Extended<I> {
+impl<'a, I: std::fmt::Display> std::fmt::Display for Extended<'a, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for istr in self.instructions.iter() {
-            let name = istr.as_ref().map_or("Empty".to_string(), |e| e.to_string());
+            let name = istr.map_or("Empty".to_string(), |e| e.to_string());
             write!(f, "{name} | ")?;
         }
 
@@ -21,7 +30,7 @@ impl<I: std::fmt::Display> std::fmt::Display for Extended<I> {
     }
 }
 
-impl<I> Extended<I> {
+impl<'a, I> Extended<'a, I> {
     pub fn new() -> Self {
         Self {
             instructions: [const { None }; 16],
@@ -33,11 +42,11 @@ impl<I> Extended<I> {
         self.num_used_istrs >= 16
     }
 
-    pub fn get_istr(&self, idx: u8) -> &Option<I> {
+    pub fn get_istr(&self, idx: u8) -> &Option<&'a I> {
         self.instructions.get(idx as usize).unwrap()
     }
 
-    pub fn push(&mut self, istr: I) {
+    pub fn push(&mut self, istr: &'a I) {
         if self.is_full() {
             panic!();
         }
@@ -56,7 +65,7 @@ impl<I> Extended<I> {
 }
 
 // TODO: determine what to do in empty case
-impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
+impl<'a, I: OpcodeToOutput> OpcodeToOutput for Extended<'a, I> {
     fn to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
@@ -77,17 +86,17 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
     }
 }
 
-pub struct Single<I> {
-    instruction: I,
+pub struct Single<'a, I> {
+    instruction: &'a I,
 }
 
-impl<I: std::fmt::Display> std::fmt::Display for Single<I> {
+impl<'a, I: std::fmt::Display> std::fmt::Display for Single<'a, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.instruction)
     }
 }
 
-impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
+impl<'a, I: OpcodeToOutput> OpcodeToOutput for Single<'a, I> {
     fn to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
@@ -103,8 +112,8 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
     }
 }
 
-impl<I> Single<I> {
-    pub fn new(istr: I) -> Self {
+impl<'a, I> Single<'a, I> {
+    pub fn new(istr: &'a I) -> Self {
         Self { instruction: istr }
     }
 }
@@ -168,11 +177,11 @@ pub enum InstructionImpl {
     Vram(VramInstructionTemplate),
 }
 
-impl std::fmt::Display for InstructionImpl {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
+// impl std::fmt::Display for InstructionImpl {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.name())
+//     }
+// }
 
 impl InstructionImpl {
     pub fn name(&self) -> &String {
@@ -192,13 +201,13 @@ impl OpcodeToOutput for InstructionImpl {
     }
 }
 
-pub enum InstructionEntry {
-    Single(Box<Single<InstructionImpl>>),
-    Extended(Box<Extended<InstructionImpl>>),
+pub enum InstructionEntry<'a> {
+    Single(Single<'a, Instruction>),
+    Extended(Box<Extended<'a, Instruction>>),
     Empty,
 }
 
-impl std::fmt::Display for InstructionEntry {
+impl<'a> std::fmt::Display for InstructionEntry<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             InstructionEntry::Single(single) => single.to_string(),
@@ -206,53 +215,5 @@ impl std::fmt::Display for InstructionEntry {
             InstructionEntry::Empty => "Empty".to_string(),
         };
         write!(f, "{name}")
-    }
-}
-
-pub struct IstrSet {
-    istrs: [InstructionEntry; 256],
-}
-
-pub trait OpcodeToOutput {
-    fn to_output(&self, opcode: Opcode) -> Output;
-}
-
-// TODO: determine how to handle empty case
-impl OpcodeToOutput for IstrSet {
-    fn to_output(&self, opcode: Opcode) -> Output {
-        match self.get_istr(opcode.ir) {
-            InstructionEntry::Single(single) => single.to_output(opcode),
-            InstructionEntry::Extended(extended) => extended.to_output(opcode),
-            InstructionEntry::Empty => Halt.to_output(),
-        }
-    }
-}
-
-impl IstrSet {
-    pub fn new() -> IstrSet {
-        IstrSet {
-            istrs: [const { InstructionEntry::Empty }; 256],
-        }
-    }
-
-    pub fn get_istr(&self, idx: u8) -> &InstructionEntry {
-        self.istrs.get(idx as usize).unwrap()
-    }
-
-    pub fn get_istr_mut(&mut self, idx: u8) -> &mut InstructionEntry {
-        self.istrs.get_mut(idx as usize).unwrap()
-    }
-
-    pub fn is_empty(&self, idx: u8) -> bool {
-        matches!(self.get_istr(idx), InstructionEntry::Empty)
-    }
-}
-
-impl std::fmt::Display for IstrSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, istr) in self.istrs.iter().enumerate() {
-            writeln!(f, "{i}: {istr}\n\n")?;
-        }
-        Ok(())
     }
 }
