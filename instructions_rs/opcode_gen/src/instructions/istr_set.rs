@@ -9,16 +9,17 @@ use crate::output::Output;
 
 use std::error::Error;
 use std::fmt;
+use std::rc::Rc;
 
-pub struct IstrSet<'a> {
-    istrs: [InstructionEntry<'a>; 256],
+pub struct IstrSet {
+    istrs: [InstructionEntry; 256],
     // used for writing
     simple_istr_ptr: u16,
     extended_istr_ptr: u16,
 }
 
 // TODO: determine how to handle empty case
-impl<'a> OpcodeToOutput for IstrSet<'a> {
+impl OpcodeToOutput for IstrSet {
     fn to_output(&self, opcode: Opcode) -> Output {
         match self.get_istr(opcode.ir) {
             InstructionEntry::Single(single) => single.to_output(opcode),
@@ -28,7 +29,7 @@ impl<'a> OpcodeToOutput for IstrSet<'a> {
     }
 }
 
-impl<'a> IstrSet<'a> {
+impl IstrSet {
     pub fn new() -> Self {
         IstrSet {
             istrs: [const { InstructionEntry::Empty }; 256],
@@ -41,7 +42,7 @@ impl<'a> IstrSet<'a> {
         self.istrs.get(idx as usize).unwrap()
     }
 
-    pub fn get_istr_mut(&'a mut self, idx: u8) -> &'a mut InstructionEntry {
+    pub fn get_istr_mut(&mut self, idx: u8) -> &mut InstructionEntry {
         self.istrs.get_mut(idx as usize).unwrap()
     }
 
@@ -50,7 +51,7 @@ impl<'a> IstrSet<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for IstrSet<'a> {
+impl std::fmt::Display for IstrSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, istr) in self.istrs.iter().enumerate() {
             writeln!(f, "{i}: {istr}\n\n")?;
@@ -67,14 +68,14 @@ impl<'a> std::fmt::Display for IstrSet<'a> {
 //
 // caller also does not need to worry about the allocation of extended or simple instructions, only
 // in the case the constraints cannot be satisfied (which should crash the program)
-impl<'a> IstrSet<'a> {
+impl IstrSet {
     /// True if can place simple instruction at ir index (i.e. the opcode is empty)
     fn simple_available(&self, idx: u8) -> bool {
         self.is_empty(idx)
     }
 
     /// Allocates an extended instruction at the specified ir index
-    fn allocate_extended_idx(&'a mut self, idx: u8) -> Result<(), AllocationError> {
+    fn allocate_extended_idx(&mut self, idx: u8) -> Result<(), AllocationError> {
         if !self.is_empty(idx) {
             return Err(AllocationError);
         }
@@ -105,8 +106,8 @@ impl<'a> IstrSet<'a> {
     /// * `istr`: Instruction to place
     /// * `idx`: ir index
     fn place_extended_idx(
-        &'a mut self,
-        istr: &'a Instruction,
+        &mut self,
+        istr: Rc<Instruction>,
         idx: u8,
     ) -> Result<(), ExtPlacementError> {
         // make sure the idx is available
@@ -127,11 +128,7 @@ impl<'a> IstrSet<'a> {
     }
 
     // attempts to place simple at specified ir idx
-    fn place_simple_idx(
-        &'a mut self,
-        istr: &'a Instruction,
-        idx: u8,
-    ) -> Result<(), AllocationError> {
+    fn place_simple_idx(&mut self, istr: Rc<Instruction>, idx: u8) -> Result<(), AllocationError> {
         if !self.simple_available(idx) {
             return Err(AllocationError);
         }
@@ -148,8 +145,8 @@ impl<'a> IstrSet<'a> {
     /// * `istr`: Instruction to place
     /// * `ranges`: Inclusive ranges [start, end] of ir indexes where istr is allowed to be placed
     pub fn place_extended_ranges(
-        &'a mut self,
-        istr: &'a Instruction,
+        &mut self,
+        istr: Rc<Instruction>,
         ranges: &[(u8, u8)],
     ) -> Result<(), FilledRangesError> {
         for &(start, end) in ranges.iter() {
@@ -166,7 +163,7 @@ impl<'a> IstrSet<'a> {
 
     // places simple instruction in first available slot
     // if none available returns ?
-    pub fn place_simple(&'a mut self, istr: &'a Instruction) -> Result<(), PlacementError> {
+    pub fn place_simple(&mut self, istr: Rc<Instruction>) -> Result<(), PlacementError> {
         // TODO: move hardcoded values elsewhere
 
         // finds smallest index at which a valid spot is available
@@ -188,7 +185,7 @@ impl<'a> IstrSet<'a> {
 
     // places extended in first available slot
     // returns none if no spots available
-    pub fn place_extended(&'a mut self, istr: &'a Instruction) -> Result<(), PlacementError> {
+    pub fn place_extended(&mut self, istr: Rc<Instruction>) -> Result<(), PlacementError> {
         // TODO: move hardcoded values elsewhere
 
         // finds smallest index at which a valid spot is available

@@ -583,6 +583,7 @@ pub fn pop_addr_reg_instructions() -> Vec<Instruction> {
         [SP.inc, Reset].into(),
     ];
 
+    // TODO: might need a different instruction to be able to differentiate from MAR variant?
     result.push(
         Instruction::new(
             InstructionType::PopAddrReg(AddressRegister::Sp.clone()),
@@ -597,7 +598,7 @@ pub fn pop_addr_reg_instructions() -> Vec<Instruction> {
 }
 
 // mar/sp = imm16
-pub fn lda_imm16_instructions() -> Vec<InstructionImpl> {
+pub fn lda_imm16_instructions() -> Vec<Instruction> {
     let mut result = Vec::new();
 
     let base_template = vec![
@@ -615,11 +616,14 @@ pub fn lda_imm16_instructions() -> Vec<InstructionImpl> {
 
         assert!(addr_reg_filled(&current));
 
-        // result.push(InstructionImpl::Simple(InstructionTemplate(
-        //     current,
-        //     format!("lda {}, imm16", addr_reg.name()),
-        // )));
+        result.push(Instruction::new(
+            InstructionType::PopAddrReg(addr_reg.clone()),
+            Imm::Addr,
+            format!("lda {}, imm16", addr_reg.name()),
+            InstructionImpl::Simple(InstructionTemplate(current)),
+        ));
     }
+
     result
 }
 

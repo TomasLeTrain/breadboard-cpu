@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::rc::Rc;
 
 /// Structures used to represent how instructions are placed in opcodes
 use crate::action::Action::*;
@@ -7,6 +8,7 @@ use crate::instructions::defs::*;
 use crate::instructions::instruction::Instruction;
 use crate::opcode::Opcode;
 use crate::output::Output;
+use crate::step_template::MergingActionsError;
 
 /// Trait defining generating an output for some opcode
 pub trait OpcodeToOutput {
@@ -14,15 +16,17 @@ pub trait OpcodeToOutput {
 }
 
 // TODO: move out hardcoded length to somewhere?
-pub struct Extended<'a, I> {
-    instructions: [Option<&'a I>; 16],
+pub struct Extended<I> {
+    instructions: [Option<Rc<I>>; 16],
     num_used_istrs: u8,
 }
 
-impl<'a, I: std::fmt::Display> std::fmt::Display for Extended<'a, I> {
+impl<I: std::fmt::Display> std::fmt::Display for Extended<I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for istr in self.instructions.iter() {
-            let name = istr.map_or("Empty".to_string(), |e| e.to_string());
+            let name = istr
+                .as_ref()
+                .map_or("Empty".to_string(), |e| Rc::clone(e).to_string());
             write!(f, "{name} | ")?;
         }
 
@@ -30,7 +34,7 @@ impl<'a, I: std::fmt::Display> std::fmt::Display for Extended<'a, I> {
     }
 }
 
-impl<'a, I> Extended<'a, I> {
+impl<I> Extended<I> {
     pub fn new() -> Self {
         Self {
             instructions: [const { None }; 16],
@@ -42,11 +46,11 @@ impl<'a, I> Extended<'a, I> {
         self.num_used_istrs >= 16
     }
 
-    pub fn get_istr(&self, idx: u8) -> &Option<&'a I> {
+    pub fn get_istr(&self, idx: u8) -> &Option<Rc<I>> {
         self.instructions.get(idx as usize).unwrap()
     }
 
-    pub fn push(&mut self, istr: &'a I) {
+    pub fn push(&mut self, istr: Rc<I>) {
         if self.is_full() {
             panic!();
         }
@@ -65,7 +69,7 @@ impl<'a, I> Extended<'a, I> {
 }
 
 // TODO: determine what to do in empty case
-impl<'a, I: OpcodeToOutput> OpcodeToOutput for Extended<'a, I> {
+impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
     fn to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
@@ -86,17 +90,17 @@ impl<'a, I: OpcodeToOutput> OpcodeToOutput for Extended<'a, I> {
     }
 }
 
-pub struct Single<'a, I> {
-    instruction: &'a I,
+pub struct Single<I> {
+    instruction: Rc<I>,
 }
 
-impl<'a, I: std::fmt::Display> std::fmt::Display for Single<'a, I> {
+impl<I: std::fmt::Display> std::fmt::Display for Single<I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.instruction)
     }
 }
 
-impl<'a, I: OpcodeToOutput> OpcodeToOutput for Single<'a, I> {
+impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
     fn to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
@@ -112,8 +116,8 @@ impl<'a, I: OpcodeToOutput> OpcodeToOutput for Single<'a, I> {
     }
 }
 
-impl<'a, I> Single<'a, I> {
-    pub fn new(istr: &'a I) -> Self {
+impl<I> Single<I> {
+    pub fn new(istr: Rc<I>) -> Self {
         Self { instruction: istr }
     }
 }
@@ -126,8 +130,8 @@ pub struct VramInstructionTemplate {
     pub name: String,
 }
 
-impl OpcodeToOutput for VramInstructionTemplate {
-    fn to_output(&self, opcode: Opcode) -> Output {
+impl VramInstructionTemplate {
+    fn to_output(&self, opcode: Opcode) -> Result<Output, MergingActionsError> {
         let step = opcode.step as usize;
         let vram_active = opcode.not_vram_active as usize;
 
@@ -151,20 +155,14 @@ impl OpcodeToOutput for VramInstructionTemplate {
 pub struct InstructionTemplate(pub IstrTemplateVec);
 
 // where the chain ends for simple instructions
-impl OpcodeToOutput for InstructionTemplate {
-    fn to_output(&self, opcode: Opcode) -> Output {
+impl InstructionTemplate {
+    fn to_output(&self, opcode: Opcode) -> Result<Output, MergingActionsError> {
         let step = opcode.step as usize;
 
         if self.0.len() <= step {
-            Halt.to_output()
+            Ok(Halt.to_output())
         } else {
-            match self.0[step].to_output() {
-                Ok(result) => result,
-                Err(err) => {
-                    eprintln!("Got error on instruction \"{}\": {}", self.name, err);
-                    Halt.to_output()
-                }
-            }
+            self.0[step].to_output()
         }
     }
 }
@@ -174,8 +172,8 @@ pub enum InstructionImpl {
     Vram(VramInstructionTemplate),
 }
 
-impl OpcodeToOutput for InstructionImpl {
-    fn to_output(&self, opcode: Opcode) -> Output {
+impl InstructionImpl {
+    pub fn to_output(&self, opcode: Opcode) -> Result<Output, MergingActionsError> {
         match self {
             InstructionImpl::Simple(simple_instruction) => simple_instruction.to_output(opcode),
             InstructionImpl::Vram(vram_instruction) => vram_instruction.to_output(opcode),
@@ -183,13 +181,13 @@ impl OpcodeToOutput for InstructionImpl {
     }
 }
 
-pub enum InstructionEntry<'a> {
-    Single(Single<'a, Instruction>),
-    Extended(Box<Extended<'a, Instruction>>),
+pub enum InstructionEntry {
+    Single(Single<Instruction>),
+    Extended(Box<Extended<Instruction>>),
     Empty,
 }
 
-impl<'a> std::fmt::Display for InstructionEntry<'a> {
+impl std::fmt::Display for InstructionEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             InstructionEntry::Single(single) => single.to_string(),

@@ -1,7 +1,9 @@
 /// public interface for interacting with instructions
 use crate::{
+    action::Action,
     instructions::{InstructionImpl, OpcodeToOutput, instruction_defs::InstructionType},
-    opcode::InstructionOpcode,
+    opcode::{self, InstructionOpcode, Opcode},
+    output::{self, Output},
 };
 
 pub enum Imm {
@@ -78,8 +80,14 @@ impl Instruction {
 }
 
 impl OpcodeToOutput for Instruction {
-    fn to_output(&self, opcode: crate::opcode::Opcode) -> crate::output::Output {
-        self.template.to_output(opcode)
+    fn to_output(&self, opcode: Opcode) -> Output {
+        match self.template.to_output(opcode) {
+            Ok(result) => result,
+            Err(err) => {
+                eprintln!("Got error on instruction \"{}\": {}", self.name, err);
+                Action::Halt.to_output()
+            }
+        }
     }
 }
 
