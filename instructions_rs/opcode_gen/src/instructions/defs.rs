@@ -178,7 +178,7 @@ pub enum AddressRegisterImpl<'a> {
     Sp(&'a SpRegister),
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash)]
 pub enum Register {
     A,
     B,
@@ -276,7 +276,7 @@ impl Register {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash)]
 pub enum AddressRegister {
     Mar,
     Sp,
@@ -304,7 +304,7 @@ impl AddressRegister {
 }
 
 // in order of associated bits (0 is first, 7 is last)
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MathIstrTypes {
     SubNoCarry,
     SubCarry,
@@ -319,18 +319,7 @@ pub enum MathIstrTypes {
 
 impl std::fmt::Display for MathIstrTypes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            MathIstrTypes::SubNoCarry => "sub",
-            MathIstrTypes::SubCarry => "sbb",
-            MathIstrTypes::AddNoCarry => "add",
-            MathIstrTypes::AddCarry => "adc",
-            MathIstrTypes::Not => "not",
-            MathIstrTypes::Xor => "xor",
-            MathIstrTypes::Or => "or",
-            MathIstrTypes::And => "and",
-            MathIstrTypes::Cmp => "cmp",
-        };
-        write!(f, "{name}")
+        write!(f, "{}", self.istr_name())
     }
 }
 
@@ -370,10 +359,24 @@ impl MathIstrTypes {
             MathIstrTypes::And => 7,
         }
     }
+
+    pub fn istr_name(&self) -> &str {
+        match self {
+            MathIstrTypes::SubNoCarry => "sub",
+            MathIstrTypes::SubCarry => "sbb",
+            MathIstrTypes::AddNoCarry => "add",
+            MathIstrTypes::AddCarry => "adc",
+            MathIstrTypes::Not => "not",
+            MathIstrTypes::Xor => "xor",
+            MathIstrTypes::Or => "or",
+            MathIstrTypes::And => "and",
+            MathIstrTypes::Cmp => "cmp",
+        }
+    }
 }
 
 // in order of associated bits (0 is first, 7 is last)
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OutputFlags {
     Direct,
     Carry,

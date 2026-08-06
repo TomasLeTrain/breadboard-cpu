@@ -8,7 +8,7 @@ use crate::instructions::istr_utils::{
 };
 use crate::instructions::register_defs::*;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum InstructionType {
     MoveWordReg {
         dest: Register,
@@ -18,10 +18,12 @@ pub enum InstructionType {
     MoveWordImm(Register),
 
     MathReg {
+        math_type: MathIstrTypes,
         lhs: Register,
         rhs: Register,
     },
     MathImm {
+        math_type: MathIstrTypes,
         reg: Register,
         imm_lhs: bool,
     },
@@ -98,6 +100,165 @@ pub enum InstructionType {
     Inc(AddressRegister),
     Halt,
     Nop,
+}
+
+#[derive(Hash)]
+pub enum ArgumentType {
+    Reg(Register),
+    AddrReg(AddressRegister),
+    Byte,
+    Addr,
+}
+
+/// a way to identify an instruction by how it gets called
+/// Should be unique per instruction
+#[derive(Hash)]
+pub struct InstructionSignature {
+    name: String,
+    arguments: Vec<ArgumentType>,
+}
+
+impl InstructionType {
+    /// get associated instruction name for instruction
+    pub fn istr_name(&self) -> &str {
+        match self {
+            InstructionType::MoveWordReg { .. } | InstructionType::MoveWordImm(_) => "mv",
+            InstructionType::MathReg { math_type, .. }
+            | InstructionType::MathImm { math_type, .. } => math_type.istr_name(),
+            InstructionType::Not(..) | InstructionType::NotReg { .. } => "not",
+            InstructionType::PushReg(..) | InstructionType::PushImm => "push",
+            InstructionType::PopReg(..) | InstructionType::PopAddrReg(..) => "pop",
+            InstructionType::LdaImmAddr(..) => "lda",
+            InstructionType::MoveAddrReg { .. } => "mva",
+            InstructionType::ShiftLeft(_) => "shl",
+            InstructionType::ShiftRight(_) => "shr",
+
+            // lw
+            InstructionType::LoadWordReg { .. }
+            | InstructionType::LoadWordRegImmAddr { .. }
+            | InstructionType::VramRead { .. } => "lw",
+
+            // sw
+            InstructionType::StoreWordReg { .. }
+            | InstructionType::StoreWordRegImmAddr { .. }
+            | InstructionType::VramWrite { .. } => "sw",
+
+            InstructionType::JnzReg { .. } => "jnz",
+            InstructionType::Jmp { flag, .. } | InstructionType::JmpImmAddr { flag, .. } => {
+                flag.get_jump_name()
+            }
+            InstructionType::Dec(_) => "dec",
+            InstructionType::Inc(_) => "inc",
+            InstructionType::Halt => "halt",
+            InstructionType::Nop => "nop",
+        }
+    }
+
+    /// list of arguments (in order from left to right) that the instruction takes
+    pub fn arguments(&self) -> Vec<ArgumentType> {
+        match self {
+            // istr reg, reg
+            InstructionType::MoveWordReg {
+                dest: lhs,
+                origin: rhs,
+            }
+            | InstructionType::NotReg {
+                dest: lhs,
+                origin: rhs,
+            }
+            | InstructionType::MathReg { lhs, rhs, .. } => {
+                vec![ArgumentType::Reg(*lhs), ArgumentType::Reg(*rhs)]
+            }
+
+            // istr reg, imm8
+            InstructionType::MoveWordImm(reg) => vec![ArgumentType::Reg(*reg), ArgumentType::Byte],
+
+            // istr reg, imm8 or istr imm8, reg
+            InstructionType::MathImm { reg, imm_lhs, .. } => {
+                if *imm_lhs {
+                    vec![ArgumentType::Reg(*reg), ArgumentType::Byte]
+                } else {
+                    vec![ArgumentType::Byte, ArgumentType::Reg(*reg)]
+                }
+            }
+
+            // istr reg
+            InstructionType::Not(reg)
+            | InstructionType::PushReg(reg)
+            | InstructionType::ShiftLeft(reg)
+            | InstructionType::ShiftRight(reg)
+            | InstructionType::PopReg(reg) => vec![ArgumentType::Reg(*reg)],
+
+            // istr byte
+            InstructionType::PushImm => vec![ArgumentType::Byte],
+
+            // istr addr_reg, imm_addr
+            InstructionType::LdaImmAddr(addr_reg) => {
+                vec![ArgumentType::AddrReg(*addr_reg), ArgumentType::Addr]
+            }
+
+            // istr addr_reg, addr_reg
+            InstructionType::MoveAddrReg { dest, origin } => {
+                vec![ArgumentType::AddrReg(*dest), ArgumentType::AddrReg(*origin)]
+            }
+
+            // reg, addr_reg
+            InstructionType::JnzReg {
+                origin: reg,
+                addr: addr_reg,
+            }
+            | InstructionType::LoadWordReg {
+                dest: reg,
+                addr: addr_reg,
+            }
+            | InstructionType::VramRead {
+                dest: reg,
+                addr: addr_reg,
+            }
+            | InstructionType::StoreWordReg {
+                origin: reg,
+                dest: addr_reg,
+            }
+            | InstructionType::StoreWordRegImmAddr {
+                origin: reg,
+                scrath_addr_reg: addr_reg,
+            }
+            | InstructionType::VramWrite {
+                origin: reg,
+                addr: addr_reg,
+            } => vec![ArgumentType::Reg(*reg), ArgumentType::AddrReg(*addr_reg)],
+
+            // istr reg, imm8, addr_reg
+            InstructionType::LoadWordRegImmAddr {
+                dest,
+                scratch_addr_reg,
+            } => vec![
+                ArgumentType::Reg(*dest),
+                ArgumentType::Byte,
+                ArgumentType::AddrReg(*scratch_addr_reg),
+            ],
+
+            // istr addr_reg
+            InstructionType::PopAddrReg(addr_reg)
+            | InstructionType::Jmp { addr: addr_reg, .. }
+            | InstructionType::Dec(addr_reg)
+            | InstructionType::Inc(addr_reg) => vec![ArgumentType::AddrReg(*addr_reg)],
+
+            // istr imm_addr
+            InstructionType::JmpImmAddr { .. } => vec![ArgumentType::Addr],
+
+            // istr (no arguments)
+            InstructionType::Halt => vec![],
+            InstructionType::Nop => vec![],
+        }
+    }
+
+    pub fn get_signature(&self) -> InstructionSignature {
+        InstructionSignature {
+            name: self.istr_name().to_string(),
+            arguments: self.arguments(),
+        }
+    }
 }
 
 // move register to register (reg0 = reg1)
@@ -1039,6 +1200,7 @@ pub fn math_imm_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                 result.push((
                     Instruction::new(
                         InstructionType::MathImm {
+                            math_type: *math_type,
                             reg: reg.clone(),
                             imm_lhs,
                         },
@@ -1139,6 +1301,7 @@ pub fn math_reg_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                 result.push((
                     Instruction::new(
                         InstructionType::MathReg {
+                            math_type: *math_type,
                             lhs: reg0.clone(),
                             rhs: reg1.clone(),
                         },
@@ -1194,14 +1357,14 @@ pub fn jnz_reg_instructions() -> Vec<(Instruction, AddressRegister)> {
             result.push((
                 Instruction::new(
                     InstructionType::JnzReg {
-                        origin: reg.clone(),
-                        addr: addr_reg.clone(),
+                        origin: *reg,
+                        addr: *addr_reg,
                     },
                     Imm::None,
                     format!("jnz {}, {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ),
-                addr_reg.clone(),
+                *addr_reg,
             ));
         }
     }

@@ -48,27 +48,27 @@ impl Instruction {
         }
     }
 
-    fn istr_type(&self) -> &InstructionType {
+    pub fn istr_type(&self) -> &InstructionType {
         &self.istr_type
     }
 
-    fn opcode(&self) -> &Option<InstructionOpcode> {
+    pub fn opcode(&self) -> &Option<InstructionOpcode> {
         &self.opcode
     }
 
-    fn imm(&self) -> &Imm {
+    pub fn imm(&self) -> &Imm {
         &self.imm
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn template(&self) -> &InstructionImpl {
+    pub fn template(&self) -> &InstructionImpl {
         &self.template
     }
 
-    fn overrides(&self) -> &[OverrideBehavior] {
+    pub fn overrides(&self) -> &[OverrideBehavior] {
         &self.overrides
     }
 

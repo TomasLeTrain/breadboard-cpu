@@ -9,10 +9,12 @@ use std::{cell::RefCell, rc::Rc, vec::Vec};
 
 pub use defs::{AddressRegister, Register};
 pub use instruction::Instruction;
+pub use instruction_defs::InstructionType;
 pub use istr_set::IstrSet;
 pub use istr_utils::{InstructionImpl, OpcodeToOutput};
 
-use crate::instructions::instruction_defs::*;
+// import all the instruction funcs
+use instruction_defs::*;
 
 /// Generates list of instructions and also allocates all opcodes
 pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
