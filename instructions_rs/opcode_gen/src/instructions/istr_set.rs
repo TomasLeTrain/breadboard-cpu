@@ -1,9 +1,9 @@
 //! Utils for placing instructions in an instruction set while following given constraints.
 
 use crate::action::Action::*;
+use crate::instructions::OpcodeToOutput;
 use crate::instructions::instruction::Instruction;
 use crate::instructions::istr_utils::{Extended, InstructionEntry, Single};
-use crate::instructions::{InstructionImpl, OpcodeToOutput};
 use crate::opcode::{InstructionOpcode, Opcode};
 use crate::output::Output;
 
@@ -21,10 +21,10 @@ pub struct IstrSet {
 
 // TODO: determine how to handle empty case
 impl OpcodeToOutput for IstrSet {
-    fn to_output(&self, opcode: Opcode) -> Output {
+    fn opcode_to_output(&self, opcode: Opcode) -> Output {
         match self.get_istr(opcode.ir) {
-            InstructionEntry::Single(single) => single.to_output(opcode),
-            InstructionEntry::Extended(extended) => extended.to_output(opcode),
+            InstructionEntry::Single(single) => single.opcode_to_output(opcode),
+            InstructionEntry::Extended(extended) => extended.opcode_to_output(opcode),
             InstructionEntry::Empty => Halt.to_output(),
         }
     }
@@ -49,6 +49,12 @@ impl IstrSet {
 
     pub fn is_empty(&self, idx: u8) -> bool {
         matches!(self.get_istr(idx), InstructionEntry::Empty)
+    }
+}
+
+impl Default for IstrSet {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

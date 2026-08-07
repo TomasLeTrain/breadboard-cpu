@@ -54,7 +54,7 @@ fn write_contents_binary(data: &(Vec<u8>, Vec<u8>)) -> std::io::Result<()> {
 }
 
 fn main() -> std::io::Result<()> {
-    let (all_istrs, istr_set) = instructions::build_all_instructions();
+    let (_all_istrs, istr_set) = instructions::build_all_instructions();
     println!("{istr_set}");
     println!("constructed instruction set, generating rom data...");
 
@@ -62,7 +62,7 @@ fn main() -> std::io::Result<()> {
         .into_iter()
         .map(|i| {
             let opcode = addr_to_opcode(i);
-            let data = istr_set.to_output(opcode).get_output_data();
+            let data = istr_set.opcode_to_output(opcode).get_output_data();
             (data as u8, (data >> 8) as u8)
         })
         .unzip();

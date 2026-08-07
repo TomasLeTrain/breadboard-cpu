@@ -289,8 +289,8 @@ pub fn move_word_reg_instructions() -> Vec<Instruction> {
 
             result.push(Instruction::new(
                 InstructionType::MoveWordReg {
-                    dest: reg0.clone(),
-                    origin: reg1.clone(),
+                    dest: *reg0,
+                    origin: *reg1,
                 },
                 Imm::None,
                 format!("mv {}, {}", reg0.name(), reg1.name()),
@@ -332,7 +332,7 @@ pub fn move_word_imm_instructions() -> Vec<Instruction> {
         assert!(all_regs_filled(&current));
 
         result.push(Instruction::new(
-            InstructionType::MoveWordImm(reg.clone()),
+            InstructionType::MoveWordImm(*reg),
             Imm::Byte,
             format!("mv {}, imm8", reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
@@ -385,14 +385,14 @@ pub fn lw_template_addr_reg_instructions() -> Vec<(Instruction, AddressRegister)
             result.push((
                 Instruction::new(
                     InstructionType::LoadWordReg {
-                        dest: reg.clone(),
-                        addr: addr_reg.clone(),
+                        dest: *reg,
+                        addr: *addr_reg,
                     },
                     Imm::None,
                     format!("lw {}, mem[{}]", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ),
-                addr_reg.clone(),
+                *addr_reg,
             ));
         }
     }
@@ -458,14 +458,14 @@ pub fn lw_template_imm16_instructions() -> Vec<(Instruction, AddressRegister)> {
             result.push((
                 Instruction::new(
                     InstructionType::LoadWordRegImmAddr {
-                        dest: reg.clone(),
-                        scratch_addr_reg: addr_reg.clone(),
+                        dest: *reg,
+                        scratch_addr_reg: *addr_reg,
                     },
                     Imm::Addr,
                     format!("lw {}, mem[imm16], {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ),
-                addr_reg.clone(),
+                *addr_reg,
             ));
         }
     }
@@ -537,27 +537,27 @@ pub fn sw_instructions() -> Vec<(Instruction, AddressRegister)> {
                     result.push((
                         Instruction::new(
                             InstructionType::StoreWordRegImmAddr {
-                                origin: reg.clone(),
-                                scrath_addr_reg: addr_reg.clone(),
+                                origin: *reg,
+                                scrath_addr_reg: *addr_reg,
                             },
                             Imm::Addr,
                             format!("sw {}, mem[imm16], {}", reg.name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
-                        addr_reg.clone(),
+                        *addr_reg,
                     ));
                 } else {
                     result.push((
                         Instruction::new(
                             InstructionType::StoreWordReg {
-                                origin: reg.clone(),
-                                dest: addr_reg.clone(),
+                                origin: *reg,
+                                dest: *addr_reg,
                             },
                             Imm::Addr,
                             format!("sw {}, mem[{}]", reg.name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
-                        addr_reg.clone(),
+                        *addr_reg,
                     ));
                 }
             }
@@ -604,7 +604,7 @@ pub fn push_reg_instructions() -> Vec<Instruction> {
         assert!(all_regs_filled(&current));
 
         result.push(Instruction::new(
-            InstructionType::PushReg(reg.clone()),
+            InstructionType::PushReg(*reg),
             Imm::None,
             format!("push {}", reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
@@ -677,7 +677,7 @@ pub fn pop_reg_instructions() -> Vec<Instruction> {
         assert!(all_regs_filled(&current));
 
         let istr = Instruction::new(
-            InstructionType::PopReg(reg.clone()),
+            InstructionType::PopReg(*reg),
             Imm::None,
             format!("pop {}", reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
@@ -705,7 +705,7 @@ pub fn pop_addr_reg_instructions() -> Vec<Instruction> {
     ];
 
     result.push(Instruction::new(
-        InstructionType::PopAddrReg(AddressRegister::Mar.clone()),
+        InstructionType::PopAddrReg(AddressRegister::Mar),
         Imm::None,
         "pop MAR".to_string(),
         InstructionImpl::Simple(InstructionTemplate(sp_to_mar)),
@@ -722,7 +722,7 @@ pub fn pop_addr_reg_instructions() -> Vec<Instruction> {
 
     result.push(
         Instruction::new(
-            InstructionType::PopAddrReg(AddressRegister::Sp.clone()),
+            InstructionType::PopAddrReg(AddressRegister::Sp),
             Imm::None,
             "pop SP, MAR".to_string(),
             InstructionImpl::Simple(InstructionTemplate(sp_to_sp_through_mar)),
@@ -773,7 +773,7 @@ pub fn lda_imm16_instructions() -> Vec<Instruction> {
         assert!(addr_reg_filled(&current));
 
         result.push(Instruction::new(
-            InstructionType::LdaImmAddr(addr_reg.clone()),
+            InstructionType::LdaImmAddr(*addr_reg),
             Imm::Addr,
             format!("lda {}, imm16", addr_reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
@@ -804,8 +804,8 @@ pub fn mv_addr_reg_instructions() -> Vec<Instruction> {
 
             result.push(Instruction::new(
                 InstructionType::MoveAddrReg {
-                    dest: addr_reg0.clone(),
-                    origin: addr_reg1.clone(),
+                    dest: *addr_reg0,
+                    origin: *addr_reg1,
                 },
                 Imm::None,
                 format!("mva {}, {}", addr_reg0.name(), addr_reg1.name()),
@@ -942,8 +942,8 @@ pub fn vram_read_instructions() -> Vec<Instruction> {
 
             result.push(Instruction::new(
                 InstructionType::VramRead {
-                    dest: reg.clone(),
-                    addr: addr_reg.clone(),
+                    dest: *reg,
+                    addr: *addr_reg,
                 },
                 Imm::None,
                 format!("lw {}, vram[{}]", reg.name(), addr_reg.name()),
@@ -999,8 +999,8 @@ pub fn vram_write_instructions() -> Vec<Instruction> {
 
             result.push(Instruction::new(
                 InstructionType::VramWrite {
-                    origin: reg.clone(),
-                    addr: addr_reg.clone(),
+                    origin: *reg,
+                    addr: *addr_reg,
                 },
                 Imm::None,
                 format!("sw {}, vram[{}]", reg.name(), addr_reg.name()),
@@ -1042,11 +1042,12 @@ pub fn not_instructions() -> Vec<(Instruction, MathIstrTypes)> {
 
         result.push((
             Instruction::new(
-                InstructionType::Not(reg.clone()),
+                InstructionType::Not(*reg),
                 Imm::None,
                 format!("not {}", reg.name()),
                 InstructionImpl::Simple(InstructionTemplate(current)),
-            ),
+            )
+            .with_overrides(vec![OverrideBehavior::Flag]),
             MathIstrTypes::Not,
         ));
     }
@@ -1095,13 +1096,14 @@ pub fn not_reg_instructions() -> Vec<(Instruction, MathIstrTypes)> {
             result.push((
                 Instruction::new(
                     InstructionType::NotReg {
-                        dest: reg0.clone(),
-                        origin: reg1.clone(),
+                        dest: *reg0,
+                        origin: *reg1,
                     },
                     Imm::None,
                     format!("not {}, {}", reg0.name(), reg1.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
-                ),
+                )
+                .with_overrides(vec![OverrideBehavior::Flag]),
                 MathIstrTypes::Not,
             ));
         }
@@ -1201,14 +1203,15 @@ pub fn math_imm_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                     Instruction::new(
                         InstructionType::MathImm {
                             math_type: *math_type,
-                            reg: reg.clone(),
+                            reg: *reg,
                             imm_lhs,
                         },
                         Imm::Byte,
                         name,
                         InstructionImpl::Simple(InstructionTemplate(current)),
-                    ),
-                    math_type.clone(),
+                    )
+                    .with_overrides(vec![OverrideBehavior::Flag]),
+                    *math_type,
                 ));
             }
         }
@@ -1302,14 +1305,15 @@ pub fn math_reg_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                     Instruction::new(
                         InstructionType::MathReg {
                             math_type: *math_type,
-                            lhs: reg0.clone(),
-                            rhs: reg1.clone(),
+                            lhs: *reg0,
+                            rhs: *reg1,
                         },
                         Imm::None,
                         format!("{} {}, {}", math_type, reg0.name(), reg1.name()),
                         InstructionImpl::Simple(InstructionTemplate(current)),
-                    ),
-                    math_type.clone(),
+                    )
+                    .with_overrides(vec![OverrideBehavior::Flag]),
+                    *math_type,
                 ));
             }
         }
@@ -1363,7 +1367,8 @@ pub fn jnz_reg_instructions() -> Vec<(Instruction, AddressRegister)> {
                     Imm::None,
                     format!("jnz {}, {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
-                ),
+                )
+                .with_overrides(vec![OverrideBehavior::Flag]),
                 *addr_reg,
             ));
         }
@@ -1420,7 +1425,7 @@ pub fn jmp_instructions() -> Vec<(Instruction, AddressRegister)> {
                             format!("{} imm16, {}", flag.get_jump_name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
-                        addr_reg.clone(),
+                        *addr_reg,
                     ));
                 } else {
                     result.push((
@@ -1433,7 +1438,7 @@ pub fn jmp_instructions() -> Vec<(Instruction, AddressRegister)> {
                             format!("{} {}", flag.get_jump_name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
-                        addr_reg.clone(),
+                        *addr_reg,
                     ));
                 };
             }

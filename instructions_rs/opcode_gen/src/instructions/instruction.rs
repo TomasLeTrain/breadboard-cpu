@@ -1,9 +1,9 @@
 /// public interface for interacting with instructions
 use crate::{
     action::Action,
-    instructions::{InstructionImpl, OpcodeToOutput, instruction_defs::InstructionType},
-    opcode::{self, InstructionOpcode, Opcode},
-    output::{self, Output},
+    instructions::{InstructionImpl, instruction_defs::InstructionType},
+    opcode::{InstructionOpcode, Opcode},
+    output::Output,
 };
 
 #[derive(Debug)]
@@ -13,12 +13,14 @@ pub enum Imm {
     None,
 }
 
+/// Possible registers that can get overwritten by instructions
 #[derive(Debug)]
 pub enum OverrideBehavior {
     A,
     B,
     Mar,
     Sp,
+    Flag,
 }
 
 #[derive(Debug)]
@@ -82,8 +84,10 @@ impl Instruction {
     }
 }
 
-impl OpcodeToOutput for Instruction {
-    fn to_output(&self, opcode: Opcode) -> Output {
+impl Instruction {
+    /// at this point the step from opcode should be modified to include the prelude
+    /// trait not implemented to make this more clear
+    pub fn template_to_output(&self, opcode: Opcode) -> Output {
         match self.template.to_output(opcode) {
             Ok(result) => result,
             Err(err) => {

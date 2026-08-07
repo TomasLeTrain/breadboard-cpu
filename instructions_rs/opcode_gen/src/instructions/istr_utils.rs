@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::error::Error;
 use std::rc::Rc;
 
 /// Structures used to represent how instructions are placed in opcodes
@@ -13,16 +12,20 @@ use crate::step_template::MergingActionsError;
 
 /// Trait defining generating an output for some opcode
 pub trait OpcodeToOutput {
-    fn to_output(&self, opcode: Opcode) -> Output;
+    fn opcode_to_output(&self, opcode: Opcode) -> Output;
+}
+
+pub trait OpcodeToInstruction {
+    fn opcode_to_instruction(&self, opcode: Opcode) -> Option<&Rc<RefCell<Instruction>>>;
 }
 
 // TODO: move out hardcoded length to somewhere?
-pub struct Extended<I> {
-    instructions: [Option<Rc<RefCell<I>>>; 16],
+pub struct Extended {
+    instructions: [Option<Rc<RefCell<Instruction>>>; 16],
     num_used_istrs: u8,
 }
 
-impl<I: std::fmt::Display> std::fmt::Display for Extended<I> {
+impl std::fmt::Display for Extended {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for istr in self.instructions.iter() {
             let name = istr
@@ -35,7 +38,7 @@ impl<I: std::fmt::Display> std::fmt::Display for Extended<I> {
     }
 }
 
-impl<I> Extended<I> {
+impl Extended {
     pub fn new() -> Self {
         Self {
             instructions: [const { None }; 16],
@@ -47,12 +50,12 @@ impl<I> Extended<I> {
         self.num_used_istrs >= 16
     }
 
-    pub fn get_istr(&self, idx: u8) -> &Option<Rc<RefCell<I>>> {
-        self.instructions.get(idx as usize).unwrap()
+    pub fn get_istr(&self, idx: u8) -> Option<&Rc<RefCell<Instruction>>> {
+        self.instructions.get(idx as usize).unwrap().as_ref()
     }
 
     /// returns extended_idx at which instruction was placed
-    pub fn push(&mut self, istr: Rc<RefCell<I>>) -> u8 {
+    pub fn push(&mut self, istr: Rc<RefCell<Instruction>>) -> u8 {
         if self.is_full() {
             panic!();
         }
@@ -74,8 +77,8 @@ impl<I> Extended<I> {
 }
 
 // TODO: determine what to do in empty case
-impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
-    fn to_output(&self, mut opcode: Opcode) -> Output {
+impl OpcodeToOutput for Extended {
+    fn opcode_to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
         let extended_prelude = [*UNIVERSAL_STEP_0, *UNIVERSAL_STEP_1, *LOAD_IR2];
@@ -88,25 +91,37 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Extended<I> {
         opcode.step -= extended_prelude.len() as u8;
 
         if let Some(istr) = self.get_istr(opcode.ir2) {
-            istr.borrow().to_output(opcode)
+            istr.borrow().template_to_output(opcode)
         } else {
             Halt.to_output()
         }
     }
 }
 
-pub struct Single<I> {
-    instruction: Rc<RefCell<I>>,
+impl OpcodeToInstruction for Extended {
+    fn opcode_to_instruction(&self, opcode: Opcode) -> Option<&Rc<RefCell<Instruction>>> {
+        self.get_istr(opcode.ir2)
+    }
 }
 
-impl<I: std::fmt::Display> std::fmt::Display for Single<I> {
+pub struct Single {
+    instruction: Rc<RefCell<Instruction>>,
+}
+
+impl Single {
+    pub fn new(istr: Rc<RefCell<Instruction>>) -> Self {
+        Self { instruction: istr }
+    }
+}
+
+impl std::fmt::Display for Single {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.instruction.borrow())
     }
 }
 
-impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
-    fn to_output(&self, mut opcode: Opcode) -> Output {
+impl OpcodeToOutput for Single {
+    fn opcode_to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
         let single_prelude = [*UNIVERSAL_STEP_0];
@@ -117,13 +132,13 @@ impl<I: OpcodeToOutput> OpcodeToOutput for Single<I> {
 
         opcode.step -= single_prelude.len() as u8;
 
-        self.instruction.borrow().to_output(opcode)
+        self.instruction.borrow().template_to_output(opcode)
     }
 }
 
-impl<I> Single<I> {
-    pub fn new(istr: Rc<RefCell<I>>) -> Self {
-        Self { instruction: istr }
+impl OpcodeToInstruction for Single {
+    fn opcode_to_instruction(&self, _opcode: Opcode) -> Option<&Rc<RefCell<Instruction>>> {
+        Some(&self.instruction)
     }
 }
 
@@ -189,8 +204,8 @@ impl InstructionImpl {
 }
 
 pub enum InstructionEntry {
-    Single(Single<Instruction>),
-    Extended(Box<Extended<Instruction>>),
+    Single(Single),
+    Extended(Box<Extended>),
     Empty,
 }
 
