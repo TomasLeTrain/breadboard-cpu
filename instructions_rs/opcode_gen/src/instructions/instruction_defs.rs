@@ -102,7 +102,7 @@ pub enum InstructionType {
     Nop,
 }
 
-#[derive(Hash)]
+#[derive(Hash, PartialEq, Debug, Clone, Copy)]
 pub enum ArgumentType {
     Reg(Register),
     AddrReg(AddressRegister),
@@ -112,7 +112,7 @@ pub enum ArgumentType {
 
 /// a way to identify an instruction by how it gets called
 /// Should be unique per instruction
-#[derive(Hash)]
+#[derive(Hash, PartialEq, Debug, Clone)]
 pub struct InstructionSignature {
     name: String,
     arguments: Vec<ArgumentType>,

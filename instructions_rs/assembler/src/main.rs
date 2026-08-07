@@ -2,34 +2,64 @@ mod ast;
 mod parser;
 mod types;
 
-mod comp;
-mod link;
-mod eval;
-
 use std::fs;
 
+use opcode_gen::instructions::{AddressRegister, Register};
+
+use crate::types::{Symbol, Type};
+
 // Structure:
-// - parsing
-//    - parse ast from file
-// - compilation
-//    - find and keep track of local/global symbols(vars and labels)
-//    - generate instructions with expressions to yet be resolved
-//    - typecheck expressions
-// - linking
-//    - give a value to all symbols
-// - (const) evaluation - must happen after linking to make sure all symbols have values
-//    - eval all expressions and symbols
-//    - ensure types are correct
+// ast: parsing
+// typechecked symbols: ast
+//  - traverse ast and find all indentifiers and give them types (register, const, etc.)
+// typechecking: ast and typechecked symbols
+//  - resolve all types in ast
+// instruction signatures: typechecking
+//  - resolve all instruction signatures in ast
+// address allocation: instruction signatures
+//  - allocate addresses based on instruction signatures and address directives
+// labels: address allocation
+//  - resolve values for all labels based on
+// resolving expressions: labels
+//  - eval all expressions and resolve values in ast
+// emitting assembly: resolving expressions
+//  - emit assembly from ast
 
 fn main() {
     let asm_file = fs::read_to_string("src/program.asm").expect("cannot read file");
 
-    let program = parser::parse(&asm_file);
+    let statements = parser::parse(&asm_file);
 
     // pretty print the parse error
-    if let Err(e) = program {
+    if let Err(e) = statements {
         println!("{}", e);
-    } else {
-        println!("{:#?}", program);
+        return;
     }
+
+    let mut statements = statements.unwrap();
+
+    // println!("{:#?}", statements);
+
+    let mut global_symbols = parser::SymbolContext::new();
+
+    // add global symbols reserved for register names and the like
+
+    for reg in Register::iterator() {
+        global_symbols.push(Symbol {
+            name: reg.name().to_string(),
+            symbol_type: Type::Register,
+        });
+    }
+
+    for reg in AddressRegister::iterator() {
+        global_symbols.push(Symbol {
+            name: reg.name().to_string(),
+            symbol_type: Type::AddressRegister,
+        });
+    }
+
+    parser::fill_symbol_types(&mut statements, &mut global_symbols);
+    println!("{:#?}", statements);
+
+    // println!("{:#?}", global_labels);
 }

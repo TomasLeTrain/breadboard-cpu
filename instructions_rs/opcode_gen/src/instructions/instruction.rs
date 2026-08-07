@@ -85,16 +85,13 @@ impl Instruction {
 }
 
 impl Instruction {
-    /// at this point the step from opcode should be modified to include the prelude
-    /// trait not implemented to make this more clear
+    // at this point the step from opcode should be modified to include the prelude
+    // trait not implemented to make this more clear
     pub fn template_to_output(&self, opcode: Opcode) -> Output {
-        match self.template.to_output(opcode) {
-            Ok(result) => result,
-            Err(err) => {
-                eprintln!("Got error on instruction \"{}\": {}", self.name, err);
-                Action::Halt.to_output()
-            }
-        }
+        self.template.to_output(opcode).unwrap_or_else(|err| {
+            eprintln!("Got error on instruction \"{}\": {}", self.name, err);
+            Action::Halt.to_output()
+        })
     }
 }
 

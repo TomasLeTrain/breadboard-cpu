@@ -1,10 +1,11 @@
 use std::sync::LazyLock;
 
 use crate::ast::*;
-use crate::types::Type;
+use crate::types::{Symbol, Type};
 use pest::Parser;
 use pest::iterators::{Pair, Pairs};
 use pest::pratt_parser::{Assoc, Op, PrattParser};
+use std::collections::{HashMap, HashSet};
 
 #[derive(pest_derive::Parser)]
 #[grammar = "grammar.pest"] // relative to src
@@ -115,7 +116,11 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<Statement, String> {
         };
     }
 
-    Ok(Statement::Instruction { name, params })
+    Ok(Statement::Instruction(Instruction {
+        name,
+        params,
+        istr_signature: None,
+    }))
 }
 
 fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<TypedExpr>, String> {
@@ -260,5 +265,127 @@ fn unescape_char(string: &str) -> char {
         }
     } else {
         first_char
+    }
+}
+
+// keeps track of symbols by keeping track of their scope as well
+// allows reusing one context struct through all operations
+pub struct SymbolContext {
+    symbol_stack: Vec<Symbol>,
+    symbols: HashMap<String, Type>,
+}
+
+impl SymbolContext {
+    pub fn new() -> Self {
+        SymbolContext {
+            symbol_stack: Vec::new(),
+            symbols: HashMap::new(),
+        }
+    }
+
+    pub fn push(&mut self, symbol: Symbol) {
+        // TODO: add errors
+        self.symbol_stack.push(symbol.clone());
+        self.symbols.insert(symbol.name, symbol.symbol_type);
+    }
+
+    fn pop(&mut self) {
+        // TODO: turn into errors
+        let popped_symbol = self.symbol_stack.pop().unwrap();
+        self.symbols.remove(&popped_symbol.name).unwrap();
+    }
+
+    fn get(&self, name: &String) -> Option<&Type> {
+        self.symbols.get(name)
+    }
+
+    fn contains(&self, name: &String) -> bool {
+        self.symbols.contains_key(name)
+    }
+}
+
+pub fn fill_symbol_types(statements: &mut Vec<Statement>, symbols: &mut SymbolContext) {
+    // TODO: can turn into label vec to verify poppped values are accurate (if pop returns val)
+    let mut num_labels = 0;
+
+    // first find all labels in the current scope (accessible from anywhere in scope)
+    for statement in statements.iter() {
+        match statement {
+            Statement::Label { name } => {
+                // TODO: ensure not duplicate
+                // push into local scope
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    symbol_type: Type::Label,
+                });
+                num_labels += 1;
+            }
+            _ => (),
+        }
+    }
+
+    for statement in statements.iter_mut() {
+        match statement {
+            Statement::BlockLabel { name, body } => {
+                // TODO: ensure not duplicate
+                // push into local scope
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    symbol_type: Type::Label,
+                });
+
+                // fill labels for block
+                fill_symbol_types(body, symbols);
+
+                // TODO: turn into error
+                // remove from scope
+                symbols.pop();
+            }
+            Statement::Instruction(istr) => fill_symbols_instruction(istr, symbols),
+            _ => (),
+        }
+    }
+
+    for _ in 0..num_labels {
+        symbols.pop();
+    }
+}
+
+/// populates all occurances of symbols in statements
+pub fn fill_symbols(statements: &mut Vec<Statement>, symbols: &SymbolContext) {
+    for statement in statements {
+        match statement {
+            Statement::Instruction(istr) => fill_symbols_instruction(istr, symbols),
+            _ => (),
+        }
+    }
+}
+
+/// populates all occurances of symbols in instruction
+pub fn fill_symbols_instruction(istr: &mut Instruction, symbols: &SymbolContext) {
+    for param in &mut istr.params {
+        fill_symbols_expr(param, symbols);
+    }
+}
+
+/// populates all occurances of symbols in expr
+pub fn fill_symbols_expr(typed_expr: &mut TypedExpr, symbols: &SymbolContext) {
+    match &mut typed_expr.expr {
+        Expr::Identity(name) => {
+            // try and find identity in symbols
+            println!("querying for symbol: {name}");
+            if symbols.contains(name) {
+                // TODO: turn into error
+                assert!(matches!(typed_expr.ty, Type::Unknown));
+                println!("found symbol: {name}");
+                typed_expr.ty = *symbols.get(name).unwrap();
+            }
+        }
+        Expr::Unary { expr, .. } => fill_symbols_expr(expr, symbols),
+        Expr::Binary { left, right, .. } => {
+            fill_symbols_expr(left, symbols);
+            fill_symbols_expr(right, symbols);
+        }
+        _ => (),
     }
 }

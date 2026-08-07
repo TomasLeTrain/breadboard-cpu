@@ -2,27 +2,28 @@ use crate::types::Type;
 
 pub type Program = Vec<Statement>;
 
-struct AddressRegister {}
+use opcode_gen::instructions::InstructionSignature;
 
-use opcode_gen::instructions::Register;
+type Address = u16;
 
-enum Instruction {
-    MvRegReg(Register, Register),
+#[derive(Debug, Clone, PartialEq)]
+pub struct AddressedStatement {
+    statement: Statement,
+    address: Option<Address>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Instruction {
+    pub name: String,
+    pub params: Vec<TypedExpr>,
+    pub istr_signature: Option<InstructionSignature>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
-    Label {
-        name: String,
-    },
-    BlockLabel {
-        name: String,
-        body: Vec<Statement>,
-    },
-    Instruction {
-        name: String,
-        params: Vec<TypedExpr>,
-    },
+    Label { name: String },
+    BlockLabel { name: String, body: Vec<Statement> },
+    Instruction(Instruction),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

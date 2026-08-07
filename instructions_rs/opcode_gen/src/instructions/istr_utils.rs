@@ -15,6 +15,7 @@ pub trait OpcodeToOutput {
     fn opcode_to_output(&self, opcode: Opcode) -> Output;
 }
 
+// TODO: could use for opcode query mode
 pub trait OpcodeToInstruction {
     fn opcode_to_instruction(&self, opcode: Opcode) -> Option<&Rc<RefCell<Instruction>>>;
 }

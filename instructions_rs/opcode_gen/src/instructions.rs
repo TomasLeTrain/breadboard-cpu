@@ -9,7 +9,7 @@ use std::{cell::RefCell, rc::Rc, vec::Vec};
 
 pub use defs::{AddressRegister, Register};
 pub use instruction::Instruction;
-pub use instruction_defs::InstructionType;
+pub use instruction_defs::{InstructionSignature, InstructionType};
 pub use istr_set::IstrSet;
 pub use istr_utils::{InstructionImpl, OpcodeToOutput};
 
