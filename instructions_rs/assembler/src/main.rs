@@ -1,4 +1,5 @@
 mod ast;
+mod istr_resolver;
 mod parser;
 mod types;
 
@@ -12,7 +13,6 @@ use crate::types::{Symbol, Type};
 // ast: parsing
 // typechecked symbols: ast
 //  - traverse ast and find all indentifiers and give them types (register, const, etc.)
-// typechecking: ast and typechecked symbols
 //  - resolve all types in ast
 // instruction signatures: typechecking
 //  - resolve all instruction signatures in ast
@@ -36,9 +36,7 @@ fn main() {
         return;
     }
 
-    let mut statements = statements.unwrap();
-
-    // println!("{:#?}", statements);
+    let mut program = statements.unwrap();
 
     let mut global_symbols = types::SymbolTypeContext::new();
 
@@ -58,7 +56,11 @@ fn main() {
         });
     }
 
-    types::typecheck(&mut statements, &mut global_symbols);
+    types::typecheck(&mut program, &mut global_symbols);
 
-    println!("{:#?}", statements);
+    istr_resolver::resolve_istr_signatures(&mut program);
+
+    // TODO: find the actual instructions based on the signatures
+
+    println!("{:#?}", program);
 }

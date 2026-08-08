@@ -108,6 +108,7 @@ pub enum ArgumentType {
     AddrReg(AddressRegister),
     Byte,
     Addr,
+    GenericImm,
 }
 
 /// a way to identify an instruction by how it gets called
@@ -116,6 +117,12 @@ pub enum ArgumentType {
 pub struct InstructionSignature {
     name: String,
     arguments: Vec<ArgumentType>,
+}
+
+impl InstructionSignature {
+    pub fn new(name: String, arguments: Vec<ArgumentType>) -> Self {
+        InstructionSignature { name, arguments }
+    }
 }
 
 impl InstructionType {
@@ -254,10 +261,7 @@ impl InstructionType {
     }
 
     pub fn get_signature(&self) -> InstructionSignature {
-        InstructionSignature {
-            name: self.istr_name().to_string(),
-            arguments: self.arguments(),
-        }
+        InstructionSignature::new(self.istr_name().to_string(), self.arguments())
     }
 }
 

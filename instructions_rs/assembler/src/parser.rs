@@ -115,11 +115,7 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<Statement, String> {
         };
     }
 
-    Ok(Statement::Instruction(Instruction {
-        name,
-        params,
-        istr_signature: None,
-    }))
+    Ok(Statement::Instruction(AstInstruction::new(name, params)))
 }
 
 fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<TypedExpr>, String> {

@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::types::Type;
 
 pub type Program = Vec<Statement>;
@@ -6,24 +8,35 @@ use opcode_gen::instructions::InstructionSignature;
 
 type Address = u16;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct AddressedStatement {
     statement: Statement,
     address: Option<Address>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Instruction {
+#[derive(Debug, Clone)]
+pub struct AstInstruction {
     pub name: String,
     pub params: Vec<TypedExpr>,
     pub istr_signature: Option<InstructionSignature>,
+    pub instruction: Option<Rc<RefCell<opcode_gen::instructions::Instruction>>>,
+}
+impl AstInstruction {
+    pub fn new(name: String, params: Vec<TypedExpr>) -> Self {
+        AstInstruction {
+            name,
+            params,
+            istr_signature: None,
+            instruction: None,
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     Label { name: String },
     BlockLabel { name: String, body: Vec<Statement> },
-    Instruction(Instruction),
+    Instruction(AstInstruction),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -65,6 +78,16 @@ pub enum Expr {
         left: Box<TypedExpr>,
         right: Box<TypedExpr>,
     },
+}
+
+impl Expr {
+    pub fn as_identity(&self) -> Option<String> {
+        if let Expr::Identity(name) = self {
+            Some(name.clone())
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
