@@ -40,7 +40,7 @@ fn main() {
 
     // println!("{:#?}", statements);
 
-    let mut global_symbols = parser::SymbolContext::new();
+    let mut global_symbols = types::SymbolTypeContext::new();
 
     // add global symbols reserved for register names and the like
 
@@ -58,8 +58,7 @@ fn main() {
         });
     }
 
-    parser::fill_symbol_types(&mut statements, &mut global_symbols);
-    println!("{:#?}", statements);
+    types::typecheck(&mut statements, &mut global_symbols);
 
-    // println!("{:#?}", global_labels);
+    println!("{:#?}", statements);
 }

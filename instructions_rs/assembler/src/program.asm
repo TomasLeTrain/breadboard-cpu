@@ -2,7 +2,7 @@
 
 cool_label:
 	jmp global_scope_label
-	do cool_label
+	do cool_label + 5
 global_scope_label:
 
 block_label {
