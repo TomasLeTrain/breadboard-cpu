@@ -3,11 +3,17 @@ mod istr_resolver;
 mod parser;
 mod types;
 
-use std::fs;
+use std::{collections::HashMap, fs, rc::Rc};
 
-use opcode_gen::instructions::{AddressRegister, Register};
+use opcode_gen::{
+    get_instruction_list,
+    instructions::{AddressRegister, Instruction, Register},
+};
 
-use crate::types::{Symbol, Type};
+use crate::{
+    istr_resolver::gen_instruction_lookup_table,
+    types::{Symbol, Type},
+};
 
 // Structure:
 // ast: parsing
@@ -24,7 +30,6 @@ use crate::types::{Symbol, Type};
 //  - eval all expressions and resolve values in ast
 // emitting assembly: resolving expressions
 //  - emit assembly from ast
-
 fn main() {
     let asm_file = fs::read_to_string("src/program.asm").expect("cannot read file");
 
@@ -58,7 +63,10 @@ fn main() {
 
     types::typecheck(&mut program, &mut global_symbols);
 
-    istr_resolver::resolve_istr_signatures(&mut program);
+    let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
+    let istr_lookup = gen_instruction_lookup_table(&all_istrs);
+
+    istr_resolver::resolve_instructions(&mut program, &istr_lookup);
 
     // TODO: find the actual instructions based on the signatures
 

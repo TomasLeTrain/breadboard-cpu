@@ -19,7 +19,7 @@ pub struct AstInstruction {
     pub name: String,
     pub params: Vec<TypedExpr>,
     pub istr_signature: Option<InstructionSignature>,
-    pub instruction: Option<Rc<RefCell<opcode_gen::instructions::Instruction>>>,
+    pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
 }
 impl AstInstruction {
     pub fn new(name: String, params: Vec<TypedExpr>) -> Self {

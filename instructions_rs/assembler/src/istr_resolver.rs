@@ -1,4 +1,9 @@
-use opcode_gen::instructions::{AddressRegister, ArgumentType, InstructionSignature, Register};
+use std::{collections::HashMap, rc::Rc};
+
+use opcode_gen::{
+    get_instruction_list,
+    instructions::{AddressRegister, ArgumentType, Instruction, InstructionSignature, Register},
+};
 
 use crate::{
     ast::{Statement, TypedExpr},
@@ -9,6 +14,7 @@ fn expr_to_argument_type(expr: &TypedExpr) -> ArgumentType {
     match expr.ty {
         // coerce into generic imm since we dont know which it could be
         Type::Int => ArgumentType::GenericImm,
+
         Type::Register => {
             // TODO: add errors
             let name = expr.expr.as_identity().unwrap();
@@ -17,6 +23,7 @@ fn expr_to_argument_type(expr: &TypedExpr) -> ArgumentType {
                 .unwrap();
             ArgumentType::Reg(*register)
         }
+
         Type::AddressRegister => {
             // TODO: add errors
             let name = expr.expr.as_identity().unwrap();
@@ -25,19 +32,26 @@ fn expr_to_argument_type(expr: &TypedExpr) -> ArgumentType {
                 .unwrap();
             ArgumentType::AddrReg(*register)
         }
-        // coerce into address
+
+        // coerce labels into address
         Type::Label => ArgumentType::Addr,
-        Type::Unknown => todo!(),
+        Type::Addr => ArgumentType::Addr,
+
         // TODO: return error
         _ => todo!(),
     }
+    // ensure the type is generic since lookup table is as well
+    .to_generic()
 }
 
-pub fn resolve_istr_signatures(statements: &mut [Statement]) {
+pub fn resolve_instructions(
+    statements: &mut [Statement],
+    istr_lookup: &HashMap<InstructionSignature, Rc<Instruction>>,
+) {
     for statement in statements {
         match statement {
             Statement::BlockLabel { body, .. } => {
-                resolve_istr_signatures(body);
+                resolve_instructions(body, istr_lookup);
             }
             Statement::Instruction(instruction) => {
                 let param_types: Vec<ArgumentType> = instruction
@@ -50,8 +64,34 @@ pub fn resolve_istr_signatures(statements: &mut [Statement]) {
                     instruction.name.clone(),
                     param_types,
                 ));
+
+                if let Some(found_istr) =
+                    istr_lookup.get(instruction.istr_signature.as_ref().unwrap())
+                {
+                    instruction.instruction = Some(Rc::clone(found_istr));
+                } else {
+                    panic!(
+                        "Instruction with signature not found: {:#?}",
+                        instruction.istr_signature
+                    )
+                }
             }
             _ => (),
         }
     }
+}
+
+pub fn gen_instruction_lookup_table(
+    istrs: &Vec<Rc<Instruction>>,
+) -> HashMap<InstructionSignature, Rc<Instruction>> {
+    let mut res = HashMap::new();
+
+    for istr in istrs {
+        res.insert(
+            istr.istr_type().get_signature().to_generic(),
+            Rc::clone(istr),
+        );
+    }
+
+    res
 }

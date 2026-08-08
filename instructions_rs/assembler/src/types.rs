@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{BinaryOp, Expr, AstInstruction, Statement, TypedExpr, UnaryOp};
+use crate::ast::{AstInstruction, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -14,6 +14,8 @@ pub enum Type {
     Register,
     AddressRegister,
 
+    Addr,
+
     Label,
 
     /// Unknown type
@@ -26,8 +28,8 @@ impl Type {
             (Type::Int, Type::Int) => Ok(Type::Int),
             (Type::Bool, Type::Bool) => Ok(Type::Bool),
 
-            // allow coercing labels into int (address)
-            (Type::Label, Type::Int) | (Type::Int, Type::Label) => Ok(Type::Int),
+            // math on labels will mean an address
+            (Type::Label, Type::Int) | (Type::Int, Type::Label) => Ok(Type::Addr),
 
             // allow coercing characters into int
             (Type::Character, Type::Int) | (Type::Int, Type::Character) => Ok(Type::Int),

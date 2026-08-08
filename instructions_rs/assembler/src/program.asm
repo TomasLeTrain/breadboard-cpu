@@ -1,13 +1,13 @@
 ; this is a comment detailing another thing
 
 cool_label:
-	jmp global_scope_label
-	do cool_label + 5
+	jmp global_scope_label, MAR
+	jmp cool_label + 5, SP
 global_scope_label:
 
 block_label {
 	local_scope_label:
-	math A, Z
+	add A, Z
 }
 
 ;  	expr_test some_const + (1 + 2 / 3 * 4 + (const2 / 5) + y6)

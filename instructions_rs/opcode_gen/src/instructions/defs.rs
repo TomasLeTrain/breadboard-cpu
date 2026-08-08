@@ -178,7 +178,7 @@ pub enum AddressRegisterImpl<'a> {
     Sp(&'a SpRegister),
 }
 
-#[derive(PartialEq, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq)]
 pub enum Register {
     A,
     B,
@@ -276,7 +276,7 @@ impl Register {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq)]
 pub enum AddressRegister {
     Mar,
     Sp,

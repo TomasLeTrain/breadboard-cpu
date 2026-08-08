@@ -35,14 +35,14 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
 pub fn parse(source: &str) -> Result<Program, String> {
     let pairs =
         AssemblyParser::parse(Rule::Program, source).map_err(|e| format!("Parse error: {}", e))?;
-    println!("{:#?}", pairs);
+    // println!("{:#?}", pairs);
 
     let mut program = Vec::new();
 
     for pair in pairs {
         match pair.as_rule() {
             Rule::Statement => {
-                println!("found statement \"{}\"", pair);
+                // println!("found statement \"{}\"", pair);
                 program.push(parse_statement(pair)?);
             }
             Rule::EOI => (),
@@ -107,7 +107,7 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<Statement, String> {
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
-        println!("istr item: {:#?}", item);
+        // println!("istr item: {:#?}", item);
         match item.as_rule() {
             Rule::InstructionLabel => name = item.to_string(),
             Rule::InstructionParameters => params = parse_instruction_parameters(item)?,
@@ -122,7 +122,7 @@ fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<TypedExpr>, Stri
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
-        println!("istr parameter item: {:#?}", item);
+        // println!("istr parameter item: {:#?}", item);
         match item.as_rule() {
             Rule::Expr => params.push(parse_expr(item.into_inner())?),
             r => return Err(format!("Unexpected itsr parameter rule: {:?}", r)),
@@ -217,7 +217,7 @@ fn parse_literal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
             let s = inner.as_str();
             let c = unescape_char(&s[1..s.len() - 1]);
 
-            println!("c is {}", c);
+            // println!("c is {}", c);
 
             Ok(TypedExpr::new(Expr::Char(c as u8), Type::Character))
         }
@@ -240,7 +240,7 @@ fn parse_hexadecimal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
 /// Turns string of length <= 2 into corresponding character.
 /// Turns literal escape sequences like "\\n" into the actual character '\n'.
 fn unescape_char(string: &str) -> char {
-    println!("got string {}", string);
+    // println!("got string {}", string);
     assert!(string.chars().count() <= 2);
 
     let mut iter = string.chars();

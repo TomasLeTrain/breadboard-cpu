@@ -102,7 +102,7 @@ pub enum InstructionType {
     Nop,
 }
 
-#[derive(Hash, PartialEq, Debug, Clone, Copy)]
+#[derive(Hash, PartialEq, Debug, Clone, Copy, Eq)]
 pub enum ArgumentType {
     Reg(Register),
     AddrReg(AddressRegister),
@@ -111,9 +111,20 @@ pub enum ArgumentType {
     GenericImm,
 }
 
+impl ArgumentType {
+    /// makes imm's into generic imm to allow loopkup without knowing the exact imm type
+    pub fn to_generic(self) -> Self {
+        match self {
+            ArgumentType::Byte => ArgumentType::GenericImm,
+            ArgumentType::Addr => ArgumentType::GenericImm,
+            other => other,
+        }
+    }
+}
+
 /// a way to identify an instruction by how it gets called
 /// Should be unique per instruction
-#[derive(Hash, PartialEq, Debug, Clone)]
+#[derive(Hash, PartialEq, Debug, Clone, Eq)]
 pub struct InstructionSignature {
     name: String,
     arguments: Vec<ArgumentType>,
@@ -122,6 +133,18 @@ pub struct InstructionSignature {
 impl InstructionSignature {
     pub fn new(name: String, arguments: Vec<ArgumentType>) -> Self {
         InstructionSignature { name, arguments }
+    }
+
+    /// returns a signature where all imm types get changed to be generic
+    /// makes lookup possible without knowing the type of imm
+    pub fn to_generic(self) -> Self {
+        let arguments: Vec<_> = self
+            .arguments
+            .into_iter()
+            .map(ArgumentType::to_generic)
+            .collect();
+
+        InstructionSignature::new(self.name.clone(), arguments)
     }
 }
 
@@ -251,8 +274,13 @@ impl InstructionType {
             | InstructionType::Dec(addr_reg)
             | InstructionType::Inc(addr_reg) => vec![ArgumentType::AddrReg(*addr_reg)],
 
-            // istr imm_addr
-            InstructionType::JmpImmAddr { .. } => vec![ArgumentType::Addr],
+            // istr imm_addr, addr_reg
+            InstructionType::JmpImmAddr {
+                scrath_addr_reg: addr_reg,
+                ..
+            } => {
+                vec![ArgumentType::Addr, ArgumentType::AddrReg(*addr_reg)]
+            }
 
             // istr (no arguments)
             InstructionType::Halt => vec![],
