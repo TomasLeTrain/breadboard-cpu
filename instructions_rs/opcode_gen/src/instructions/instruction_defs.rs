@@ -146,6 +146,10 @@ impl InstructionSignature {
 
         InstructionSignature::new(self.name.clone(), arguments)
     }
+
+    pub fn arguments(&self) -> &Vec<ArgumentType> {
+        &self.arguments
+    }
 }
 
 impl InstructionType {

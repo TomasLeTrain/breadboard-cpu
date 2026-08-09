@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{AstInstruction, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
+use crate::ast::{AstInstruction, AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -15,6 +15,7 @@ pub enum Type {
     AddressRegister,
 
     Addr,
+    Byte,
 
     Label,
 
@@ -122,13 +123,13 @@ impl SymbolTypeContext {
     }
 }
 
-pub fn typecheck(statements: &mut [Statement], symbols: &mut SymbolTypeContext) {
+pub fn typecheck(statements: &mut [AstNode<Statement>], symbols: &mut SymbolTypeContext) {
     // TODO: can turn into label vec to verify poppped values are accurate (if pop returns val)
     let mut num_labels = 0;
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
-        if let Statement::Label { name } = statement {
+        if let Statement::Label { name } = statement.inner() {
             // TODO: ensure not duplicate
             // push into local scope
             symbols.push(Symbol {
@@ -140,7 +141,7 @@ pub fn typecheck(statements: &mut [Statement], symbols: &mut SymbolTypeContext) 
     }
 
     for statement in statements.iter_mut() {
-        match statement {
+        match statement.inner_mut() {
             Statement::BlockLabel { name, body } => {
                 // TODO: ensure not duplicate
                 // push into local scope
@@ -170,27 +171,33 @@ pub fn typecheck(statements: &mut [Statement], symbols: &mut SymbolTypeContext) 
     }
 }
 
-fn typecheck_expr(typed_expr: &mut TypedExpr, symbols: &SymbolTypeContext) -> Result<(), String> {
-    match &mut typed_expr.expr {
-        Expr::Int(_) => typed_expr.ty = Type::Int,
-        Expr::Bool(_) => typed_expr.ty = Type::Bool,
-        Expr::String(_) => typed_expr.ty = Type::String,
-        Expr::Char(_) => typed_expr.ty = Type::Character,
+fn typecheck_expr(
+    typed_expr: &mut AstNode<TypedExpr>,
+    symbols: &SymbolTypeContext,
+) -> Result<(), String> {
+    let inner = typed_expr.inner_mut();
+
+    match &mut inner.expr {
+        Expr::Int(_) => inner.ty = Type::Int,
+        Expr::Bool(_) => inner.ty = Type::Bool,
+        Expr::String(_) => inner.ty = Type::String,
+        Expr::Char(_) => inner.ty = Type::Character,
         Expr::Identity(name) => {
             // try and find identity in symbols
             println!("querying for symbol: {name}");
             if symbols.contains(name) {
-                if !matches!(typed_expr.ty, Type::Unknown) {
-                    return Err(format!("Identity already has type: {:#?}", typed_expr.ty));
+                if !matches!(inner.ty, Type::Unknown) {
+                    return Err(format!("Identity already has type: {:#?}", inner.ty));
                 }
                 println!("found symbol: {name}");
-                typed_expr.ty = *symbols.get(name).unwrap();
+                inner.ty = *symbols.get(name).unwrap();
             } else {
                 return Err(format!("Symbol not found: {}", name));
             }
         }
         Expr::Unary { op, expr } => {
             typecheck_expr(expr, symbols)?;
+            let expr = expr.inner_mut();
 
             match op {
                 UnaryOp::Neg => {
@@ -216,6 +223,8 @@ fn typecheck_expr(typed_expr: &mut TypedExpr, symbols: &SymbolTypeContext) -> Re
         Expr::Binary { op, left, right } => {
             typecheck_expr(left, symbols)?;
             typecheck_expr(right, symbols)?;
+            let left = left.inner_mut();
+            let right = right.inner_mut();
 
             match op {
                 BinaryOp::Add
@@ -237,7 +246,7 @@ fn typecheck_expr(typed_expr: &mut TypedExpr, symbols: &SymbolTypeContext) -> Re
                             left.ty, right.ty
                         ));
                     }
-                    typed_expr.ty = left.ty.unify(&right.ty)?;
+                    inner.ty = left.ty.unify(&right.ty)?;
                 }
                 BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
                     if !Type::comparable(&left.ty, &right.ty)? {
@@ -246,11 +255,11 @@ fn typecheck_expr(typed_expr: &mut TypedExpr, symbols: &SymbolTypeContext) -> Re
                             left.ty, right.ty
                         ));
                     }
-                    typed_expr.ty = Type::Bool;
+                    inner.ty = Type::Bool;
                 }
                 BinaryOp::Eq | BinaryOp::Ne => {
                     let _ = left.ty.unify(&right.ty)?;
-                    typed_expr.ty = Type::Bool;
+                    inner.ty = Type::Bool;
                 }
             }
         }

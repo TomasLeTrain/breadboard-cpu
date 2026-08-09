@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::Path;
 use std::sync::LazyLock;
 
 use crate::ast::*;
@@ -5,6 +7,8 @@ use crate::types::Type;
 use pest::Parser;
 use pest::iterators::{Pair, Pairs};
 use pest::pratt_parser::{Assoc, Op, PrattParser};
+
+use pest::error::Error;
 
 #[derive(pest_derive::Parser)]
 #[grammar = "grammar.pest"] // relative to src
@@ -32,14 +36,16 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
 });
 
 /// Parse source code into a program (list of top-level items)
-pub fn parse(source: &str) -> Result<Program, String> {
+pub fn parse_file<'a>(source: &'a str, file_path: &'a Path) -> Result<File<'a>, Error> {
+    let mut res = File::new(source, file_path);
+
+
     let pairs =
         AssemblyParser::parse(Rule::Program, source).map_err(|e| format!("Parse error: {}", e))?;
-    // println!("{:#?}", pairs);
 
-    let mut program = Vec::new();
+    let program = res.statements_mut();
 
-    for pair in pairs {
+    for pair in pairs.into_iter() {
         match pair.as_rule() {
             Rule::Statement => {
                 // println!("found statement \"{}\"", pair);
@@ -50,10 +56,10 @@ pub fn parse(source: &str) -> Result<Program, String> {
         }
     }
 
-    Ok(program)
+    Ok(res)
 }
 
-fn parse_statement(pair: Pair<Rule>) -> Result<Statement, String> {
+fn parse_statement(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::InstructionStatement => parse_instruction(inner),
@@ -63,19 +69,23 @@ fn parse_statement(pair: Pair<Rule>) -> Result<Statement, String> {
     }
 }
 
-fn parse_label(pair: Pair<Rule>) -> Result<Statement, String> {
+fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::LabelIdentifier => Ok(Statement::Label {
-            name: inner.to_string(),
-        }),
+        Rule::LabelIdentifier => Ok(AstNode::from_pair(
+            Statement::Label {
+                name: inner.to_string(),
+            },
+            inner,
+        )),
         r => Err(format!("Unexpected label rule: {:?}", r)),
     }
 }
 
-fn parse_block_label(pair: Pair<Rule>) -> Result<Statement, String> {
+fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
     let mut name: Result<String, String> = Err("Name not found".to_string());
-    let mut body: Result<Vec<Statement>, String> = Err("Body not found".to_string());
+    let mut body: Result<Vec<AstNode<Statement>>, String> = Err("Body not found".to_string());
+    let span = pair.as_span();
 
     for item in pair.into_inner() {
         match item.as_rule() {
@@ -85,13 +95,16 @@ fn parse_block_label(pair: Pair<Rule>) -> Result<Statement, String> {
         }
     }
 
-    Ok(Statement::BlockLabel {
-        name: name?,
-        body: body?,
-    })
+    Ok(AstNode::new(
+        Statement::BlockLabel {
+            name: name?,
+            body: body?,
+        },
+        span,
+    ))
 }
 
-fn parse_block(pair: Pair<Rule>) -> Result<Vec<Statement>, String> {
+fn parse_block(pair: Pair<Rule>) -> Result<Vec<AstNode<Statement>>, String> {
     let mut stmts = Vec::new();
     for item in pair.into_inner() {
         match item.as_rule() {
@@ -102,9 +115,10 @@ fn parse_block(pair: Pair<Rule>) -> Result<Vec<Statement>, String> {
     Ok(stmts)
 }
 
-fn parse_instruction(pair: Pair<Rule>) -> Result<Statement, String> {
+fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
     let mut name = String::new();
     let mut params = Vec::new();
+    let span = pair.as_span();
 
     for item in pair.into_inner() {
         // println!("istr item: {:#?}", item);
@@ -115,10 +129,13 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<Statement, String> {
         };
     }
 
-    Ok(Statement::Instruction(AstInstruction::new(name, params)))
+    Ok(AstNode::new(
+        Statement::Instruction(AstInstruction::new(name, params)),
+        span,
+    ))
 }
 
-fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<TypedExpr>, String> {
+fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<AstNode<TypedExpr>>, String> {
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
@@ -132,13 +149,14 @@ fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<TypedExpr>, Stri
     Ok(params)
 }
 
-fn parse_expr(pairs: Pairs<Rule>) -> Result<TypedExpr, String> {
+fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>, String> {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
             Rule::Literal => parse_literal(primary),
-            Rule::Identifier => Ok(TypedExpr::unknown(Expr::Identity(
-                primary.as_str().to_string(),
-            ))),
+            Rule::Identifier => Ok(AstNode::from_pair(
+                TypedExpr::unknown(Expr::Identity(primary.as_str().to_string())),
+                primary,
+            )),
             Rule::Expr => parse_expr(primary.into_inner()),
             r => Err(format!("Unexpected primary: {:?}", r)),
         })
@@ -169,11 +187,14 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<TypedExpr, String> {
                 Rule::logical_or => BinaryOp::Or,
                 _ => return Err(format!("Unexpected infix op: {:?}", op)),
             };
-            Ok(TypedExpr::unknown(Expr::Binary {
-                op: bin_op,
-                left: Box::new(lhs?),
-                right: Box::new(rhs?),
-            }))
+            Ok(AstNode::from_pair(
+                TypedExpr::unknown(Expr::Binary {
+                    op: bin_op,
+                    left: Box::new(lhs?),
+                    right: Box::new(rhs?),
+                }),
+                op,
+            ))
         })
         .map_prefix(|op, rhs| {
             // Handle unary operations
@@ -184,54 +205,61 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<TypedExpr, String> {
                 _ => return Err(format!("Unexpected prefix op: {:?}", op)),
             };
 
-            Ok(TypedExpr::unknown(Expr::Unary {
-                op: un_op,
-                expr: Box::new(rhs?),
-            }))
+            Ok(AstNode::from_pair(
+                TypedExpr::unknown(Expr::Unary {
+                    op: un_op,
+                    expr: Box::new(rhs?),
+                }),
+                op,
+            ))
         })
         .parse(pairs)
 }
 
-fn parse_literal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
+fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>, String> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
-        Rule::Int => Ok(TypedExpr::new(
-            Expr::Int(inner.as_str().parse().unwrap()),
-            Type::Int,
+        Rule::Int => Ok(AstNode::from_pair(
+            TypedExpr::new(Expr::Int(inner.as_str().parse().unwrap()), Type::Int),
+            inner,
         )),
         Rule::Hexadecimal => parse_hexadecimal(inner),
-        Rule::Bool => Ok(TypedExpr::new(
-            Expr::Bool(inner.as_str() == "true"),
-            Type::Bool,
+        Rule::Bool => Ok(AstNode::from_pair(
+            TypedExpr::new(Expr::Bool(inner.as_str() == "true"), Type::Bool),
+            inner,
         )),
         Rule::String => {
             let s = inner.as_str();
             // removes "" quotes
-            Ok(TypedExpr::new(
-                Expr::String(s[1..s.len() - 1].to_string()),
-                Type::String,
+            Ok(AstNode::from_pair(
+                TypedExpr::new(Expr::String(s[1..s.len() - 1].to_string()), Type::String),
+                inner,
             ))
         }
         Rule::Character => {
             let s = inner.as_str();
             let c = unescape_char(&s[1..s.len() - 1]);
 
-            // println!("c is {}", c);
-
-            Ok(TypedExpr::new(Expr::Char(c as u8), Type::Character))
+            Ok(AstNode::from_pair(
+                TypedExpr::new(Expr::Char(c as u8), Type::Character),
+                inner,
+            ))
         }
         r => Err(format!("Unexpected literal rule: {:?}", r)),
     }
 }
 
-fn parse_hexadecimal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
+fn parse_hexadecimal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>, String> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
-        Rule::Int => Ok(TypedExpr::new(
-            Expr::Int(i64::from_str_radix(inner.as_str(), 16).unwrap()),
-            Type::Int,
+        Rule::Int => Ok(AstNode::from_pair(
+            TypedExpr::new(
+                Expr::Int(i64::from_str_radix(inner.as_str(), 16).unwrap()),
+                Type::Int,
+            ),
+            inner,
         )),
         r => Err(format!("Unexpected hexadecimal rule: {:?}", r)),
     }
@@ -240,7 +268,6 @@ fn parse_hexadecimal(pair: Pair<Rule>) -> Result<TypedExpr, String> {
 /// Turns string of length <= 2 into corresponding character.
 /// Turns literal escape sequences like "\\n" into the actual character '\n'.
 fn unescape_char(string: &str) -> char {
-    // println!("got string {}", string);
     assert!(string.chars().count() <= 2);
 
     let mut iter = string.chars();

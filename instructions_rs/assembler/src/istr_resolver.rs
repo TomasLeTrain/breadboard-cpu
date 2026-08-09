@@ -1,16 +1,16 @@
 use std::{collections::HashMap, rc::Rc};
 
-use opcode_gen::{
-    get_instruction_list,
-    instructions::{AddressRegister, ArgumentType, Instruction, InstructionSignature, Register},
+use opcode_gen::instructions::{
+    AddressRegister, ArgumentType, Instruction, InstructionSignature, Register,
 };
 
 use crate::{
-    ast::{Statement, TypedExpr},
+    ast::{AstNode, Statement, TypedExpr},
     types::Type,
 };
 
-fn expr_to_argument_type(expr: &TypedExpr) -> ArgumentType {
+fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> ArgumentType {
+    let expr = expr.inner();
     match expr.ty {
         // coerce into generic imm since we dont know which it could be
         Type::Int => ArgumentType::GenericImm,
@@ -45,11 +45,11 @@ fn expr_to_argument_type(expr: &TypedExpr) -> ArgumentType {
 }
 
 pub fn resolve_instructions(
-    statements: &mut [Statement],
+    statements: &mut [AstNode<Statement>],
     istr_lookup: &HashMap<InstructionSignature, Rc<Instruction>>,
 ) {
     for statement in statements {
-        match statement {
+        match statement.inner_mut() {
             Statement::BlockLabel { body, .. } => {
                 resolve_instructions(body, istr_lookup);
             }
@@ -60,21 +60,28 @@ pub fn resolve_instructions(
                     .map(expr_to_argument_type)
                     .collect();
 
-                instruction.istr_signature = Some(InstructionSignature::new(
-                    instruction.name.clone(),
-                    param_types,
-                ));
+                let generic_signature =
+                    InstructionSignature::new(instruction.name.clone(), param_types);
 
-                if let Some(found_istr) =
-                    istr_lookup.get(instruction.istr_signature.as_ref().unwrap())
-                {
+                if let Some(found_istr) = istr_lookup.get(&generic_signature) {
                     instruction.instruction = Some(Rc::clone(found_istr));
                 } else {
+                    // TODO: make into error
                     panic!(
-                        "Instruction with signature not found: {:#?}",
+                        "Instruction not found from signature: {:#?}",
                         instruction.istr_signature
                     )
                 }
+
+                // save non-generic instruction
+                let signature = instruction
+                    .instruction
+                    .as_ref()
+                    .unwrap()
+                    .istr_type()
+                    .get_signature();
+
+                instruction.istr_signature = Some(signature);
             }
             _ => (),
         }

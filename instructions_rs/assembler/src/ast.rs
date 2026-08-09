@@ -1,28 +1,109 @@
-use std::{cell::RefCell, rc::Rc};
+use std::fmt::Debug;
+use std::{cell::RefCell, fmt, path::Path, rc::Rc};
 
 use crate::types::Type;
 
-pub type Program = Vec<Statement>;
+pub type Program<'a> = Vec<Statement<'a>>;
 
 use opcode_gen::instructions::InstructionSignature;
+use pest::{RuleType, Span, iterators::Pair};
 
 type Address = u16;
 
-#[derive(Debug, Clone)]
-pub struct AddressedStatement {
-    statement: Statement,
-    address: Option<Address>,
+type Statements<'a> = Vec<AstNode<'a, Statement<'a>>>;
+
+#[derive(Debug)]
+pub struct File<'a> {
+    statements: Statements<'a>,
+
+    // TODO: should be taking ownership of source
+    source: &'a str,
+    file_path: &'a Path,
+}
+
+impl<'a> File<'a> {
+    pub fn new(source: &'a str, file_path: &'a Path) -> Self {
+        Self {
+            statements: Statements::new(),
+            source,
+            file_path,
+        }
+    }
+
+    pub fn statements(&self) -> &Statements<'a> {
+        &self.statements
+    }
+
+    pub fn statements_mut(&mut self) -> &mut Statements<'a> {
+        &mut self.statements
+    }
+}
+
+// #[derive(Debug)]
+// pub struct ParsingError<'a, T> {
+//     message: String,
+//     node: &'a AstNode<'a, T>,
+// }
+//
+// impl<'a, T: Debug> Error for ParsingError<'a, T> {}
+//
+// impl<'a, T> fmt::Display for ParsingError<'a, T> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         writeln!(f, " \u{001b}[31mERROR:\u{001b}[39m {}", self.message)?;
+//         writeln!(f, "{}", self.node.span)
+//     }
+// }
+
+/// wraps T with additional information tied to each token (ex. parent file, span, etc.)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AstNode<'a, T> {
+    inner: T,
+    span: Span<'a>,
+}
+
+impl<'a, T> AstNode<'a, T> {
+    pub fn new(inner: T, span: Span<'a>) -> Self {
+        Self { inner, span }
+    }
+
+    pub fn from_pair<R: RuleType>(inner: T, pair: Pair<'a, R>) -> Self {
+        Self::new(inner, pair.as_span())
+    }
+
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
+
+    pub fn inner_mut(&mut self) -> &mut T {
+        &mut self.inner
+    }
+
+    fn span(&self) -> Span {
+        self.span
+    }
 }
 
 #[derive(Debug, Clone)]
-pub struct AstInstruction {
+pub struct AddressedStatement<'a> {
+    statement: Statement<'a>,
+    address: Option<Address>,
+}
+
+impl<'a> AddressedStatement<'a> {
+    pub fn statement(&self) -> &Statement {
+        &self.statement
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AstInstruction<'a> {
     pub name: String,
-    pub params: Vec<TypedExpr>,
+    pub params: Vec<AstNode<'a, TypedExpr<'a>>>,
     pub istr_signature: Option<InstructionSignature>,
     pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
 }
-impl AstInstruction {
-    pub fn new(name: String, params: Vec<TypedExpr>) -> Self {
+impl<'a> AstInstruction<'a> {
+    pub fn new(name: String, params: Vec<AstNode<'a, TypedExpr<'a>>>) -> Self {
         AstInstruction {
             name,
             params,
@@ -33,24 +114,29 @@ impl AstInstruction {
 }
 
 #[derive(Debug, Clone)]
-pub enum Statement {
-    Label { name: String },
-    BlockLabel { name: String, body: Vec<Statement> },
-    Instruction(AstInstruction),
+pub enum Statement<'a> {
+    Label {
+        name: String,
+    },
+    BlockLabel {
+        name: String,
+        body: Vec<AstNode<'a, Statement<'a>>>,
+    },
+    Instruction(AstInstruction<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypedExpr {
-    pub expr: Expr,
+pub struct TypedExpr<'a> {
+    pub expr: Expr<'a>,
     pub ty: Type,
 }
 
-impl TypedExpr {
-    pub fn new(expr: Expr, ty: Type) -> Self {
-        TypedExpr { expr, ty }
+impl<'a> TypedExpr<'a> {
+    pub fn new(expr: Expr<'a>, ty: Type) -> Self {
+        Self { expr, ty }
     }
 
-    pub fn unknown(expr: Expr) -> Self {
+    pub fn unknown(expr: Expr<'a>) -> Self {
         TypedExpr {
             expr,
             ty: Type::Unknown,
@@ -59,7 +145,7 @@ impl TypedExpr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Expr {
+pub enum Expr<'a> {
     /// Integer literal
     Int(i64),
     /// Boolean literal
@@ -71,16 +157,19 @@ pub enum Expr {
     /// Identity (could be var, reg, etc.)
     Identity(String),
     /// Unary operation
-    Unary { op: UnaryOp, expr: Box<TypedExpr> },
+    Unary {
+        op: UnaryOp,
+        expr: Box<AstNode<'a, TypedExpr<'a>>>,
+    },
     /// Binary operation
     Binary {
         op: BinaryOp,
-        left: Box<TypedExpr>,
-        right: Box<TypedExpr>,
+        left: Box<AstNode<'a, TypedExpr<'a>>>,
+        right: Box<AstNode<'a, TypedExpr<'a>>>,
     },
 }
 
-impl Expr {
+impl<'a> Expr<'a> {
     pub fn as_identity(&self) -> Option<String> {
         if let Expr::Identity(name) = self {
             Some(name.clone())
