@@ -1,21 +1,21 @@
 use std::error::Error;
+use std::fmt;
 use std::fmt::Display;
 use std::path::Path;
 use std::sync::LazyLock;
-use std::{fmt, fs};
 
 use crate::ast::*;
 use crate::types::Type;
-use miette::{Diagnostic, IntoDiagnostic, NamedSource, Result, SourceSpan, miette};
+use miette::{Diagnostic, Result, SourceSpan};
 use pest::iterators::{Pair, Pairs};
 use pest::pratt_parser::{Assoc, Op, PrattParser};
-use pest::{Parser, Position, RuleType, Span};
+use pest::{Parser, RuleType, Span};
 
 use pest::error::Error as PestParseError;
 use pest::error::ErrorVariant as PestParseErrorVariant;
 
 #[derive(pest_derive::Parser)]
-#[grammar = "grammar.pest"] // relative to src
+#[grammar = "grammar.pest"]
 pub struct AssemblyParser;
 
 pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
@@ -39,110 +39,19 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
         .op(Op::prefix(logical_not) | Op::prefix(negation) | Op::prefix(bit_negation)) // ! - ~ (unary)
 });
 
-#[derive(Debug, Diagnostic)]
-#[diagnostic(code(assembler::parse_error))]
-pub struct ParseError {
-    #[label]
-    pub snippet: SourceSpan,
-    pub err_message: String,
-    #[help]
-    pub help: Option<String>,
-}
+/// parse a file
+pub fn parse_file<'a>(source: &'a str, file_path: &'a Path) -> Result<FileAst<'a>> {
+    let mut res = FileAst::new(source, file_path);
 
-impl Error for ParseError {}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.err_message)
-    }
-}
-
-impl ParseError {
-    fn from_span<'a>(message: String, span: Span<'a>) -> Self {
-        let span_start = span.start();
-        let span_end = span.end();
-        let len = span_end - span_start;
-        let snippet = SourceSpan::new(span_start.into(), len);
-
-        ParseError {
-            err_message: message,
-            snippet,
-            help: None,
-        }
-    }
-
-    fn enumerate<F, R>(rules: &[R], f: &mut F) -> String
-    where
-        F: FnMut(&R) -> String,
-    {
-        match rules.len() {
-            1 => f(&rules[0]),
-            2 => format!("{} or {}", f(&rules[0]), f(&rules[1])),
-            l => {
-                let non_separated = f(&rules[l - 1]);
-                let separated = rules
-                    .iter()
-                    .take(l - 1)
-                    .map(f)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{}, or {}", separated, non_separated)
-            }
-        }
-    }
-
-    fn from_expected<'a, R: RuleType>(
-        message: String,
-        expected: Vec<R>,
-        unexpected: Vec<R>,
-        span: Span<'a>,
-    ) -> Self {
-        Self::from_pest_message(
-            PestParseError::new_from_span(
-                PestParseErrorVariant::ParsingError {
-                    positives: expected,
-                    negatives: unexpected,
-                },
-                span,
-            ),
-            message,
-        )
-    }
-
-    fn from_pest_message<R: RuleType>(err: PestParseError<R>, err_message: String) -> ParseError {
-        let help = Some(err.variant.message().to_string());
-
-        let span = match err.location {
-            pest::error::InputLocation::Pos(pos) => (pos, pos + 1),
-            pest::error::InputLocation::Span((start, end)) => (start, end),
-        };
-
-        let snippet = SourceSpan::new(span.0.into(), span.1 - span.0);
-
-        ParseError {
-            err_message,
-            snippet,
-            help,
-        }
-    }
-
-    fn from_pest<R: RuleType>(err: PestParseError<R>) -> ParseError {
-        let message = "Grammar parsing error".to_string();
-        Self::from_pest_message(err, message)
-    }
-}
-
-pub fn parse_file<'a>(source: &'a str, file_path: &'a Path) -> Result<File<'a>> {
-    let mut res = File::new(source, file_path);
 
     let pairs = AssemblyParser::parse(Rule::Program, source).map_err(ParseError::from_pest)?;
+    println!("{pairs:#?}");
 
     let program = res.statements_mut();
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {
             Rule::Statement => {
-                // println!("found statement \"{}\"", pair);
                 program.push(parse_statement(pair)?);
             }
             Rule::EOI => (),
@@ -159,8 +68,14 @@ fn parse_statement(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
         Rule::InstructionStatement => parse_instruction(inner),
         Rule::LabelStatement => parse_label(inner),
         Rule::BlockLabel => parse_block_label(inner),
-        r => Err(ParseError::from_span(
-            format!("Unexpected statement rule: {:?}", r),
+        r => Err(ParseError::from_expected(
+            "Statement parsing error".to_string(),
+            vec![
+                Rule::InstructionStatement,
+                Rule::LabelStatement,
+                Rule::BlockLabel,
+            ],
+            vec![r],
             inner.as_span(),
         ))?,
     }
@@ -175,8 +90,10 @@ fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
             },
             inner,
         )),
-        r => Err(ParseError::from_span(
-            format!("Unexpected label rule: {:?}", r),
+        r => Err(ParseError::from_expected(
+            "Label parsing error".to_string(),
+            vec![Rule::LabelIdentifier],
+            vec![r],
             inner.as_span(),
         ))?,
     }
@@ -217,8 +134,10 @@ fn parse_block(pair: Pair<Rule>) -> Result<Vec<AstNode<Statement>>> {
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::Statement => stmts.push(parse_statement(item)?),
-            r => Err(ParseError::from_span(
-                format!("Unexpected block rule: {:?}", r),
+            r => Err(ParseError::from_expected(
+                "Block parsing error".to_string(),
+                vec![Rule::Statement],
+                vec![r],
                 item.as_span(),
             ))?,
         }
@@ -232,11 +151,15 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
     let span = pair.as_span();
 
     for item in pair.into_inner() {
-        // println!("istr item: {:#?}", item);
         match item.as_rule() {
             Rule::InstructionLabel => name = item.to_string(),
             Rule::InstructionParameters => params = parse_instruction_parameters(item)?,
-            r => return Err(miette!("Unexpected instruction rule: {:?}", r)),
+            r => Err(ParseError::from_expected(
+                "Instruction parsing error".to_string(),
+                vec![Rule::InstructionLabel, Rule::InstructionParameters],
+                vec![r],
+                item.as_span(),
+            ))?,
         };
     }
 
@@ -250,10 +173,14 @@ fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<AstNode<TypedExp
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
-        // println!("istr parameter item: {:#?}", item);
         match item.as_rule() {
             Rule::Expr => params.push(parse_expr(item.into_inner())?),
-            r => return Err(miette!("Unexpected itsr parameter rule: {:?}", r)),
+            r => Err(ParseError::from_expected(
+                "Instruction parameter parsing error".to_string(),
+                vec![Rule::Expr],
+                vec![r],
+                item.as_span(),
+            ))?,
         };
     }
 
@@ -269,7 +196,12 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>> {
                 primary,
             )),
             Rule::Expr => parse_expr(primary.into_inner()),
-            r => Err(miette!("Unexpected primary: {:?}", r)),
+            r => Err(ParseError::from_expected(
+                "Primary parsing error".to_string(),
+                vec![Rule::Literal, Rule::Identifier, Rule::Expr],
+                vec![r],
+                primary.as_span(),
+            ))?,
         })
         .map_infix(|lhs, op, rhs| {
             // Handle binary operations
@@ -296,7 +228,33 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>> {
 
                 Rule::logical_and => BinaryOp::And,
                 Rule::logical_or => BinaryOp::Or,
-                _ => return Err(miette!("Unexpected infix op: {:?}", op)),
+
+                r => Err(ParseError::from_expected(
+                    "Binary op parsing error".to_string(),
+                    vec![
+                        Rule::add,
+                        Rule::subtract,
+                        Rule::multiply,
+                        Rule::divide,
+                        Rule::modulo,
+                        Rule::power,
+                        Rule::shift_left,
+                        Rule::shift_right,
+                        Rule::bit_and,
+                        Rule::bit_xor,
+                        Rule::bit_or,
+                        Rule::eq,
+                        Rule::ne,
+                        Rule::le,
+                        Rule::ge,
+                        Rule::lt,
+                        Rule::gt,
+                        Rule::logical_and,
+                        Rule::logical_or,
+                    ],
+                    vec![r],
+                    op.as_span(),
+                ))?,
             };
             Ok(AstNode::from_pair(
                 TypedExpr::unknown(Expr::Binary {
@@ -314,7 +272,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>> {
                 Rule::logical_not => UnaryOp::Not,
                 Rule::bit_negation => UnaryOp::BitNegation,
                 r => Err(ParseError::from_expected(
-                    "Ast parsing error".to_string(),
+                    "Prefix parsing error".to_string(),
                     vec![Rule::subtract, Rule::logical_not, Rule::bit_negation],
                     vec![r],
                     op.as_span(),
@@ -362,7 +320,18 @@ fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
                 inner,
             ))
         }
-        r => Err(miette!("Unexpected literal rule: {:?}", r)),
+        r => Err(ParseError::from_expected(
+            "Literal parsing error".to_string(),
+            vec![
+                Rule::Int,
+                Rule::Hexadecimal,
+                Rule::Bool,
+                Rule::String,
+                Rule::Character,
+            ],
+            vec![r],
+            inner.as_span(),
+        ))?,
     }
 }
 
@@ -377,7 +346,12 @@ fn parse_hexadecimal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
             ),
             inner,
         )),
-        r => Err(miette!("Unexpected hexadecimal rule: {:?}", r)),
+        r => Err(ParseError::from_expected(
+            "Hexadecimal parsing error".to_string(),
+            vec![Rule::Int],
+            vec![r],
+            inner.as_span(),
+        ))?,
     }
 }
 
@@ -403,5 +377,81 @@ fn unescape_char(string: &str) -> char {
         }
     } else {
         first_char
+    }
+}
+
+// TODO: make error code generic to distinguish grammar parsing vs. ast parsing
+
+#[derive(Debug, Diagnostic)]
+#[diagnostic(code(assembler::parse_error))]
+pub struct ParseError {
+    #[label]
+    pub snippet: SourceSpan,
+    pub err_message: String,
+    #[help]
+    pub help: Option<String>,
+}
+
+impl Error for ParseError {}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.err_message)
+    }
+}
+
+impl ParseError {
+    pub fn from_span<'a>(message: String, span: Span<'a>) -> Self {
+        let span_start = span.start();
+        let span_end = span.end();
+        let len = span_end - span_start;
+        let snippet = SourceSpan::new(span_start.into(), len);
+
+        ParseError {
+            err_message: message,
+            snippet,
+            help: None,
+        }
+    }
+
+    /// creates error message with a help message detailing expected/unexpected rules
+    fn from_expected<'a, R: RuleType>(
+        message: String,
+        expected: Vec<R>,
+        unexpected: Vec<R>,
+        span: Span<'a>,
+    ) -> Self {
+        Self::from_pest_message(
+            PestParseError::new_from_span(
+                PestParseErrorVariant::ParsingError {
+                    positives: expected,
+                    negatives: unexpected,
+                },
+                span,
+            ),
+            message,
+        )
+    }
+
+    fn from_pest_message<R: RuleType>(err: PestParseError<R>, err_message: String) -> ParseError {
+        let help = Some(err.variant.message().to_string());
+
+        let span = match err.location {
+            pest::error::InputLocation::Pos(pos) => (pos, pos + 1),
+            pest::error::InputLocation::Span((start, end)) => (start, end),
+        };
+
+        let snippet = SourceSpan::new(span.0.into(), span.1 - span.0);
+
+        ParseError {
+            err_message,
+            snippet,
+            help,
+        }
+    }
+
+    fn from_pest<R: RuleType>(err: PestParseError<R>) -> ParseError {
+        let message = "Grammar parsing error".to_string();
+        Self::from_pest_message(err, message)
     }
 }

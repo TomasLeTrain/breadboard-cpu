@@ -10,31 +10,31 @@ use pest::{RuleType, Span, iterators::Pair};
 
 type Address = u16;
 
-type Statements<'a> = Vec<AstNode<'a, Statement<'a>>>;
+type Ast<'a> = Vec<AstNode<'a, Statement<'a>>>;
 
 #[derive(Debug)]
-pub struct File<'a> {
-    statements: Statements<'a>,
+pub struct FileAst<'a> {
+    statements: Ast<'a>,
 
     // TODO: should be taking ownership of source
     source: &'a str,
     file_path: &'a Path,
 }
 
-impl<'a> File<'a> {
+impl<'a> FileAst<'a> {
     pub fn new(source: &'a str, file_path: &'a Path) -> Self {
         Self {
-            statements: Statements::new(),
+            statements: Ast::new(),
             source,
             file_path,
         }
     }
 
-    pub fn statements(&self) -> &Statements<'a> {
+    pub fn statements(&self) -> &Ast<'a> {
         &self.statements
     }
 
-    pub fn statements_mut(&mut self) -> &mut Statements<'a> {
+    pub fn statements_mut(&mut self) -> &mut Ast<'a> {
         &mut self.statements
     }
 }

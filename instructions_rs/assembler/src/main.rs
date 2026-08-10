@@ -5,7 +5,7 @@ mod types;
 
 use std::{fs, path::Path, rc::Rc};
 
-use miette::{NamedSource, Result, SourceOffset, SourceSpan};
+use miette::{NamedSource, Result, };
 use opcode_gen::{
     get_instruction_list,
     instructions::{AddressRegister, Instruction, Register},
@@ -13,7 +13,6 @@ use opcode_gen::{
 
 use crate::{
     istr_resolver::gen_instruction_lookup_table,
-    parser::ParseError,
     types::{Symbol, Type},
 };
 
@@ -78,7 +77,7 @@ fn parse_source(file: &str, file_path: &Path) -> Result<()> {
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs);
 
-    istr_resolver::resolve_instructions(program.statements_mut(), &istr_lookup);
+    istr_resolver::resolve_instructions(program.statements_mut(), &istr_lookup)?;
 
     println!("{:#?}", program);
     Ok(())

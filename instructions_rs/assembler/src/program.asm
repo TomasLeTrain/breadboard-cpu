@@ -3,6 +3,7 @@
 
 cool_label:
 	jmp global_scope_label, MAR
+	whar 3
 	; 1 3
 global_scope_label:
 

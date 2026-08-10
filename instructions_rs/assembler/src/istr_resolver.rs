@@ -1,11 +1,13 @@
 use std::{collections::HashMap, rc::Rc};
 
+use miette::Result;
 use opcode_gen::instructions::{
     AddressRegister, ArgumentType, Instruction, InstructionSignature, Register,
 };
 
 use crate::{
     ast::{AstNode, Statement, TypedExpr},
+    parser::ParseError,
     types::Type,
 };
 
@@ -47,11 +49,11 @@ fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> ArgumentType {
 pub fn resolve_instructions(
     statements: &mut [AstNode<Statement>],
     istr_lookup: &HashMap<InstructionSignature, Rc<Instruction>>,
-) {
+) -> Result<()> {
     for statement in statements {
         match statement.inner_mut() {
             Statement::BlockLabel { body, .. } => {
-                resolve_instructions(body, istr_lookup);
+                resolve_instructions(body, istr_lookup)?;
             }
             Statement::Instruction(instruction) => {
                 let param_types: Vec<ArgumentType> = instruction
@@ -66,11 +68,14 @@ pub fn resolve_instructions(
                 if let Some(found_istr) = istr_lookup.get(&generic_signature) {
                     instruction.instruction = Some(Rc::clone(found_istr));
                 } else {
-                    // TODO: make into error
-                    panic!(
-                        "Instruction not found from signature: {:#?}",
-                        instruction.istr_signature
+                    return Err(ParseError::from_span(
+                        format!(
+                            "Instruction not found from signature: {:#?}",
+                            generic_signature
+                        ),
+                        statement.span(),
                     )
+                    .into());
                 }
 
                 // save non-generic instruction
@@ -86,6 +91,7 @@ pub fn resolve_instructions(
             _ => (),
         }
     }
+    Ok(())
 }
 
 pub fn gen_instruction_lookup_table(
