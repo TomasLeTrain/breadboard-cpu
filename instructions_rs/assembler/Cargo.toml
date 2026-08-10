@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+miette = { version = "7.6.0", features = ["fancy"] }
 opcode_gen = { path = "../opcode_gen" }
 pest = "2.8.8"
 pest_derive = "2.8.8"

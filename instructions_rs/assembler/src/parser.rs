@@ -1,14 +1,18 @@
-use std::fs;
+use std::error::Error;
+use std::fmt::Display;
 use std::path::Path;
 use std::sync::LazyLock;
+use std::{fmt, fs};
 
 use crate::ast::*;
 use crate::types::Type;
-use pest::Parser;
+use miette::{Diagnostic, IntoDiagnostic, NamedSource, Result, SourceSpan, miette};
 use pest::iterators::{Pair, Pairs};
 use pest::pratt_parser::{Assoc, Op, PrattParser};
+use pest::{Parser, Position, RuleType, Span};
 
-use pest::error::Error;
+use pest::error::Error as PestParseError;
+use pest::error::ErrorVariant as PestParseErrorVariant;
 
 #[derive(pest_derive::Parser)]
 #[grammar = "grammar.pest"] // relative to src
@@ -35,13 +39,103 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
         .op(Op::prefix(logical_not) | Op::prefix(negation) | Op::prefix(bit_negation)) // ! - ~ (unary)
 });
 
-/// Parse source code into a program (list of top-level items)
-pub fn parse_file<'a>(source: &'a str, file_path: &'a Path) -> Result<File<'a>, Error> {
+#[derive(Debug, Diagnostic)]
+#[diagnostic(code(assembler::parse_error))]
+pub struct ParseError {
+    #[label]
+    pub snippet: SourceSpan,
+    pub err_message: String,
+    #[help]
+    pub help: Option<String>,
+}
+
+impl Error for ParseError {}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.err_message)
+    }
+}
+
+impl ParseError {
+    fn from_span<'a>(message: String, span: Span<'a>) -> Self {
+        let span_start = span.start();
+        let span_end = span.end();
+        let len = span_end - span_start;
+        let snippet = SourceSpan::new(span_start.into(), len);
+
+        ParseError {
+            err_message: message,
+            snippet,
+            help: None,
+        }
+    }
+
+    fn enumerate<F, R>(rules: &[R], f: &mut F) -> String
+    where
+        F: FnMut(&R) -> String,
+    {
+        match rules.len() {
+            1 => f(&rules[0]),
+            2 => format!("{} or {}", f(&rules[0]), f(&rules[1])),
+            l => {
+                let non_separated = f(&rules[l - 1]);
+                let separated = rules
+                    .iter()
+                    .take(l - 1)
+                    .map(f)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}, or {}", separated, non_separated)
+            }
+        }
+    }
+
+    fn from_expected<'a, R: RuleType>(
+        message: String,
+        expected: Vec<R>,
+        unexpected: Vec<R>,
+        span: Span<'a>,
+    ) -> Self {
+        Self::from_pest_message(
+            PestParseError::new_from_span(
+                PestParseErrorVariant::ParsingError {
+                    positives: expected,
+                    negatives: unexpected,
+                },
+                span,
+            ),
+            message,
+        )
+    }
+
+    fn from_pest_message<R: RuleType>(err: PestParseError<R>, err_message: String) -> ParseError {
+        let help = Some(err.variant.message().to_string());
+
+        let span = match err.location {
+            pest::error::InputLocation::Pos(pos) => (pos, pos + 1),
+            pest::error::InputLocation::Span((start, end)) => (start, end),
+        };
+
+        let snippet = SourceSpan::new(span.0.into(), span.1 - span.0);
+
+        ParseError {
+            err_message,
+            snippet,
+            help,
+        }
+    }
+
+    fn from_pest<R: RuleType>(err: PestParseError<R>) -> ParseError {
+        let message = "Grammar parsing error".to_string();
+        Self::from_pest_message(err, message)
+    }
+}
+
+pub fn parse_file<'a>(source: &'a str, file_path: &'a Path) -> Result<File<'a>> {
     let mut res = File::new(source, file_path);
 
-
-    let pairs =
-        AssemblyParser::parse(Rule::Program, source).map_err(|e| format!("Parse error: {}", e))?;
+    let pairs = AssemblyParser::parse(Rule::Program, source).map_err(ParseError::from_pest)?;
 
     let program = res.statements_mut();
 
@@ -59,17 +153,20 @@ pub fn parse_file<'a>(source: &'a str, file_path: &'a Path) -> Result<File<'a>, 
     Ok(res)
 }
 
-fn parse_statement(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
+fn parse_statement(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::InstructionStatement => parse_instruction(inner),
         Rule::LabelStatement => parse_label(inner),
         Rule::BlockLabel => parse_block_label(inner),
-        r => Err(format!("Unexpected statement rule: {:?}", r)),
+        r => Err(ParseError::from_span(
+            format!("Unexpected statement rule: {:?}", r),
+            inner.as_span(),
+        ))?,
     }
 }
 
-fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
+fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::LabelIdentifier => Ok(AstNode::from_pair(
@@ -78,20 +175,31 @@ fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
             },
             inner,
         )),
-        r => Err(format!("Unexpected label rule: {:?}", r)),
+        r => Err(ParseError::from_span(
+            format!("Unexpected label rule: {:?}", r),
+            inner.as_span(),
+        ))?,
     }
 }
 
-fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
-    let mut name: Result<String, String> = Err("Name not found".to_string());
-    let mut body: Result<Vec<AstNode<Statement>>, String> = Err("Body not found".to_string());
+fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
+    let mut name: Result<String> =
+        Err(ParseError::from_span("Block label name not found".to_string(), pair.as_span()).into());
+    let mut body: Result<Vec<AstNode<Statement>>> =
+        Err(ParseError::from_span("Block label body not found".to_string(), pair.as_span()).into());
+
     let span = pair.as_span();
 
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::LabelIdentifier => name = Ok(item.to_string()),
             Rule::Block => body = Ok(parse_block(item)?),
-            r => return Err(format!("Unexpected label rule: {:?}", r)),
+            r => Err(ParseError::from_expected(
+                "Block label parsing error".to_string(),
+                vec![Rule::LabelIdentifier, Rule::Block],
+                vec![r],
+                span,
+            ))?,
         }
     }
 
@@ -104,18 +212,21 @@ fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
     ))
 }
 
-fn parse_block(pair: Pair<Rule>) -> Result<Vec<AstNode<Statement>>, String> {
+fn parse_block(pair: Pair<Rule>) -> Result<Vec<AstNode<Statement>>> {
     let mut stmts = Vec::new();
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::Statement => stmts.push(parse_statement(item)?),
-            r => return Err(format!("Unexpected block rule: {:?}", r)),
+            r => Err(ParseError::from_span(
+                format!("Unexpected block rule: {:?}", r),
+                item.as_span(),
+            ))?,
         }
     }
     Ok(stmts)
 }
 
-fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
+fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
     let mut name = String::new();
     let mut params = Vec::new();
     let span = pair.as_span();
@@ -125,7 +236,7 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
         match item.as_rule() {
             Rule::InstructionLabel => name = item.to_string(),
             Rule::InstructionParameters => params = parse_instruction_parameters(item)?,
-            r => return Err(format!("Unexpected instruction rule: {:?}", r)),
+            r => return Err(miette!("Unexpected instruction rule: {:?}", r)),
         };
     }
 
@@ -135,21 +246,21 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>, String> {
     ))
 }
 
-fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<AstNode<TypedExpr>>, String> {
+fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<AstNode<TypedExpr>>> {
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
         // println!("istr parameter item: {:#?}", item);
         match item.as_rule() {
             Rule::Expr => params.push(parse_expr(item.into_inner())?),
-            r => return Err(format!("Unexpected itsr parameter rule: {:?}", r)),
+            r => return Err(miette!("Unexpected itsr parameter rule: {:?}", r)),
         };
     }
 
     Ok(params)
 }
 
-fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>, String> {
+fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>> {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
             Rule::Literal => parse_literal(primary),
@@ -158,7 +269,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>, String> {
                 primary,
             )),
             Rule::Expr => parse_expr(primary.into_inner()),
-            r => Err(format!("Unexpected primary: {:?}", r)),
+            r => Err(miette!("Unexpected primary: {:?}", r)),
         })
         .map_infix(|lhs, op, rhs| {
             // Handle binary operations
@@ -185,7 +296,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>, String> {
 
                 Rule::logical_and => BinaryOp::And,
                 Rule::logical_or => BinaryOp::Or,
-                _ => return Err(format!("Unexpected infix op: {:?}", op)),
+                _ => return Err(miette!("Unexpected infix op: {:?}", op)),
             };
             Ok(AstNode::from_pair(
                 TypedExpr::unknown(Expr::Binary {
@@ -202,7 +313,12 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>, String> {
                 Rule::subtract => UnaryOp::Neg,
                 Rule::logical_not => UnaryOp::Not,
                 Rule::bit_negation => UnaryOp::BitNegation,
-                _ => return Err(format!("Unexpected prefix op: {:?}", op)),
+                r => Err(ParseError::from_expected(
+                    "Ast parsing error".to_string(),
+                    vec![Rule::subtract, Rule::logical_not, Rule::bit_negation],
+                    vec![r],
+                    op.as_span(),
+                ))?,
             };
 
             Ok(AstNode::from_pair(
@@ -216,7 +332,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<AstNode<TypedExpr>, String> {
         .parse(pairs)
 }
 
-fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>, String> {
+fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -246,11 +362,11 @@ fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>, String> {
                 inner,
             ))
         }
-        r => Err(format!("Unexpected literal rule: {:?}", r)),
+        r => Err(miette!("Unexpected literal rule: {:?}", r)),
     }
 }
 
-fn parse_hexadecimal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>, String> {
+fn parse_hexadecimal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -261,7 +377,7 @@ fn parse_hexadecimal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>, String> {
             ),
             inner,
         )),
-        r => Err(format!("Unexpected hexadecimal rule: {:?}", r)),
+        r => Err(miette!("Unexpected hexadecimal rule: {:?}", r)),
     }
 }
 

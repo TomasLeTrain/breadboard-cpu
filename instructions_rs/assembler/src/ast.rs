@@ -78,7 +78,7 @@ impl<'a, T> AstNode<'a, T> {
         &mut self.inner
     }
 
-    fn span(&self) -> Span {
+    pub fn span(&self) -> Span {
         self.span
     }
 }

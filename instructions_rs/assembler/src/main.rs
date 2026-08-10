@@ -5,6 +5,7 @@ mod types;
 
 use std::{fs, path::Path, rc::Rc};
 
+use miette::{NamedSource, Result, SourceOffset, SourceSpan};
 use opcode_gen::{
     get_instruction_list,
     instructions::{AddressRegister, Instruction, Register},
@@ -12,6 +13,7 @@ use opcode_gen::{
 
 use crate::{
     istr_resolver::gen_instruction_lookup_table,
+    parser::ParseError,
     types::{Symbol, Type},
 };
 
@@ -30,19 +32,28 @@ use crate::{
 //  - eval all expressions and resolve values in ast
 // emitting assembly: resolving expressions
 //  - emit assembly from ast
-fn main() {
-    let file_path = Path::new("src/program.asm");
+fn main() -> Result<()> {
+    let file_path_str = "src/program.asm";
+
+    parse_file(file_path_str)?;
+
+    Ok(())
+}
+
+// wrapper for parse_source that adds the source_code if errors occur
+fn parse_file(file_path_str: &str) -> Result<()> {
+    let file_path = Path::new(file_path_str);
     let asm_file = fs::read_to_string(file_path).expect("cannot read file");
 
-    let statements = parser::parse_file(&asm_file, file_path);
+    parse_source(asm_file.as_str(), file_path)
+        .map_err(|e| e.with_source_code(NamedSource::new(file_path_str, asm_file.clone())))
+}
 
-    // pretty print the parse error
-    if let Err(e) = statements {
-        println!("{}", e);
-        return;
-    }
+//
+fn parse_source(file: &str, file_path: &Path) -> Result<()> {
+    let statements = parser::parse_file(file, file_path)?;
 
-    let mut program = statements.unwrap();
+    let mut program = statements;
 
     let mut global_symbols = types::SymbolTypeContext::new();
 
@@ -70,4 +81,5 @@ fn main() {
     istr_resolver::resolve_instructions(program.statements_mut(), &istr_lookup);
 
     println!("{:#?}", program);
+    Ok(())
 }

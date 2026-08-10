@@ -199,6 +199,7 @@ fn typecheck_expr(
             typecheck_expr(expr, symbols)?;
             let expr = expr.inner_mut();
 
+            // TODO: change to consider arithmetically operable and boolean operable
             match op {
                 UnaryOp::Neg => {
                     if expr.ty != Type::Int {
