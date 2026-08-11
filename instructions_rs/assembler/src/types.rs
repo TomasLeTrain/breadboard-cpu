@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{AstInstruction, AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
+use crate::ast::{AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {

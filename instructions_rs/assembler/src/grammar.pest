@@ -1,5 +1,5 @@
 WHITESPACE = _{ " " | "\t" | NEWLINE }
-COMMENT    = _{ ";" ~ (!NEWLINE ~ ANY)* }
+COMMENT    = { ";" ~ (!NEWLINE ~ ANY)* }
 
 // Program is a sequence of statements/expressions
 Program = _{ SOI ~ (Statement)* ~ EOI }
@@ -10,7 +10,7 @@ Statement             = { LabelStatement | BlockLabel | InstructionStatement }
 InstructionStatement  = { InstructionLabel ~ InstructionParameters? }
 InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
 InstructionLabel      = { Identifier }
-InstructionParameter  = _{  Expr }
+InstructionParameter  = _{ Expr }
 
 // label:
 LabelStatement = { LabelIdentifier ~ ":" }
@@ -68,7 +68,7 @@ bit_negation = { "~" }
 logical_not = { "!" }
 
 // Primary expressions
-Primary = _{ Literal | Identifier | "(" ~ Expr ~ ")" }
+Primary = _{ Literal | (Identifier ~ !":") | "(" ~ Expr ~ ")" }
 
 // Literals
 // Hex must have higher precedence otherwise gets recognized as int

@@ -1,10 +1,7 @@
-; jmp ~cool_label + 5, SP
-; this is a comment detailing another thing
-
 cool_label:
 	jmp global_scope_label, MAR
-	whar 3
-	; 1 3
+	lol ; some other comment
+
 global_scope_label:
 
 block_label {

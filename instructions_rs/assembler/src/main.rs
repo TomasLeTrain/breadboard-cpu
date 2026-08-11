@@ -5,7 +5,7 @@ mod types;
 
 use std::{fs, path::Path, rc::Rc};
 
-use miette::{NamedSource, Result, };
+use miette::{NamedSource, Result};
 use opcode_gen::{
     get_instruction_list,
     instructions::{AddressRegister, Instruction, Register},

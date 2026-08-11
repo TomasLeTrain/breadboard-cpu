@@ -1,9 +1,7 @@
 use std::fmt::Debug;
-use std::{cell::RefCell, fmt, path::Path, rc::Rc};
+use std::{path::Path, rc::Rc};
 
 use crate::types::Type;
-
-pub type Program<'a> = Vec<Statement<'a>>;
 
 use opcode_gen::instructions::InstructionSignature;
 use pest::{RuleType, Span, iterators::Pair};
