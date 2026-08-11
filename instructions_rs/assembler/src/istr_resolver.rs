@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use miette::Result;
+use miette::{Result, miette};
 use opcode_gen::instructions::{
     AddressRegister, ArgumentType, Instruction, InstructionSignature, Register,
 };
@@ -109,15 +109,21 @@ pub fn resolve_instructions(
 
 pub fn gen_instruction_lookup_table(
     istrs: &Vec<Rc<Instruction>>,
-) -> HashMap<InstructionSignature, Rc<Instruction>> {
+) -> Result<HashMap<InstructionSignature, Rc<Instruction>>> {
     let mut res = HashMap::new();
 
     for istr in istrs {
-        res.insert(
+        if let Some(other) = res.insert(
             istr.istr_type().get_signature().to_generic(),
             Rc::clone(istr),
-        );
+        ) {
+            return Err(miette!(
+                "Duplicate signatures found - {} and {}",
+                istr,
+                other
+            ));
+        }
     }
 
-    res
+    Ok(res)
 }

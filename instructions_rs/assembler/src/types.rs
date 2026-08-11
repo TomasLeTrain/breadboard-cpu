@@ -87,20 +87,26 @@ impl Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Symbol {
+pub struct Symbol<'a> {
     pub name: String,
     pub symbol_type: Type,
+    pub definition: Option<Span<'a>>,
 }
 
 // keeps track of symbols by keeping track of their scope as well
 // allows reusing one context struct through all operations
-pub struct SymbolTypeContext {
-    symbol_stack: Vec<Symbol>,
+pub struct SymbolTypeContext<'a> {
+    symbol_stack: Vec<Symbol<'a>>,
     symbols: HashMap<String, Type>,
 }
 
 #[derive(Debug)]
-pub struct DuplicateSymbolError;
+pub struct DuplicateSymbolError {
+    name: String,
+    type1: Type,
+    type2: Type,
+}
+
 #[derive(Debug)]
 pub struct EmptyStackError;
 
@@ -109,7 +115,11 @@ impl Error for EmptyStackError {}
 
 impl Display for DuplicateSymbolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Symbol already in context.")
+        write!(
+            f,
+            "Symbol already in context - name: {:?}, type1: {:?}, type2: {:?}",
+            self.name, self.type1, self.type2
+        )
     }
 }
 impl Display for EmptyStackError {
@@ -118,7 +128,7 @@ impl Display for EmptyStackError {
     }
 }
 
-impl SymbolTypeContext {
+impl<'a> SymbolTypeContext<'a> {
     pub fn new() -> Self {
         SymbolTypeContext {
             symbol_stack: Vec::new(),
@@ -126,12 +136,24 @@ impl SymbolTypeContext {
         }
     }
 
-    pub fn push(&mut self, symbol: Symbol) -> Result<Type> {
+    pub fn push(&mut self, symbol: Symbol<'a>) -> Result<()> {
         self.symbol_stack.push(symbol.clone());
-        self.symbols
-            .insert(symbol.name, symbol.symbol_type)
-            .ok_or(DuplicateSymbolError {})
+        let pushed_symbol = symbol.clone();
+
+        let push_result = self
+            .symbols
+            .insert(pushed_symbol.name, pushed_symbol.symbol_type);
+
+        if let Some(other) = push_result {
+            Err(DuplicateSymbolError {
+                name: symbol.name,
+                type1: other,
+                type2: symbol.symbol_type,
+            })
             .into_diagnostic()
+        } else {
+            Ok(())
+        }
     }
 
     fn pop(&mut self) -> Result<Symbol> {
@@ -146,6 +168,7 @@ impl SymbolTypeContext {
         Ok(Symbol {
             name: popped_symbol.name,
             symbol_type: returned_type,
+            definition: None,
         })
     }
 
@@ -173,6 +196,7 @@ pub fn typecheck(
             let curr_symbol = Symbol {
                 name: name.clone(),
                 symbol_type: Type::Label,
+                definition: None
             };
             symbols.push(curr_symbol.clone())?;
             labels.push(curr_symbol);
@@ -190,6 +214,7 @@ pub fn typecheck(
                 if let Err(_err) = symbols.push(Symbol {
                     name: name.clone(),
                     symbol_type: Type::Label,
+                    definition: Some(*span)
                 }) {
                     Err(ParseError::from_span("Duplicate symbol in scope", *span))?
                 }
@@ -213,11 +238,12 @@ pub fn typecheck(
     }
 
     // checks that all returned symbols match what was pushed in
-    for label in labels {
+    // goes in reverse since pop starts from the last added element
+    for label in labels.into_iter().rev() {
         let curr = symbols.pop()?;
         if label != curr {
             return Err(miette!(
-                "Popped Label does not match - original: {:?}, got: {:?}",
+                "Popped symbol does not match - original: {:?}, got: {:?}",
                 label,
                 curr,
             ));

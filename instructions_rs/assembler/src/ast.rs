@@ -10,6 +10,12 @@ type Address = u16;
 
 type Ast<'a> = Vec<AstNode<'a, Statement<'a>>>;
 
+pub struct AstSpan {
+    start: usize,
+    len: usize,
+    source: Rc<str>,
+}
+
 #[derive(Debug)]
 pub struct FileAst<'a> {
     statements: Ast<'a>,

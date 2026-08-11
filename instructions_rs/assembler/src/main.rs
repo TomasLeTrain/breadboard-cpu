@@ -75,7 +75,7 @@ fn parse_source(file: &str, file_path: &Path) -> Result<()> {
     types::typecheck(program.statements_mut(), &mut global_symbols)?;
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
-    let istr_lookup = gen_instruction_lookup_table(&all_istrs);
+    let istr_lookup = gen_instruction_lookup_table(&all_istrs)?;
 
     istr_resolver::resolve_instructions(program.statements_mut(), &istr_lookup)?;
 
