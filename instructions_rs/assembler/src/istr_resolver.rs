@@ -49,7 +49,6 @@ fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> Result<ArgumentType> {
         // coerce labels into address
         Type::Label => ArgumentType::Addr,
         Type::Addr => ArgumentType::Addr,
-        // Type::Unknown => ArgumentType::Addr,
 
         ty => Err(ParseError::from_span(
             format!("Unexpected parameter expression type {:?}", ty),

@@ -36,8 +36,8 @@ impl<'a> FileAst<'a> {
 /// wraps T with additional information tied to each token (ex. parent file, span, etc.)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AstNode<'a, T> {
-    inner: T,
-    span: Span<'a>,
+    pub inner: T,
+    pub span: Span<'a>,
 }
 
 impl<'a, T> AstNode<'a, T> {

@@ -1,7 +1,11 @@
 use std::{collections::HashMap, error::Error, fmt::Display};
 
-use crate::{ast::{AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp}, parser::ParseError};
-use miette::{IntoDiagnostic, Result};
+use crate::{
+    ast::{AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp},
+    parser::ParseError,
+};
+use miette::{IntoDiagnostic, Result, miette};
+use pest::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -130,15 +134,19 @@ impl SymbolTypeContext {
             .into_diagnostic()
     }
 
-    fn pop(&mut self) -> Result<()> {
+    fn pop(&mut self) -> Result<Symbol> {
         let popped_symbol = self
             .symbol_stack
             .pop()
             .ok_or(EmptyStackError {})
             .into_diagnostic()?;
 
-        self.symbols.remove(&popped_symbol.name).unwrap();
-        Ok(())
+        let returned_type = self.symbols.remove(&popped_symbol.name).unwrap();
+
+        Ok(Symbol {
+            name: popped_symbol.name,
+            symbol_type: returned_type,
+        })
     }
 
     fn get(&self, name: &String) -> Option<&Type> {
@@ -155,30 +163,35 @@ pub fn typecheck(
     symbols: &mut SymbolTypeContext,
 ) -> Result<()> {
     // TODO: can turn into label vec to verify poppped values are accurate (if pop returns val)
-    let mut num_labels = 0;
+    let mut labels = Vec::new();
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
         if let Statement::Label { name } = statement.inner() {
             // TODO: ensure not duplicate
             // push into local scope
-            symbols.push(Symbol {
+            let curr_symbol = Symbol {
                 name: name.clone(),
                 symbol_type: Type::Label,
-            })?;
-            num_labels += 1;
+            };
+            symbols.push(curr_symbol.clone())?;
+            labels.push(curr_symbol);
         }
     }
 
     for statement in statements.iter_mut() {
-        match statement.inner_mut() {
-            Statement::BlockLabel { name, body } => {
+        // must match whole statement to get span without an additional mutable borrow
+        match statement {
+            AstNode {
+                inner: Statement::BlockLabel { name, body },
+                span,
+            } => {
                 // push into local scope
-                if let Err(err) = symbols.push(Symbol {
+                if let Err(_err) = symbols.push(Symbol {
                     name: name.clone(),
                     symbol_type: Type::Label,
                 }) {
-                    // already in scope
+                    Err(ParseError::from_span("Duplicate symbol in scope", *span))?
                 }
 
                 // fill labels for block
@@ -187,18 +200,30 @@ pub fn typecheck(
                 // remove from scope
                 symbols.pop()?;
             }
-            Statement::Instruction(instruction) => {
+            AstNode {
+                inner: Statement::Instruction(instruction),
+                span: _span,
+            } => {
                 for param in &mut instruction.params.iter_mut() {
                     typecheck_expr(param, symbols).unwrap();
                 }
             }
             _ => (),
+        };
+    }
+
+    // checks that all returned symbols match what was pushed in
+    for label in labels {
+        let curr = symbols.pop()?;
+        if label != curr {
+            return Err(miette!(
+                "Popped Label does not match - original: {:?}, got: {:?}",
+                label,
+                curr,
+            ));
         }
     }
 
-    for _ in 0..num_labels {
-        symbols.pop()?;
-    }
     Ok(())
 }
 

@@ -438,7 +438,7 @@ fn unescape_char(string: &str) -> char {
 #[diagnostic(code(assembler::parse_error))]
 pub struct ParseError {
     #[label]
-    pub snippet: SourceSpan,
+    pub snippet: Option<SourceSpan>,
     pub err_message: String,
     #[help]
     pub help: Option<String>,
@@ -457,7 +457,7 @@ impl ParseError {
         let span_start = span.start();
         let span_end = span.end();
         let len = span_end - span_start;
-        let snippet = SourceSpan::new(span_start.into(), len);
+        let snippet = Some(SourceSpan::new(span_start.into(), len));
 
         ParseError {
             err_message: message.into(),
@@ -485,7 +485,10 @@ impl ParseError {
         )
     }
 
-    fn from_pest_message<R: RuleType>(err: PestParseError<R>, err_message: impl Into<String>) -> ParseError {
+    fn from_pest_message<R: RuleType>(
+        err: PestParseError<R>,
+        err_message: impl Into<String>,
+    ) -> ParseError {
         let help = Some(err.variant.message().to_string());
 
         let span = match err.location {
@@ -493,7 +496,7 @@ impl ParseError {
             pest::error::InputLocation::Span((start, end)) => (start, end),
         };
 
-        let snippet = SourceSpan::new(span.0.into(), span.1 - span.0);
+        let snippet = Some(SourceSpan::new(span.0.into(), span.1 - span.0));
 
         ParseError {
             err_message: err_message.into(),
