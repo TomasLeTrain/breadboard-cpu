@@ -3,15 +3,16 @@ mod istr_resolver;
 mod parser;
 mod types;
 
-use std::{fs, path::Path, rc::Rc};
+use std::{fs, rc::Rc, sync::Arc};
 
-use miette::{NamedSource, Result};
+use miette::Result;
 use opcode_gen::{
     get_instruction_list,
     instructions::{AddressRegister, Instruction, Register},
 };
 
 use crate::{
+    ast::NamedSourceFile,
     istr_resolver::gen_instruction_lookup_table,
     types::{Symbol, Type},
 };
@@ -41,18 +42,19 @@ fn main() -> Result<()> {
 
 // wrapper for parse_source that adds the source_code if errors occur
 fn parse_file(file_path_str: &str) -> Result<()> {
-    let file_path = Path::new(file_path_str);
-    let asm_file = fs::read_to_string(file_path).expect("cannot read file");
+    let file_path = file_path_str.to_string();
+    let asm_file = fs::read_to_string(file_path.clone()).expect("cannot read file");
 
-    parse_source(asm_file.as_str(), file_path)
-        .map_err(|e| e.with_source_code(NamedSource::new(file_path_str, asm_file.clone())))
+    parse_source(asm_file, file_path)
+    // TODO: add functionality back
+    // .map_err(|e| e.with_source_code(NamedSource::new(file_path_str, asm_file)))
 }
 
 //
-fn parse_source(file: &str, file_path: &Path) -> Result<()> {
-    let statements = parser::parse_file(file, file_path)?;
+fn parse_source(file: String, file_path: String) -> Result<()> {
+    let source = Arc::new(NamedSourceFile::new(file, file_path));
 
-    let mut program = statements;
+    let mut program = parser::parse_file(source)?;
 
     let mut global_symbols = types::SymbolTypeContext::new();
 
@@ -62,6 +64,7 @@ fn parse_source(file: &str, file_path: &Path) -> Result<()> {
         global_symbols.push(Symbol {
             name: reg.name().to_string(),
             symbol_type: Type::Register,
+            span: None,
         })?;
     }
 
@@ -69,15 +72,16 @@ fn parse_source(file: &str, file_path: &Path) -> Result<()> {
         global_symbols.push(Symbol {
             name: reg.name().to_string(),
             symbol_type: Type::AddressRegister,
+            span: None,
         })?;
     }
 
-    types::typecheck(program.statements_mut(), &mut global_symbols)?;
+    types::typecheck(&mut program, &mut global_symbols)?;
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)?;
 
-    istr_resolver::resolve_instructions(program.statements_mut(), &istr_lookup)?;
+    istr_resolver::resolve_instructions(&mut program, &istr_lookup)?;
 
     println!("{:#?}", program);
     Ok(())

@@ -1,11 +1,10 @@
 use std::{collections::HashMap, error::Error, fmt::Display};
 
 use crate::{
-    ast::{AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp},
+    ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, TypedExpr, UnaryOp},
     parser::ParseError,
 };
 use miette::{IntoDiagnostic, Result, miette};
-use pest::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -87,16 +86,16 @@ impl Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Symbol<'a> {
+pub struct Symbol {
     pub name: String,
     pub symbol_type: Type,
-    pub definition: Option<Span<'a>>,
+    pub span: Option<AstSpan>,
 }
 
 // keeps track of symbols by keeping track of their scope as well
 // allows reusing one context struct through all operations
-pub struct SymbolTypeContext<'a> {
-    symbol_stack: Vec<Symbol<'a>>,
+pub struct SymbolTypeContext {
+    symbol_stack: Vec<Symbol>,
     symbols: HashMap<String, Type>,
 }
 
@@ -128,7 +127,7 @@ impl Display for EmptyStackError {
     }
 }
 
-impl<'a> SymbolTypeContext<'a> {
+impl SymbolTypeContext {
     pub fn new() -> Self {
         SymbolTypeContext {
             symbol_stack: Vec::new(),
@@ -136,7 +135,7 @@ impl<'a> SymbolTypeContext<'a> {
         }
     }
 
-    pub fn push(&mut self, symbol: Symbol<'a>) -> Result<()> {
+    pub fn push(&mut self, symbol: Symbol) -> Result<()> {
         self.symbol_stack.push(symbol.clone());
         let pushed_symbol = symbol.clone();
 
@@ -168,7 +167,7 @@ impl<'a> SymbolTypeContext<'a> {
         Ok(Symbol {
             name: popped_symbol.name,
             symbol_type: returned_type,
-            definition: None,
+            span: None,
         })
     }
 
@@ -196,7 +195,7 @@ pub fn typecheck(
             let curr_symbol = Symbol {
                 name: name.clone(),
                 symbol_type: Type::Label,
-                definition: None
+                span: None,
             };
             symbols.push(curr_symbol.clone())?;
             labels.push(curr_symbol);
@@ -214,9 +213,9 @@ pub fn typecheck(
                 if let Err(_err) = symbols.push(Symbol {
                     name: name.clone(),
                     symbol_type: Type::Label,
-                    definition: Some(*span)
+                    span: Some(span.clone()),
                 }) {
-                    Err(ParseError::from_span("Duplicate symbol in scope", *span))?
+                    Err(ParseError::from_span("Duplicate symbol in scope", span))?
                 }
 
                 // fill labels for block

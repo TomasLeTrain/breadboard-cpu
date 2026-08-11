@@ -1,15 +1,15 @@
 use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
-use std::path::Path;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use crate::ast::*;
 use crate::types::Type;
+
 use miette::{Diagnostic, Result, SourceSpan};
 use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
-use pest::{Parser, RuleType, Span};
+use pest::{Parser, RuleType};
 
 use pest::error::Error as PestParseError;
 use pest::error::ErrorVariant as PestParseErrorVariant;
@@ -40,33 +40,33 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
 });
 
 /// parse a file
-pub fn parse_file<'a>(source: &'a str, file_path: &'a Path) -> Result<FileAst<'a>> {
-    let mut res = FileAst::new(source, file_path);
+pub fn parse_file(source: Source) -> Result<Ast> {
+    let mut program = Ast::new();
 
-    let pairs = AssemblyParser::parse(Rule::Program, source).map_err(ParseError::from_pest)?;
+    let pairs =
+        AssemblyParser::parse(Rule::Program, source.source()).map_err(ParseError::from_pest)?;
+
     // println!("{pairs:#?}");
-
-    let program = res.statements_mut();
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {
             Rule::Statement => {
-                program.push(parse_statement(pair)?);
+                program.push(parse_statement(pair, &source)?);
             }
             Rule::COMMENT | Rule::EOI => (),
             _ => {}
         }
     }
 
-    Ok(res)
+    Ok(program)
 }
 
-fn parse_statement(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
+fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::InstructionStatement => parse_instruction(inner),
-        Rule::LabelStatement => parse_label(inner),
-        Rule::BlockLabel => parse_block_label(inner),
+        Rule::InstructionStatement => parse_instruction(inner, source),
+        Rule::LabelStatement => parse_label(inner, source),
+        Rule::BlockLabel => parse_block_label(inner, source),
         r => Err(ParseError::from_expected(
             "Statement parsing error".to_string(),
             vec![
@@ -75,12 +75,12 @@ fn parse_statement(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
                 Rule::BlockLabel,
             ],
             vec![r],
-            inner.as_span(),
+            &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
 }
 
-fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
+fn parse_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::LabelIdentifier => Ok(AstNode::from_pair(
@@ -88,34 +88,41 @@ fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
                 name: inner.to_string(),
             },
             inner,
+            source,
         )),
         r => Err(ParseError::from_expected(
             "Label parsing error".to_string(),
             vec![Rule::LabelIdentifier],
             vec![r],
-            inner.as_span(),
+            &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
 }
 
-fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
-    let mut name: Result<String> =
-        Err(ParseError::from_span("Block label name not found", pair.as_span()).into());
-    let mut body: Result<Vec<AstNode<Statement>>> =
-        Err(ParseError::from_span("Block label body not found", pair.as_span()).into());
+fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
+    let mut name: Result<String> = Err(ParseError::from_span(
+        "Block label name not found",
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
+    let mut body: Result<Vec<AstNode<Statement>>> = Err(ParseError::from_span(
+        "Block label body not found",
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
 
-    let span = pair.as_span();
+    let span = AstSpan::from_span(pair.as_span(), source);
 
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::LabelIdentifier => name = Ok(item.to_string()),
-            Rule::Block => body = Ok(parse_block(item)?),
+            Rule::Block => body = Ok(parse_block(item, source)?),
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Block label parsing error",
                 vec![Rule::LabelIdentifier, Rule::Block, Rule::COMMENT],
                 vec![r],
-                span,
+                &span,
             ))?,
         }
     }
@@ -129,60 +136,59 @@ fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
     ))
 }
 
-fn parse_block(pair: Pair<Rule>) -> Result<Vec<AstNode<Statement>>> {
+fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNode<Statement>>> {
     let mut stmts = Vec::new();
     for item in pair.into_inner() {
         match item.as_rule() {
-            Rule::Statement => stmts.push(parse_statement(item)?),
+            Rule::Statement => stmts.push(parse_statement(item, source)?),
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Block parsing error".to_string(),
                 vec![Rule::Statement, Rule::COMMENT],
                 vec![r],
-                item.as_span(),
+                &AstSpan::from_span(item.as_span(), source),
             ))?,
         }
     }
     Ok(stmts)
 }
 
-fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
+fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
     // let mut name: Result<String> =
     //     Err(ParseError::from_span("Block label name not found".to_string(), pair.as_span()).into());
     // let mut body: Result<Vec<AstNode<Statement>>> =
     //     Err(ParseError::from_span("Block label body not found".to_string(), pair.as_span()).into());
 
-    let mut name: Result<String> =
-        Err(ParseError::from_span("Instruction name not found".to_string(), pair.as_span()).into());
+    let mut name: Result<String> = Err(ParseError::from_span(
+        "Instruction name not found".to_string(),
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
 
-    let mut params: Vec<AstNode<'_, TypedExpr<'_>>> = Vec::new();
-    let og_span = pair.as_span();
+    let mut params: Vec<AstNode<TypedExpr>> = Vec::new();
 
-    let mut span = Span::new(
-        pair.get_input(),
+    let mut span = AstSpan::new(
         pair.as_span().start(),
         pair.as_span().start() + 1,
-    )
-    .unwrap();
+        Arc::clone(source),
+    );
 
     // used to merge spans, even if non contiguous
-    let mut merge = |other: Span| -> () {
-        span = Span::new(
-            span.get_input(),
-            core::cmp::min(span.start(), other.start()),
-            core::cmp::max(span.end(), other.end()),
-        )
-        .unwrap();
+    let mut merge = |start: usize, end: usize| -> () {
+        span.set_span(
+            core::cmp::min(span.start(), start),
+            core::cmp::max(span.end(), end),
+        );
     };
 
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::InstructionLabel => {
                 // merge span covering label in case no params
-                merge(item.as_span());
+                merge(item.as_span().start(), item.as_span().end());
                 name = Ok(item.to_string());
             }
-            Rule::InstructionParameters => params = parse_instruction_parameters(item)?,
+            Rule::InstructionParameters => params = parse_instruction_parameters(item, source)?,
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Instruction parsing error".to_string(),
@@ -192,14 +198,14 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
                     Rule::COMMENT,
                 ],
                 vec![r],
-                item.as_span(),
+                &AstSpan::from_span(item.as_span(), source),
             ))?,
         };
     }
 
     // merge span to the last param, if exists
     if let Some(param) = params.iter().last() {
-        merge(param.span());
+        merge(param.span().start(), param.span().end());
     }
 
     Ok(AstNode::new(
@@ -208,18 +214,21 @@ fn parse_instruction(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
     ))
 }
 
-fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<AstNode<TypedExpr>>> {
+fn parse_instruction_parameters(
+    pair: Pair<Rule>,
+    source: &Source,
+) -> Result<Vec<AstNode<TypedExpr>>> {
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
         match item.as_rule() {
-            Rule::Expr => params.push(parse_expr(item.into_inner())?),
+            Rule::Expr => params.push(parse_expr(item.into_inner(), source)?),
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Instruction parameter parsing error".to_string(),
                 vec![Rule::Expr, Rule::COMMENT],
                 vec![r],
-                item.as_span(),
+                &AstSpan::from_span(item.as_span(), source),
             ))?,
         };
     }
@@ -229,13 +238,15 @@ fn parse_instruction_parameters(pair: Pair<Rule>) -> Result<Vec<AstNode<TypedExp
 
 fn parse_expr<'a>(
     pairs: impl Iterator<Item = pest::iterators::Pair<'a, Rule>>,
-) -> Result<AstNode<'a, TypedExpr<'a>>> {
+    source: &Source,
+) -> Result<AstNode<TypedExpr>> {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
-            Rule::Literal => parse_literal(primary),
+            Rule::Literal => parse_literal(primary, source),
             Rule::Identifier => Ok(AstNode::from_pair(
                 TypedExpr::unknown(Expr::Identity(primary.as_str().to_string())),
                 primary,
+                source,
             )),
             Rule::Expr => {
                 let inner = primary.into_inner();
@@ -246,13 +257,13 @@ fn parse_expr<'a>(
                     .filter(|x| x.as_rule() != Rule::COMMENT)
                     .collect();
 
-                parse_expr(no_comments.into_iter())
+                parse_expr(no_comments.into_iter(), source)
             }
             r => Err(ParseError::from_expected(
                 "Primary parsing error".to_string(),
                 vec![Rule::Literal, Rule::Identifier, Rule::Expr],
                 vec![r],
-                primary.as_span(),
+                &AstSpan::from_span(primary.as_span(), source),
             ))?,
         })
         .map_infix(|lhs, op, rhs| {
@@ -305,7 +316,7 @@ fn parse_expr<'a>(
                         Rule::logical_or,
                     ],
                     vec![r],
-                    op.as_span(),
+                    &AstSpan::from_span(op.as_span(), source),
                 ))?,
             };
             Ok(AstNode::from_pair(
@@ -315,6 +326,7 @@ fn parse_expr<'a>(
                     right: Box::new(rhs?),
                 }),
                 op,
+                source,
             ))
         })
         .map_prefix(|op, rhs| {
@@ -327,7 +339,7 @@ fn parse_expr<'a>(
                     "Prefix parsing error".to_string(),
                     vec![Rule::subtract, Rule::logical_not, Rule::bit_negation],
                     vec![r],
-                    op.as_span(),
+                    &AstSpan::from_span(op.as_span(), source),
                 ))?,
             };
 
@@ -337,23 +349,26 @@ fn parse_expr<'a>(
                     expr: Box::new(rhs?),
                 }),
                 op,
+                source,
             ))
         })
         .parse(pairs.filter(|x| x.as_rule() != Rule::COMMENT))
 }
 
-fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
+fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
         Rule::Int => Ok(AstNode::from_pair(
             TypedExpr::new(Expr::Int(inner.as_str().parse().unwrap()), Type::Int),
             inner,
+            source,
         )),
-        Rule::Hexadecimal => parse_hexadecimal(inner),
+        Rule::Hexadecimal => parse_hexadecimal(inner, source),
         Rule::Bool => Ok(AstNode::from_pair(
             TypedExpr::new(Expr::Bool(inner.as_str() == "true"), Type::Bool),
             inner,
+            source,
         )),
         Rule::String => {
             let s = inner.as_str();
@@ -361,6 +376,7 @@ fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
             Ok(AstNode::from_pair(
                 TypedExpr::new(Expr::String(s[1..s.len() - 1].to_string()), Type::String),
                 inner,
+                source,
             ))
         }
         Rule::Character => {
@@ -370,6 +386,7 @@ fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
             Ok(AstNode::from_pair(
                 TypedExpr::new(Expr::Char(c as u8), Type::Character),
                 inner,
+                source,
             ))
         }
         r => Err(ParseError::from_expected(
@@ -382,12 +399,12 @@ fn parse_literal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
                 Rule::Character,
             ],
             vec![r],
-            inner.as_span(),
+            &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
 }
 
-fn parse_hexadecimal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
+fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -397,12 +414,13 @@ fn parse_hexadecimal(pair: Pair<Rule>) -> Result<AstNode<TypedExpr>> {
                 Type::Int,
             ),
             inner,
+            source,
         )),
         r => Err(ParseError::from_expected(
             "Hexadecimal parsing error".to_string(),
             vec![Rule::Int],
             vec![r],
-            inner.as_span(),
+            &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
 }
@@ -453,7 +471,7 @@ impl Display for ParseError {
 }
 
 impl ParseError {
-    pub fn from_span<'a>(message: impl Into<String>, span: Span<'a>) -> Self {
+    pub fn from_span<'a>(message: impl Into<String>, span: &AstSpan) -> Self {
         let span_start = span.start();
         let span_end = span.end();
         let len = span_end - span_start;
@@ -471,7 +489,7 @@ impl ParseError {
         message: impl Into<String>,
         expected: Vec<R>,
         unexpected: Vec<R>,
-        span: Span<'a>,
+        span: &AstSpan,
     ) -> Self {
         Self::from_pest_message(
             PestParseError::new_from_span(
@@ -479,7 +497,7 @@ impl ParseError {
                     positives: expected,
                     negatives: unexpected,
                 },
-                span,
+                span.to_span(),
             ),
             message,
         )

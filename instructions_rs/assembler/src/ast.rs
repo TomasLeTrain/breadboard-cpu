@@ -1,5 +1,5 @@
-use std::fmt::Debug;
-use std::{path::Path, rc::Rc};
+use std::sync::Arc;
+use std::{fmt::Debug, rc::Rc};
 
 use crate::types::Type;
 
@@ -8,51 +8,91 @@ use pest::{RuleType, Span, iterators::Pair};
 
 type Address = u16;
 
-type Ast<'a> = Vec<AstNode<'a, Statement<'a>>>;
+pub type Ast = Vec<AstNode<Statement>>;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NamedSourceFile {
+    source: String,
+    file_name: String,
+}
+
+impl NamedSourceFile {
+    pub fn new(source: String, file_name: String) -> Self {
+        Self { source, file_name }
+    }
+
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    pub fn file_name(&self) -> &str {
+        &self.file_name
+    }
+}
+
+// type Source = NamedSource<Arc<str>>;
+pub type Source = Arc<NamedSourceFile>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AstSpan {
     start: usize,
-    len: usize,
-    source: Rc<str>,
+    end: usize,
+    source: Source,
 }
 
-#[derive(Debug)]
-pub struct FileAst<'a> {
-    statements: Ast<'a>,
+impl AstSpan {
+    pub fn new(start: usize, end: usize, source: Source) -> Self {
+        Self { start, end, source }
+    }
 
-    // TODO: should be taking ownership of source?
-    source: &'a str,
-    file_path: &'a Path,
-}
-
-impl<'a> FileAst<'a> {
-    pub fn new(source: &'a str, file_path: &'a Path) -> Self {
+    pub fn from_span<'a>(span: Span<'a>, source: &Source) -> Self {
         Self {
-            statements: Ast::new(),
-            source,
-            file_path,
+            start: span.start(),
+            end: span.end(),
+            source: Arc::clone(source),
         }
     }
 
-    pub fn statements_mut(&mut self) -> &mut Ast<'a> {
-        &mut self.statements
+    pub fn from_pair<R: RuleType>(pair: Pair<R>, source: &Source) -> Self {
+        Self::from_span(pair.as_span(), source)
+    }
+
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
+    pub fn set_span(&mut self, start: usize, end: usize) {
+        self.start = start;
+        self.end = end;
+    }
+
+    pub fn source(&self) -> &NamedSourceFile {
+        &self.source
+    }
+
+    pub fn to_span<'a>(&'a self) -> Span<'a> {
+        Span::new(self.source().source(), self.start(), self.end()).unwrap()
     }
 }
 
 /// wraps T with additional information tied to each token (ex. parent file, span, etc.)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AstNode<'a, T> {
+pub struct AstNode<T> {
     pub inner: T,
-    pub span: Span<'a>,
+    pub span: AstSpan,
 }
 
-impl<'a, T> AstNode<'a, T> {
-    pub fn new(inner: T, span: Span<'a>) -> Self {
+impl<T> AstNode<T> {
+    pub fn new(inner: T, span: AstSpan) -> Self {
         Self { inner, span }
     }
 
-    pub fn from_pair<R: RuleType>(inner: T, pair: Pair<'a, R>) -> Self {
-        Self::new(inner, pair.as_span())
+    pub fn from_pair<R: RuleType>(inner: T, pair: Pair<R>, source: &Source) -> Self {
+        Self::new(inner, AstSpan::from_pair(pair, source))
     }
 
     pub fn inner(&self) -> &T {
@@ -63,32 +103,32 @@ impl<'a, T> AstNode<'a, T> {
         &mut self.inner
     }
 
-    pub fn span(&'a self) -> Span<'a> {
-        self.span
+    pub fn span(&self) -> &AstSpan {
+        &self.span
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct AddressedStatement<'a> {
-    statement: Statement<'a>,
+pub struct AddressedStatement {
+    statement: Statement,
     address: Option<Address>,
 }
 
-impl<'a> AddressedStatement<'a> {
-    pub fn statement(&'a self) -> &'a Statement<'a> {
+impl AddressedStatement {
+    pub fn statement<'a>(&'a self) -> &'a Statement {
         &self.statement
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct AstInstruction<'a> {
+pub struct AstInstruction {
     pub name: String,
-    pub params: Vec<AstNode<'a, TypedExpr<'a>>>,
+    pub params: Vec<AstNode<TypedExpr>>,
     pub istr_signature: Option<InstructionSignature>,
     pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
 }
-impl<'a> AstInstruction<'a> {
-    pub fn new(name: String, params: Vec<AstNode<'a, TypedExpr<'a>>>) -> Self {
+impl AstInstruction {
+    pub fn new(name: String, params: Vec<AstNode<TypedExpr>>) -> Self {
         AstInstruction {
             name,
             params,
@@ -99,29 +139,29 @@ impl<'a> AstInstruction<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Statement<'a> {
+pub enum Statement {
     Label {
         name: String,
     },
     BlockLabel {
         name: String,
-        body: Vec<AstNode<'a, Statement<'a>>>,
+        body: Vec<AstNode<Statement>>,
     },
-    Instruction(AstInstruction<'a>),
+    Instruction(AstInstruction),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypedExpr<'a> {
-    pub expr: Expr<'a>,
+pub struct TypedExpr {
+    pub expr: Expr,
     pub ty: Type,
 }
 
-impl<'a> TypedExpr<'a> {
-    pub fn new(expr: Expr<'a>, ty: Type) -> Self {
+impl TypedExpr {
+    pub fn new(expr: Expr, ty: Type) -> Self {
         Self { expr, ty }
     }
 
-    pub fn unknown(expr: Expr<'a>) -> Self {
+    pub fn unknown(expr: Expr) -> Self {
         TypedExpr {
             expr,
             ty: Type::Unknown,
@@ -130,7 +170,7 @@ impl<'a> TypedExpr<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Expr<'a> {
+pub enum Expr {
     /// Integer literal
     Int(i64),
     /// Boolean literal
@@ -144,17 +184,17 @@ pub enum Expr<'a> {
     /// Unary operation
     Unary {
         op: UnaryOp,
-        expr: Box<AstNode<'a, TypedExpr<'a>>>,
+        expr: Box<AstNode<TypedExpr>>,
     },
     /// Binary operation
     Binary {
         op: BinaryOp,
-        left: Box<AstNode<'a, TypedExpr<'a>>>,
-        right: Box<AstNode<'a, TypedExpr<'a>>>,
+        left: Box<AstNode<TypedExpr>>,
+        right: Box<AstNode<TypedExpr>>,
     },
 }
 
-impl<'a> Expr<'a> {
+impl Expr {
     pub fn as_identity(&self) -> Option<String> {
         if let Expr::Identity(name) = self {
             Some(name.clone())
