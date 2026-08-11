@@ -11,39 +11,53 @@ use crate::{
     types::Type,
 };
 
-fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> ArgumentType {
-    let expr = expr.inner();
-    match expr.ty {
+fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> Result<ArgumentType> {
+    let inner = expr.inner();
+    Ok(match inner.ty {
         // coerce into generic imm since we dont know which it could be
         Type::Int => ArgumentType::GenericImm,
 
         Type::Register => {
-            // TODO: add errors
-            let name = expr.expr.as_identity().unwrap();
+            let name = inner.expr.as_identity().ok_or(ParseError::from_span(
+                "Expression with type Register is not identity",
+                expr.span(),
+            ))?;
             let register = Register::iterator()
                 .find(|reg| reg.name() == name.as_str())
-                .unwrap();
+                .ok_or(ParseError::from_span(
+                    format!("Register not found from name \"{}\"", name),
+                    expr.span(),
+                ))?;
             ArgumentType::Reg(*register)
         }
 
         Type::AddressRegister => {
-            // TODO: add errors
-            let name = expr.expr.as_identity().unwrap();
+            let name = inner.expr.as_identity().ok_or(ParseError::from_span(
+                "Expression with type AddressRegister is not identity",
+                expr.span(),
+            ))?;
             let register = AddressRegister::iterator()
                 .find(|reg| reg.name() == name.as_str())
-                .unwrap();
+                .ok_or(ParseError::from_span(
+                    format!("AddressRegister not found from name \"{}\"", name),
+                    expr.span(),
+                ))?;
+
             ArgumentType::AddrReg(*register)
         }
 
         // coerce labels into address
         Type::Label => ArgumentType::Addr,
         Type::Addr => ArgumentType::Addr,
+        // Type::Unknown => ArgumentType::Addr,
 
-        // TODO: return error
-        _ => todo!(),
+        ty => Err(ParseError::from_span(
+            format!("Unexpected parameter expression type {:?}", ty),
+            expr.span(),
+        ))?,
     }
     // ensure the type is generic since lookup table is as well
-    .to_generic()
+    .to_generic())
 }
 
 pub fn resolve_instructions(
@@ -56,11 +70,11 @@ pub fn resolve_instructions(
                 resolve_instructions(body, istr_lookup)?;
             }
             Statement::Instruction(instruction) => {
-                let param_types: Vec<ArgumentType> = instruction
-                    .params
-                    .iter()
-                    .map(expr_to_argument_type)
-                    .collect();
+                let mut param_types = Vec::new();
+
+                for param in instruction.params.iter() {
+                    param_types.push(expr_to_argument_type(param)?);
+                }
 
                 let generic_signature =
                     InstructionSignature::new(instruction.name.clone(), param_types);

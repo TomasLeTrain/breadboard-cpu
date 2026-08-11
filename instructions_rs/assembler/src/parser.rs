@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use crate::ast::*;
 use crate::types::Type;
 use miette::{Diagnostic, Result, SourceSpan};
-use pest::iterators::{Pair, Pairs};
+use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::{Parser, RuleType, Span};
 
@@ -100,9 +100,9 @@ fn parse_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
 
 fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
     let mut name: Result<String> =
-        Err(ParseError::from_span("Block label name not found".to_string(), pair.as_span()).into());
+        Err(ParseError::from_span("Block label name not found", pair.as_span()).into());
     let mut body: Result<Vec<AstNode<Statement>>> =
-        Err(ParseError::from_span("Block label body not found".to_string(), pair.as_span()).into());
+        Err(ParseError::from_span("Block label body not found", pair.as_span()).into());
 
     let span = pair.as_span();
 
@@ -112,7 +112,7 @@ fn parse_block_label(pair: Pair<Rule>) -> Result<AstNode<Statement>> {
             Rule::Block => body = Ok(parse_block(item)?),
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
-                "Block label parsing error".to_string(),
+                "Block label parsing error",
                 vec![Rule::LabelIdentifier, Rule::Block, Rule::COMMENT],
                 vec![r],
                 span,
@@ -453,22 +453,22 @@ impl Display for ParseError {
 }
 
 impl ParseError {
-    pub fn from_span<'a>(message: String, span: Span<'a>) -> Self {
+    pub fn from_span<'a>(message: impl Into<String>, span: Span<'a>) -> Self {
         let span_start = span.start();
         let span_end = span.end();
         let len = span_end - span_start;
         let snippet = SourceSpan::new(span_start.into(), len);
 
         ParseError {
-            err_message: message,
+            err_message: message.into(),
             snippet,
             help: None,
         }
     }
 
     /// creates error message with a help message detailing expected/unexpected rules
-    fn from_expected<'a, R: RuleType>(
-        message: String,
+    pub fn from_expected<'a, R: RuleType>(
+        message: impl Into<String>,
         expected: Vec<R>,
         unexpected: Vec<R>,
         span: Span<'a>,
@@ -485,7 +485,7 @@ impl ParseError {
         )
     }
 
-    fn from_pest_message<R: RuleType>(err: PestParseError<R>, err_message: String) -> ParseError {
+    fn from_pest_message<R: RuleType>(err: PestParseError<R>, err_message: impl Into<String>) -> ParseError {
         let help = Some(err.variant.message().to_string());
 
         let span = match err.location {
@@ -496,7 +496,7 @@ impl ParseError {
         let snippet = SourceSpan::new(span.0.into(), span.1 - span.0);
 
         ParseError {
-            err_message,
+            err_message: err_message.into(),
             snippet,
             help,
         }

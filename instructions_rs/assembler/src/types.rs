@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error, fmt::Display};
 
-use crate::ast::{AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
+use crate::{ast::{AstNode, BinaryOp, Expr, Statement, TypedExpr, UnaryOp}, parser::ParseError};
+use miette::{IntoDiagnostic, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -94,6 +95,25 @@ pub struct SymbolTypeContext {
     symbols: HashMap<String, Type>,
 }
 
+#[derive(Debug)]
+pub struct DuplicateSymbolError;
+#[derive(Debug)]
+pub struct EmptyStackError;
+
+impl Error for DuplicateSymbolError {}
+impl Error for EmptyStackError {}
+
+impl Display for DuplicateSymbolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Symbol already in context.")
+    }
+}
+impl Display for EmptyStackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "No symbols in stack.")
+    }
+}
+
 impl SymbolTypeContext {
     pub fn new() -> Self {
         SymbolTypeContext {
@@ -102,16 +122,23 @@ impl SymbolTypeContext {
         }
     }
 
-    pub fn push(&mut self, symbol: Symbol) {
-        // TODO: add errors
+    pub fn push(&mut self, symbol: Symbol) -> Result<Type> {
         self.symbol_stack.push(symbol.clone());
-        self.symbols.insert(symbol.name, symbol.symbol_type);
+        self.symbols
+            .insert(symbol.name, symbol.symbol_type)
+            .ok_or(DuplicateSymbolError {})
+            .into_diagnostic()
     }
 
-    fn pop(&mut self) {
-        // TODO: turn into errors
-        let popped_symbol = self.symbol_stack.pop().unwrap();
+    fn pop(&mut self) -> Result<()> {
+        let popped_symbol = self
+            .symbol_stack
+            .pop()
+            .ok_or(EmptyStackError {})
+            .into_diagnostic()?;
+
         self.symbols.remove(&popped_symbol.name).unwrap();
+        Ok(())
     }
 
     fn get(&self, name: &String) -> Option<&Type> {
@@ -123,7 +150,10 @@ impl SymbolTypeContext {
     }
 }
 
-pub fn typecheck(statements: &mut [AstNode<Statement>], symbols: &mut SymbolTypeContext) {
+pub fn typecheck(
+    statements: &mut [AstNode<Statement>],
+    symbols: &mut SymbolTypeContext,
+) -> Result<()> {
     // TODO: can turn into label vec to verify poppped values are accurate (if pop returns val)
     let mut num_labels = 0;
 
@@ -135,7 +165,7 @@ pub fn typecheck(statements: &mut [AstNode<Statement>], symbols: &mut SymbolType
             symbols.push(Symbol {
                 name: name.clone(),
                 symbol_type: Type::Label,
-            });
+            })?;
             num_labels += 1;
         }
     }
@@ -143,19 +173,19 @@ pub fn typecheck(statements: &mut [AstNode<Statement>], symbols: &mut SymbolType
     for statement in statements.iter_mut() {
         match statement.inner_mut() {
             Statement::BlockLabel { name, body } => {
-                // TODO: ensure not duplicate
                 // push into local scope
-                symbols.push(Symbol {
+                if let Err(err) = symbols.push(Symbol {
                     name: name.clone(),
                     symbol_type: Type::Label,
-                });
+                }) {
+                    // already in scope
+                }
 
                 // fill labels for block
-                typecheck(body, symbols);
+                typecheck(body, symbols)?;
 
-                // TODO: turn into error
                 // remove from scope
-                symbols.pop();
+                symbols.pop()?;
             }
             Statement::Instruction(instruction) => {
                 for param in &mut instruction.params.iter_mut() {
@@ -167,8 +197,9 @@ pub fn typecheck(statements: &mut [AstNode<Statement>], symbols: &mut SymbolType
     }
 
     for _ in 0..num_labels {
-        symbols.pop();
+        symbols.pop()?;
     }
+    Ok(())
 }
 
 fn typecheck_expr(

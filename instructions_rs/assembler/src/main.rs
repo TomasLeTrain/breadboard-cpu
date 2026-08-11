@@ -62,17 +62,17 @@ fn parse_source(file: &str, file_path: &Path) -> Result<()> {
         global_symbols.push(Symbol {
             name: reg.name().to_string(),
             symbol_type: Type::Register,
-        });
+        })?;
     }
 
     for reg in AddressRegister::iterator() {
         global_symbols.push(Symbol {
             name: reg.name().to_string(),
             symbol_type: Type::AddressRegister,
-        });
+        })?;
     }
 
-    types::typecheck(program.statements_mut(), &mut global_symbols);
+    types::typecheck(program.statements_mut(), &mut global_symbols)?;
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs);

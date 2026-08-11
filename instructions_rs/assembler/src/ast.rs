@@ -14,7 +14,7 @@ type Ast<'a> = Vec<AstNode<'a, Statement<'a>>>;
 pub struct FileAst<'a> {
     statements: Ast<'a>,
 
-    // TODO: should be taking ownership of source
+    // TODO: should be taking ownership of source?
     source: &'a str,
     file_path: &'a Path,
 }
@@ -28,29 +28,10 @@ impl<'a> FileAst<'a> {
         }
     }
 
-    pub fn statements(&self) -> &Ast<'a> {
-        &self.statements
-    }
-
     pub fn statements_mut(&mut self) -> &mut Ast<'a> {
         &mut self.statements
     }
 }
-
-// #[derive(Debug)]
-// pub struct ParsingError<'a, T> {
-//     message: String,
-//     node: &'a AstNode<'a, T>,
-// }
-//
-// impl<'a, T: Debug> Error for ParsingError<'a, T> {}
-//
-// impl<'a, T> fmt::Display for ParsingError<'a, T> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         writeln!(f, " \u{001b}[31mERROR:\u{001b}[39m {}", self.message)?;
-//         writeln!(f, "{}", self.node.span)
-//     }
-// }
 
 /// wraps T with additional information tied to each token (ex. parent file, span, etc.)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -76,7 +57,7 @@ impl<'a, T> AstNode<'a, T> {
         &mut self.inner
     }
 
-    pub fn span(&self) -> Span {
+    pub fn span(&'a self) -> Span<'a> {
         self.span
     }
 }
@@ -88,7 +69,7 @@ pub struct AddressedStatement<'a> {
 }
 
 impl<'a> AddressedStatement<'a> {
-    pub fn statement(&self) -> &Statement {
+    pub fn statement(&'a self) -> &'a Statement<'a> {
         &self.statement
     }
 }

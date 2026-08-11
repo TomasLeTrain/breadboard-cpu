@@ -1,6 +1,6 @@
 cool_label:
 	jmp global_scope_label, MAR
-	lol ; some other comment
+	; lol ; some other comment
 
 global_scope_label:
 
