@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error, fmt::Display};
 
 use crate::{
     ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, TypedExpr, UnaryOp},
-    parser::ParseError,
+    error::ParseError,
 };
 use miette::{IntoDiagnostic, Result, miette};
 
@@ -28,7 +28,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn unify(&self, other: &Type) -> Result<Type, String> {
+    pub fn unify(&self, other: &Type) -> Result<Type> {
         match (self, other) {
             (Type::Int, Type::Int) => Ok(Type::Int),
             (Type::Bool, Type::Bool) => Ok(Type::Bool),
@@ -43,30 +43,32 @@ impl Type {
             (Type::Unknown, t) | (t, Type::Unknown) => Ok(*t),
 
             // Type mismatch
-            _ => Err(format!(
+            _ => Err(miette!(
                 "Type mismatch: expected {:?}, got {:?}",
-                self, other
+                self,
+                other
             )),
         }
     }
 
     // returns true if types are comparable to each other
-    pub fn comparable(lhs: &Type, rhs: &Type) -> Result<bool, String> {
+    pub fn comparable(lhs: &Type, rhs: &Type) -> Result<bool> {
         match (lhs, rhs) {
             (Type::Label, Type::Int) | (Type::Int, Type::Label) => Ok(true),
             (Type::Int, Type::Int) => Ok(true),
             (Type::Bool, Type::Bool) => Ok(true),
 
             // Type mismatch
-            _ => Err(format!(
+            _ => Err(miette!(
                 "Types not comparable - lhs: {:?}, rhs {:?}",
-                lhs, rhs
+                lhs,
+                rhs
             )),
         }
     }
 
     // returns true if both types are operable with arithmetic operations
-    pub fn operable(lhs: &Type, rhs: &Type) -> Result<bool, String> {
+    pub fn operable(lhs: &Type, rhs: &Type) -> Result<bool> {
         match (lhs, rhs) {
             (Type::Int, Type::Int) => Ok(true),
 
@@ -77,9 +79,10 @@ impl Type {
             (Type::Character, Type::Int) | (Type::Int, Type::Character) => Ok(true),
 
             // Type mismatch
-            _ => Err(format!(
+            _ => Err(miette!(
                 "Can't operate arithmetic on types - lhs: {:?}, rhs: {:?}",
-                lhs, rhs
+                lhs,
+                rhs
             )),
         }
     }
@@ -229,7 +232,7 @@ pub fn typecheck(
                 span: _span,
             } => {
                 for param in &mut instruction.params.iter_mut() {
-                    typecheck_expr(param, symbols).unwrap();
+                    typecheck_expr(param, symbols)?;
                 }
             }
             _ => (),
@@ -252,10 +255,7 @@ pub fn typecheck(
     Ok(())
 }
 
-fn typecheck_expr(
-    typed_expr: &mut AstNode<TypedExpr>,
-    symbols: &SymbolTypeContext,
-) -> Result<(), String> {
+fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeContext) -> Result<()> {
     let inner = typed_expr.inner_mut();
 
     match &mut inner.expr {
@@ -268,12 +268,12 @@ fn typecheck_expr(
             println!("querying for symbol: {name}");
             if symbols.contains(name) {
                 if !matches!(inner.ty, Type::Unknown) {
-                    return Err(format!("Identity already has type: {:#?}", inner.ty));
+                    return Err(miette!("Identity already has type: {:#?}", inner.ty));
                 }
                 println!("found symbol: {name}");
                 inner.ty = *symbols.get(name).unwrap();
             } else {
-                return Err(format!("Symbol not found: {}", name));
+                return Err(miette!("Symbol not found: {}", name));
             }
         }
         Expr::Unary { op, expr } => {
@@ -284,19 +284,19 @@ fn typecheck_expr(
             match op {
                 UnaryOp::Neg => {
                     if expr.ty != Type::Int {
-                        return Err(format!("Cannot negate non-integer type: {:#?}", expr.ty));
+                        return Err(miette!("Cannot negate non-integer type: {:#?}", expr.ty));
                     }
                     expr.ty = Type::Int;
                 }
                 UnaryOp::Not => {
                     if expr.ty != Type::Bool {
-                        return Err(format!("Cannot negate non-boolean type: {:#?}", expr.ty));
+                        return Err(miette!("Cannot negate non-boolean type: {:#?}", expr.ty));
                     }
                     expr.ty = Type::Bool;
                 }
                 UnaryOp::BitNegation => {
                     if expr.ty != Type::Int {
-                        return Err(format!("Cannot bit negate non-int type: {:#?}", expr.ty));
+                        return Err(miette!("Cannot bit negate non-int type: {:#?}", expr.ty));
                     }
                     expr.ty = Type::Bool;
                 }
@@ -323,18 +323,20 @@ fn typecheck_expr(
                 | BinaryOp::And
                 | BinaryOp::Or => {
                     if !Type::operable(&left.ty, &right.ty)? {
-                        return Err(format!(
+                        return Err(miette!(
                             "Arithmetic operation requires int operands, got {:#?} and {:#?}",
-                            left.ty, right.ty
+                            left.ty,
+                            right.ty
                         ));
                     }
                     inner.ty = left.ty.unify(&right.ty)?;
                 }
                 BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
                     if !Type::comparable(&left.ty, &right.ty)? {
-                        return Err(format!(
+                        return Err(miette!(
                             "Comparison requires comparable operands, got {:#?} and {:#?}",
-                            left.ty, right.ty
+                            left.ty,
+                            right.ty
                         ));
                     }
                     inner.ty = Type::Bool;

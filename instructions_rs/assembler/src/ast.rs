@@ -12,16 +12,23 @@ pub type Ast = Vec<AstNode<Statement>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NamedSourceFile {
-    source: String,
+    source: Arc<str>,
     file_name: String,
 }
 
 impl NamedSourceFile {
     pub fn new(source: String, file_name: String) -> Self {
-        Self { source, file_name }
+        Self {
+            source: Arc::from(source),
+            file_name,
+        }
     }
 
-    pub fn source(&self) -> &str {
+    pub fn source_str(&self) -> &str {
+        &self.source
+    }
+
+    pub fn source(&self) -> &Arc<str> {
         &self.source
     }
 
@@ -30,7 +37,6 @@ impl NamedSourceFile {
     }
 }
 
-// type Source = NamedSource<Arc<str>>;
 pub type Source = Arc<NamedSourceFile>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -70,12 +76,23 @@ impl AstSpan {
         self.end = end;
     }
 
-    pub fn source(&self) -> &NamedSourceFile {
+    pub fn source(&self) -> &Arc<NamedSourceFile> {
+        &self.source
+    }
+
+    pub fn source_ref(&self) -> &NamedSourceFile {
         &self.source
     }
 
     pub fn to_span<'a>(&'a self) -> Span<'a> {
         Span::new(self.source().source(), self.start(), self.end()).unwrap()
+    }
+
+    pub fn to_miette_source_code(&self) -> miette::NamedSource<Arc<str>> {
+        miette::NamedSource::new(
+            self.source().file_name(),
+            Arc::clone(self.source().source()),
+        )
     }
 }
 

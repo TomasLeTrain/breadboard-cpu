@@ -7,7 +7,7 @@ use opcode_gen::instructions::{
 
 use crate::{
     ast::{AstNode, Statement, TypedExpr},
-    parser::ParseError,
+    error::ParseError,
     types::Type,
 };
 

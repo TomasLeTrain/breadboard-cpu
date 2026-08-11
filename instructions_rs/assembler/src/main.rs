@@ -2,6 +2,7 @@ mod ast;
 mod istr_resolver;
 mod parser;
 mod types;
+mod error;
 
 use std::{fs, rc::Rc, sync::Arc};
 

@@ -1,4 +1,5 @@
 cool_label:
+	ok ig what
 	jmp global_scope_label, MAR
 	; lol ; some other comment
 

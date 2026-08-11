@@ -1,18 +1,13 @@
-use std::error::Error;
-use std::fmt;
-use std::fmt::Display;
 use std::sync::{Arc, LazyLock};
 
 use crate::ast::*;
+use crate::error::ParseError;
 use crate::types::Type;
 
-use miette::{Diagnostic, Result, SourceSpan};
+use miette::Result;
+use pest::Parser;
 use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
-use pest::{Parser, RuleType};
-
-use pest::error::Error as PestParseError;
-use pest::error::ErrorVariant as PestParseErrorVariant;
 
 #[derive(pest_derive::Parser)]
 #[grammar = "grammar.pest"]
@@ -43,10 +38,10 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
 pub fn parse_file(source: Source) -> Result<Ast> {
     let mut program = Ast::new();
 
-    let pairs =
-        AssemblyParser::parse(Rule::Program, source.source()).map_err(ParseError::from_pest)?;
+    let pairs = AssemblyParser::parse(Rule::Program, source.source())
+        .map_err(|e| ParseError::from_pest(e, &source))?;
 
-    // println!("{pairs:#?}");
+    println!("{pairs:#?}");
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {
@@ -447,84 +442,5 @@ fn unescape_char(string: &str) -> char {
         }
     } else {
         first_char
-    }
-}
-
-// TODO: make error code generic to distinguish grammar parsing vs. ast parsing
-
-#[derive(Debug, Diagnostic)]
-#[diagnostic(code(assembler::parse_error))]
-pub struct ParseError {
-    #[label]
-    pub snippet: Option<SourceSpan>,
-    pub err_message: String,
-    #[help]
-    pub help: Option<String>,
-}
-
-impl Error for ParseError {}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.err_message)
-    }
-}
-
-impl ParseError {
-    pub fn from_span<'a>(message: impl Into<String>, span: &AstSpan) -> Self {
-        let span_start = span.start();
-        let span_end = span.end();
-        let len = span_end - span_start;
-        let snippet = Some(SourceSpan::new(span_start.into(), len));
-
-        ParseError {
-            err_message: message.into(),
-            snippet,
-            help: None,
-        }
-    }
-
-    /// creates error message with a help message detailing expected/unexpected rules
-    pub fn from_expected<'a, R: RuleType>(
-        message: impl Into<String>,
-        expected: Vec<R>,
-        unexpected: Vec<R>,
-        span: &AstSpan,
-    ) -> Self {
-        Self::from_pest_message(
-            PestParseError::new_from_span(
-                PestParseErrorVariant::ParsingError {
-                    positives: expected,
-                    negatives: unexpected,
-                },
-                span.to_span(),
-            ),
-            message,
-        )
-    }
-
-    fn from_pest_message<R: RuleType>(
-        err: PestParseError<R>,
-        err_message: impl Into<String>,
-    ) -> ParseError {
-        let help = Some(err.variant.message().to_string());
-
-        let span = match err.location {
-            pest::error::InputLocation::Pos(pos) => (pos, pos + 1),
-            pest::error::InputLocation::Span((start, end)) => (start, end),
-        };
-
-        let snippet = Some(SourceSpan::new(span.0.into(), span.1 - span.0));
-
-        ParseError {
-            err_message: err_message.into(),
-            snippet,
-            help,
-        }
-    }
-
-    fn from_pest<R: RuleType>(err: PestParseError<R>) -> ParseError {
-        let message = "Grammar parsing error".to_string();
-        Self::from_pest_message(err, message)
     }
 }
