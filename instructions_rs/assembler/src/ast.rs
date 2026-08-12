@@ -7,7 +7,7 @@ use miette::SourceSpan;
 use opcode_gen::instructions::InstructionSignature;
 use pest::{RuleType, Span, iterators::Pair};
 
-type Address = u16;
+pub type Address = u16;
 
 pub type Ast = Vec<StatementNode>;
 pub type StatementNode = AstNode<AddressedStatement>;

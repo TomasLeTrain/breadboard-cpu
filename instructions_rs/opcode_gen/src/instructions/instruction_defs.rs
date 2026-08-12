@@ -305,6 +305,20 @@ impl InstructionType {
     pub fn get_signature(&self) -> InstructionSignature {
         InstructionSignature::new(self.istr_name().to_string(), self.arguments())
     }
+
+    /// returns size in bytes imm takes up according to all imm instruction params
+    pub fn get_imm_byte_size(&self) -> usize {
+        self.arguments()
+            .iter()
+            .map(|e| match e {
+                ArgumentType::Reg(_) | ArgumentType::AddrReg(_) => 0,
+                ArgumentType::Byte => 1,
+                ArgumentType::Addr => 2,
+                // should not occur since arguments are constructed non-generically
+                ArgumentType::GenericImm => unreachable!(),
+            })
+            .sum()
+    }
 }
 
 // move register to register (reg0 = reg1)

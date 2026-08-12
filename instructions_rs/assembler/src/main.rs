@@ -14,6 +14,7 @@ use opcode_gen::{
 };
 
 use crate::{
+    address_alloc::AllocationContext,
     ast::NamedSourceFile,
     istr_resolver::gen_instruction_lookup_table,
     types::{Symbol, Type},
@@ -85,7 +86,10 @@ fn parse_source(file: String, file_path: String) -> Result<()> {
     istr_resolver::resolve_instructions(&mut program, &istr_lookup)
         .wrap_err("Failed to resolve instructions")?;
 
-    address_alloc::allocate_adresses(&mut program).wrap_err("Failed to resolve instructions")?;
+    address_alloc::allocate_adresses(&mut program, &mut AllocationContext::new())
+        .wrap_err("Failed to resolve instructions")?;
+
+    println!("{:#?}", program);
 
     Ok(())
 }

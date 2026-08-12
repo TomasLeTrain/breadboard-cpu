@@ -46,3 +46,10 @@ pub struct InstructionOpcode {
     pub ir: u8,
     pub ir2: Option<u8>,
 }
+
+impl InstructionOpcode {
+    /// number of bytes needed to represent opcode in memory
+    pub fn byte_size(&self) -> usize {
+        if self.ir2.is_some() { 2 } else { 1 }
+    }
+}

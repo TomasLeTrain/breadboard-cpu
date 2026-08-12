@@ -82,6 +82,11 @@ impl Instruction {
         self.overrides = overrides;
         self
     }
+
+    pub fn get_byte_size(&self) -> usize {
+        // TODO: wrap in result in case opcode is not set
+        self.opcode().as_ref().unwrap().byte_size() + self.istr_type.get_imm_byte_size()
+    }
 }
 
 impl Instruction {
