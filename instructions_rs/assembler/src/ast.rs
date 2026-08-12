@@ -40,16 +40,31 @@ impl NamedSourceFile {
 
 pub type Source = Arc<NamedSourceFile>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct AstSpan {
     start: usize,
     end: usize,
     source: Source,
 }
 
+impl From<AstSpan> for SourceSpan {
+    fn from(value: AstSpan) -> Self {
+        value.to_miette_span()
+    }
+}
+
 impl From<&AstSpan> for SourceSpan {
     fn from(value: &AstSpan) -> Self {
         value.to_miette_span()
+    }
+}
+
+impl Debug for AstSpan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AstSpan")
+            .field("str", &self.get_str())
+            .field("range", &format!("{}..{}", self.start, self.end))
+            .finish()
     }
 }
 
@@ -104,6 +119,10 @@ impl AstSpan {
             self.source().file_name(),
             Arc::clone(self.source().source()),
         )
+    }
+
+    pub fn get_str(&self) -> &str {
+        &self.source.source()[self.start..self.end]
     }
 }
 

@@ -117,11 +117,11 @@ pub fn gen_instruction_lookup_table(
             istr.istr_type().get_signature().to_generic(),
             Rc::clone(istr),
         ) {
-            return Err(miette!(
-                "Duplicate signatures found - \"{}\" and \"{}\"",
-                istr,
-                other
-            ));
+            // return Err(miette!(
+            //     "Duplicate signatures found - \"{}\" and \"{}\"",
+            //     istr,
+            //     other
+            // ));
         }
     }
 

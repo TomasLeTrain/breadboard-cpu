@@ -1,7 +1,9 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
 use crate::ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
-use miette::{Context, Diagnostic, IntoDiagnostic, NamedSource, Result, SourceSpan, miette};
+use miette::{
+    Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, SourceSpan, miette,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -25,62 +27,50 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn unify(&self, other: &Type) -> Result<Type> {
+    pub fn unify(&self, other: &Type) -> Option<Type> {
         match (self, other) {
-            (Type::Int, Type::Int) => Ok(Type::Int),
-            (Type::Bool, Type::Bool) => Ok(Type::Bool),
+            (Type::Int, Type::Int) => Some(Type::Int),
+            (Type::Bool, Type::Bool) => Some(Type::Bool),
 
             // math on labels will mean an address
-            (Type::Label, Type::Int) | (Type::Int, Type::Label) => Ok(Type::Addr),
+            (Type::Label, Type::Int) | (Type::Int, Type::Label) => Some(Type::Addr),
 
             // allow coercing characters into int
-            (Type::Character, Type::Int) | (Type::Int, Type::Character) => Ok(Type::Int),
+            (Type::Character, Type::Int) | (Type::Int, Type::Character) => Some(Type::Int),
 
             // Unknown can unify with anything
-            (Type::Unknown, t) | (t, Type::Unknown) => Ok(*t),
+            (Type::Unknown, t) | (t, Type::Unknown) => Some(*t),
 
             // Type mismatch
-            _ => Err(miette!(
-                "Type mismatch: expected {:?}, got {:?}",
-                self,
-                other
-            )),
+            _ => None,
         }
     }
 
     // returns true if types are comparable to each other
-    pub fn comparable(lhs: &Type, rhs: &Type) -> Result<bool> {
+    pub fn comparable(lhs: &Type, rhs: &Type) -> bool {
         match (lhs, rhs) {
-            (Type::Label, Type::Int) | (Type::Int, Type::Label) => Ok(true),
-            (Type::Int, Type::Int) => Ok(true),
-            (Type::Bool, Type::Bool) => Ok(true),
+            (Type::Label, Type::Int) | (Type::Int, Type::Label) => true,
+            (Type::Int, Type::Int) => true,
+            (Type::Bool, Type::Bool) => true,
 
             // Type mismatch
-            _ => Err(miette!(
-                "Types not comparable - lhs: {:?}, rhs {:?}",
-                lhs,
-                rhs
-            )),
+            _ => false,
         }
     }
 
     // returns true if both types are operable with arithmetic operations
-    pub fn operable(lhs: &Type, rhs: &Type) -> Result<bool> {
+    pub fn operable(lhs: &Type, rhs: &Type) -> bool {
         match (lhs, rhs) {
-            (Type::Int, Type::Int) => Ok(true),
+            (Type::Int, Type::Int) => true,
 
             // allow math between labels and int
-            (Type::Label, Type::Int) | (Type::Int, Type::Label) => Ok(true),
+            (Type::Label, Type::Int) | (Type::Int, Type::Label) => true,
 
             // allow math between characters and int
-            (Type::Character, Type::Int) | (Type::Int, Type::Character) => Ok(true),
+            (Type::Character, Type::Int) | (Type::Int, Type::Character) => true,
 
             // Type mismatch
-            _ => Err(miette!(
-                "Can't operate arithmetic on types - lhs: {:?}, rhs: {:?}",
-                lhs,
-                rhs
-            )),
+            _ => false,
         }
     }
 }
@@ -279,19 +269,20 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
                 | BinaryOp::BitAnd
                 | BinaryOp::BitXor
                 | BinaryOp::BitOr
+                // TODO: and and or should only be possible on boolean types
                 | BinaryOp::And
                 | BinaryOp::Or => {
-                    if !Type::operable(&left.ty, &right.ty)? {
+                    if !Type::operable(&left.ty, &right.ty) {
                         return Err(miette!(
                             "Arithmetic operation requires int operands, got {:#?} and {:#?}",
                             left.ty,
                             right.ty
                         ));
                     }
-                    inner.ty = left.ty.unify(&right.ty)?;
+                    inner.ty = left.ty.unify(&right.ty).unwrap();
                 }
                 BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                    if !Type::comparable(&left.ty, &right.ty)? {
+                    if !Type::comparable(&left.ty, &right.ty) {
                         return Err(miette!(
                             "Comparison requires comparable operands, got {:#?} and {:#?}",
                             left.ty,
@@ -301,7 +292,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
                     inner.ty = Type::Bool;
                 }
                 BinaryOp::Eq | BinaryOp::Ne => {
-                    let _ = left.ty.unify(&right.ty)?;
+                    let _ = left.ty.unify(&right.ty).unwrap();
                     inner.ty = Type::Bool;
                 }
             }
@@ -352,27 +343,103 @@ impl Display for EmptyStackError {
 pub enum TypecheckExprErrorKind {
     IdentityAlreadyTyped((AstSpan, Type)),
     SymbolNotFound(Symbol),
-    InvalidArithmeticTypes((AstSpan, Type), (AstSpan, Type)),
+    InvalidBinaryOpTypes((AstSpan, Type), (AstSpan, Type), BinaryOp),
     InvalidComparisonTypes((AstSpan, Type), (AstSpan, Type)),
     InvalidEqualityTypes((AstSpan, Type), (AstSpan, Type)),
-    InvalidArithmeticType((AstSpan, Type)),
-    InvalidComparisonType((AstSpan, Type)),
+    InvalidUnaryOpType((AstSpan, Type), UnaryOp),
 }
 
-impl TypecheckExprErrorKind {}
+impl TypecheckExprErrorKind {
+    fn get_spans(&self) -> Vec<LabeledSpan> {
+        match self {
+            TypecheckExprErrorKind::IdentityAlreadyTyped((span, ty)) => {
+                vec![LabeledSpan::new_with_span(
+                    Some(format!("Identity of type \"{:?}\" defined here", ty)),
+                    span,
+                )]
+            }
+            TypecheckExprErrorKind::SymbolNotFound(symbol) => {
+                if let Some(span) = &symbol.span {
+                    vec![LabeledSpan::new_with_span(
+                        Some("Symbol defined here".to_string()),
+                        span,
+                    )]
+                } else {
+                    vec![]
+                }
+            }
+            TypecheckExprErrorKind::InvalidBinaryOpTypes((span1, ty1), (span2, ty2), _)
+            | TypecheckExprErrorKind::InvalidEqualityTypes((span1, ty1), (span2, ty2))
+            | TypecheckExprErrorKind::InvalidComparisonTypes((span1, ty1), (span2, ty2)) => {
+                vec![
+                    LabeledSpan::new_with_span(
+                        Some(format!("Defined with type \"{:?}\" here", ty1)),
+                        span1,
+                    ),
+                    LabeledSpan::new_with_span(
+                        Some(format!("Defined with type \"{:?}\" here", ty2)),
+                        span2,
+                    ),
+                ]
+            }
+            TypecheckExprErrorKind::InvalidUnaryOpType((span, ty), _) => {
+                vec![LabeledSpan::new_with_span(
+                    Some(format!("Defined with type \"{:?}\" here", ty)),
+                    span,
+                )]
+            }
+        }
+    }
+
+    fn get_source(&self) -> Option<NamedSource<Arc<str>>> {
+        match self {
+            TypecheckExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
+            | TypecheckExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
+            | TypecheckExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
+            | TypecheckExprErrorKind::InvalidUnaryOpType((ast_span, _), _)
+            | TypecheckExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => {
+                Some(ast_span.to_miette_source_code())
+            }
+            TypecheckExprErrorKind::SymbolNotFound(symbol) => {
+                symbol.span.as_ref().map(AstSpan::to_miette_source_code)
+            }
+        }
+    }
+}
 
 impl Display for TypecheckExprErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypecheckExprErrorKind::IdentityAlreadyTyped((span, ty)) => write!(f, "Identity "),
+            TypecheckExprErrorKind::IdentityAlreadyTyped((_, ty)) => {
+                write!(f, "Identity already has type \"{:?}\"", ty)
+            }
             TypecheckExprErrorKind::SymbolNotFound(symbol) => {
                 write!(f, "Symbol \"{}\" not found", symbol.name)
             }
-            TypecheckExprErrorKind::InvalidArithmeticTypes(_, _) => write!(f, "what"),
-            TypecheckExprErrorKind::InvalidComparisonTypes(_, _) => write!(f, "what"),
-            TypecheckExprErrorKind::InvalidEqualityTypes(_, _) => write!(f, "what"),
-            TypecheckExprErrorKind::InvalidArithmeticType(_) => write!(f, "what"),
-            TypecheckExprErrorKind::InvalidComparisonType(_) => write!(f, "what"),
+            TypecheckExprErrorKind::InvalidBinaryOpTypes((_, ty1), (_, ty2), op) => {
+                write!(
+                    f,
+                    "Cannot perform operation \"{:?}\" on types \"{:?}\" and \"{:?}\"",
+                    op, ty1, ty2
+                )
+            }
+            TypecheckExprErrorKind::InvalidComparisonTypes((_, ty1), (_, ty2)) => {
+                write!(f, "Cannot compare types \"{:?}\" and \"{:?}\"", ty1, ty2)
+            }
+            TypecheckExprErrorKind::InvalidEqualityTypes((_, ty1), (_, ty2)) => {
+                write!(
+                    f,
+                    "Cannot check types for equality \"{:?}\" and \"{:?}\"",
+                    ty1, ty2
+                )
+            }
+            TypecheckExprErrorKind::InvalidUnaryOpType((_, ty), op) => {
+                write!(
+                    f,
+                    "Cannot perform operation \"{:?}\" on type \"{:?}\"",
+                    op, ty
+                )
+            }
         }
     }
 }
@@ -383,11 +450,8 @@ pub struct TypecheckExprError {
     source: Option<NamedSource<Arc<str>>>,
     kind: TypecheckExprErrorKind,
 
-    #[label(primary,"Defined here")]
-    symbol_span_1: Option<SourceSpan>,
-
-    #[label("Second defined here")]
-    symbol_span_2: Option<SourceSpan>,
+    #[label(collection, "Defined here")]
+    spans: Vec<LabeledSpan>,
 }
 
 impl Error for TypecheckExprError {}
@@ -400,37 +464,11 @@ impl Display for TypecheckExprError {
 
 impl TypecheckExprError {
     fn new(kind: TypecheckExprErrorKind) -> Self {
-        let (source, span1) = match &kind {
-            TypecheckExprErrorKind::InvalidArithmeticTypes((ast_span, _), _)
-            | TypecheckExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
-            | TypecheckExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
-            | TypecheckExprErrorKind::InvalidArithmeticType((ast_span, _))
-            | TypecheckExprErrorKind::InvalidComparisonType((ast_span, _))
-            | TypecheckExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => (
-                Some(ast_span.to_miette_source_code()),
-                Some(ast_span.into()),
-            ),
-            TypecheckExprErrorKind::SymbolNotFound(symbol) => (
-                symbol.span.as_ref().map(AstSpan::to_miette_source_code),
-                symbol.span.as_ref().map(AstSpan::to_miette_span),
-            ),
-        };
-
-        let span2: Option<SourceSpan> = match &kind {
-            TypecheckExprErrorKind::InvalidArithmeticTypes(_, (ast_span, _))
-            | TypecheckExprErrorKind::InvalidComparisonTypes(_, (ast_span, _))
-            | TypecheckExprErrorKind::InvalidEqualityTypes(_, (ast_span, _)) => {
-                Some(ast_span.into())
-            }
-            TypecheckExprErrorKind::SymbolNotFound(_)
-            | TypecheckExprErrorKind::InvalidArithmeticType(_)
-            | TypecheckExprErrorKind::InvalidComparisonType(_)
-            | TypecheckExprErrorKind::IdentityAlreadyTyped(_) => None,
-        };
+        let spans = kind.get_spans();
+        let source = kind.get_source();
 
         TypecheckExprError {
-            symbol_span_1: span1,
-            symbol_span_2: span2,
+            spans,
             source,
             kind,
         }

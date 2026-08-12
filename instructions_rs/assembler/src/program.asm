@@ -1,5 +1,5 @@
 cool_label:
-	jmp block_label
+	jmp block_label || 2
 	jmp global_scope_label, MAR
 	; lol ; some other comment
 

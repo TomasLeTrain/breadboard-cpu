@@ -58,6 +58,7 @@ fn parse_source(file: String, file_path: String) -> Result<()> {
     let source = Arc::new(NamedSourceFile::new(file, file_path));
 
     let mut program = parser::parse_file(source).wrap_err("Parsing file failed.")?;
+    println!("{program:#?}");
 
     let mut global_symbols = types::SymbolTypeContext::new();
 
@@ -82,7 +83,7 @@ fn parse_source(file: String, file_path: String) -> Result<()> {
     types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
-    let istr_lookup = gen_instruction_lookup_table(&all_istrs)?;
+    let istr_lookup = gen_instruction_lookup_table(&all_istrs).wrap_err("Failed generating instruction lookup table")?;
 
     istr_resolver::resolve_instructions(&mut program, &istr_lookup)?;
 

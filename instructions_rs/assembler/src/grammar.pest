@@ -58,8 +58,10 @@ Expr = { prefix_op? ~ Primary ~ (infix_op ~ prefix_op? ~ Primary )* }
 // All infix operations that the Pratt parser will handle
 infix_op = _{
     add | subtract | multiply | divide | modulo | power |
-    shift_left | shift_right | bit_and | bit_or |
+    shift_left | shift_right |
     eq | ne | le | ge | lt | gt | logical_and | logical_or
+	// must do bitwise after logical otherwise bit consumes logical
+	| bit_and | bit_or
 }
 
 prefix_op = _{ negation | bit_negation | logical_not }
