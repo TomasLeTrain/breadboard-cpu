@@ -47,9 +47,9 @@ pub struct AstSpan {
     source: Source,
 }
 
-impl From<AstSpan> for SourceSpan {
-    fn from(value: AstSpan) -> Self {
-        SourceSpan::new(value.start().into(), value.end() - value.start())
+impl From<&AstSpan> for SourceSpan {
+    fn from(value: &AstSpan) -> Self {
+        value.to_miette_span()
     }
 }
 
@@ -93,6 +93,10 @@ impl AstSpan {
 
     pub fn to_span<'a>(&'a self) -> Span<'a> {
         Span::new(self.source().source(), self.start(), self.end()).unwrap()
+    }
+
+    pub fn to_miette_span(&self) -> SourceSpan {
+        SourceSpan::new(self.start().into(), self.end() - self.start())
     }
 
     pub fn to_miette_source_code(&self) -> miette::NamedSource<Arc<str>> {

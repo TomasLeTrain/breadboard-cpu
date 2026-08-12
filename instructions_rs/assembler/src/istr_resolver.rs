@@ -118,7 +118,7 @@ pub fn gen_instruction_lookup_table(
             Rc::clone(istr),
         ) {
             return Err(miette!(
-                "Duplicate signatures found - {} and {}",
+                "Duplicate signatures found - \"{}\" and \"{}\"",
                 istr,
                 other
             ));

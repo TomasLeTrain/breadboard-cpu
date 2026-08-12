@@ -1,10 +1,7 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
 use crate::ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
-use miette::{
-    Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, SourceCode, SourceSpan,
-    miette,
-};
+use miette::{Context, Diagnostic, IntoDiagnostic, NamedSource, Result, SourceSpan, miette};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -102,43 +99,6 @@ pub struct SymbolTypeContext {
     symbols: HashMap<String, Symbol>,
 }
 
-#[derive(Diagnostic, Debug)]
-pub struct DuplicateSymbolError {
-    name: String,
-    type1: Type,
-    type2: Type,
-
-    #[source_code]
-    source: Option<NamedSource<Arc<str>>>,
-
-    #[label(primary, "Current symbol defined here")]
-    current_symbol_span: Option<SourceSpan>,
-
-    #[label("Other symbol defined here")]
-    other_symbol_span: Option<SourceSpan>,
-}
-
-#[derive(Debug)]
-pub struct EmptyStackError;
-
-impl Error for DuplicateSymbolError {}
-impl Error for EmptyStackError {}
-
-impl Display for DuplicateSymbolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Symbol already in context - name: {:?}, type1: {:?}, type2: {:?}",
-            self.name, self.type1, self.type2
-        )
-    }
-}
-impl Display for EmptyStackError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "No symbols in stack.")
-    }
-}
-
 impl SymbolTypeContext {
     pub fn new() -> Self {
         SymbolTypeContext {
@@ -154,8 +114,8 @@ impl SymbolTypeContext {
 
         if let Some(other) = push_result {
             let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
-            let current_symbol_span = symbol.span.map(|e| e.into());
-            let other_symbol_span = other.span.map(|e| e.into());
+            let current_symbol_span = symbol.span.as_ref().map(AstSpan::to_miette_span);
+            let other_symbol_span = other.span.as_ref().map(AstSpan::to_miette_span);
 
             Err(DuplicateSymbolError {
                 name: symbol.name,
@@ -257,15 +217,22 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
         Expr::Char(_) => inner.ty = Type::Character,
         Expr::Identity(name) => {
             // try and find identity in symbols
-            println!("querying for symbol: {name}");
+            // println!("querying for symbol: {name}");
             if symbols.contains(name) {
                 if !matches!(inner.ty, Type::Unknown) {
                     return Err(miette!("Identity already has type: {:#?}", inner.ty));
                 }
-                println!("found symbol: {name}");
+                // println!("found symbol: {name}");
                 inner.ty = symbols.get(name).unwrap().symbol_type;
             } else {
-                return Err(miette!("Symbol not found: {}", name));
+                // return Err(miette!("Symbol not found: {}", name));
+                Err(TypecheckExprError::new(
+                    TypecheckExprErrorKind::SymbolNotFound(Symbol {
+                        name: name.to_string(),
+                        symbol_type: inner.ty,
+                        span: Some(typed_expr.span.clone()),
+                    }),
+                ))?;
             }
         }
         Expr::Unary { op, expr } => {
@@ -341,4 +308,131 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
         }
     }
     Ok(())
+}
+
+#[derive(Diagnostic, Debug)]
+pub struct DuplicateSymbolError {
+    name: String,
+    type1: Type,
+    type2: Type,
+
+    #[source_code]
+    source: Option<NamedSource<Arc<str>>>,
+
+    #[label(primary, "Current symbol defined here")]
+    current_symbol_span: Option<SourceSpan>,
+
+    #[label("Other symbol defined here")]
+    other_symbol_span: Option<SourceSpan>,
+}
+
+#[derive(Debug)]
+pub struct EmptyStackError;
+
+impl Error for DuplicateSymbolError {}
+impl Error for EmptyStackError {}
+
+impl Display for DuplicateSymbolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Symbol already in context - name: {:?}, type1: {:?}, type2: {:?}",
+            self.name, self.type1, self.type2
+        )
+    }
+}
+
+impl Display for EmptyStackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "No symbols in stack.")
+    }
+}
+
+#[derive(Debug)]
+pub enum TypecheckExprErrorKind {
+    IdentityAlreadyTyped((AstSpan, Type)),
+    SymbolNotFound(Symbol),
+    InvalidArithmeticTypes((AstSpan, Type), (AstSpan, Type)),
+    InvalidComparisonTypes((AstSpan, Type), (AstSpan, Type)),
+    InvalidEqualityTypes((AstSpan, Type), (AstSpan, Type)),
+    InvalidArithmeticType((AstSpan, Type)),
+    InvalidComparisonType((AstSpan, Type)),
+}
+
+impl TypecheckExprErrorKind {}
+
+impl Display for TypecheckExprErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypecheckExprErrorKind::IdentityAlreadyTyped((span, ty)) => write!(f, "Identity "),
+            TypecheckExprErrorKind::SymbolNotFound(symbol) => {
+                write!(f, "Symbol \"{}\" not found", symbol.name)
+            }
+            TypecheckExprErrorKind::InvalidArithmeticTypes(_, _) => write!(f, "what"),
+            TypecheckExprErrorKind::InvalidComparisonTypes(_, _) => write!(f, "what"),
+            TypecheckExprErrorKind::InvalidEqualityTypes(_, _) => write!(f, "what"),
+            TypecheckExprErrorKind::InvalidArithmeticType(_) => write!(f, "what"),
+            TypecheckExprErrorKind::InvalidComparisonType(_) => write!(f, "what"),
+        }
+    }
+}
+
+#[derive(Diagnostic, Debug)]
+pub struct TypecheckExprError {
+    #[source_code]
+    source: Option<NamedSource<Arc<str>>>,
+    kind: TypecheckExprErrorKind,
+
+    #[label(primary,"Defined here")]
+    symbol_span_1: Option<SourceSpan>,
+
+    #[label("Second defined here")]
+    symbol_span_2: Option<SourceSpan>,
+}
+
+impl Error for TypecheckExprError {}
+
+impl Display for TypecheckExprError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl TypecheckExprError {
+    fn new(kind: TypecheckExprErrorKind) -> Self {
+        let (source, span1) = match &kind {
+            TypecheckExprErrorKind::InvalidArithmeticTypes((ast_span, _), _)
+            | TypecheckExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
+            | TypecheckExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
+            | TypecheckExprErrorKind::InvalidArithmeticType((ast_span, _))
+            | TypecheckExprErrorKind::InvalidComparisonType((ast_span, _))
+            | TypecheckExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => (
+                Some(ast_span.to_miette_source_code()),
+                Some(ast_span.into()),
+            ),
+            TypecheckExprErrorKind::SymbolNotFound(symbol) => (
+                symbol.span.as_ref().map(AstSpan::to_miette_source_code),
+                symbol.span.as_ref().map(AstSpan::to_miette_span),
+            ),
+        };
+
+        let span2: Option<SourceSpan> = match &kind {
+            TypecheckExprErrorKind::InvalidArithmeticTypes(_, (ast_span, _))
+            | TypecheckExprErrorKind::InvalidComparisonTypes(_, (ast_span, _))
+            | TypecheckExprErrorKind::InvalidEqualityTypes(_, (ast_span, _)) => {
+                Some(ast_span.into())
+            }
+            TypecheckExprErrorKind::SymbolNotFound(_)
+            | TypecheckExprErrorKind::InvalidArithmeticType(_)
+            | TypecheckExprErrorKind::InvalidComparisonType(_)
+            | TypecheckExprErrorKind::IdentityAlreadyTyped(_) => None,
+        };
+
+        TypecheckExprError {
+            symbol_span_1: span1,
+            symbol_span_2: span2,
+            source,
+            kind,
+        }
+    }
 }
