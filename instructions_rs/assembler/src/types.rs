@@ -182,10 +182,8 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
     let inner = typed_expr.inner_mut();
 
     match &mut inner.expr {
-        Expr::Int(_) => inner.ty = Type::Int,
-        Expr::Bool(_) => inner.ty = Type::Bool,
-        Expr::String(_) => inner.ty = Type::String,
-        Expr::Char(_) => inner.ty = Type::Character,
+        // literals already have their typed filled in
+        Expr::Literal => (),
         Expr::Identity(name) => {
             // try and find identity in symbols
             if symbols.contains(name) {

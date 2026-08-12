@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::{fmt::Debug, rc::Rc};
 
+use crate::eval::EvalValue;
 use crate::types::Type;
 
 use miette::SourceSpan;
@@ -174,6 +175,10 @@ impl AddressedStatement {
         self.address = address;
     }
 
+    pub fn address(&self) -> Option<Address> {
+        self.address
+    }
+
     pub fn statement(&self) -> &Statement {
         &self.statement
     }
@@ -221,31 +226,27 @@ pub enum Statement {
 pub struct TypedExpr {
     pub expr: Expr,
     pub ty: Type,
+    pub value: EvalValue,
 }
 
 impl TypedExpr {
-    pub fn new(expr: Expr, ty: Type) -> Self {
-        Self { expr, ty }
+    pub fn new(expr: Expr, ty: Type, value: EvalValue) -> Self {
+        Self { expr, ty, value }
     }
 
     pub fn unknown(expr: Expr) -> Self {
         TypedExpr {
             expr,
             ty: Type::Unknown,
+            value: EvalValue::Unknown,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    /// Integer literal
-    Int(i64),
-    /// Boolean literal
-    Bool(bool),
-    /// String literal
-    String(String),
-    /// Char literal
-    Char(u8),
+    /// Literal
+    Literal,
     /// Identity (could be var, reg, etc.)
     Identity(String),
     /// Unary operation

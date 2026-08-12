@@ -2,6 +2,7 @@ use std::sync::{Arc, LazyLock};
 
 use crate::ast::*;
 use crate::error::ParseError;
+use crate::eval::EvalValue;
 use crate::types::Type;
 
 use miette::Result;
@@ -345,13 +346,21 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>
 
     match inner.as_rule() {
         Rule::Int => Ok(AstNode::from_pair(
-            TypedExpr::new(Expr::Int(inner.as_str().parse().unwrap()), Type::Int),
+            TypedExpr::new(
+                Expr::Literal,
+                Type::Int,
+                EvalValue::Int(inner.as_str().parse().unwrap()),
+            ),
             inner,
             source,
         )),
         Rule::Hexadecimal => parse_hexadecimal(inner, source),
         Rule::Bool => Ok(AstNode::from_pair(
-            TypedExpr::new(Expr::Bool(inner.as_str() == "true"), Type::Bool),
+            TypedExpr::new(
+                Expr::Literal,
+                Type::Bool,
+                EvalValue::Bool(inner.as_str() == "true"),
+            ),
             inner,
             source,
         )),
@@ -359,7 +368,11 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>
             let s = inner.as_str();
             // removes "" quotes
             Ok(AstNode::from_pair(
-                TypedExpr::new(Expr::String(s[1..s.len() - 1].to_string()), Type::String),
+                TypedExpr::new(
+                    Expr::Literal,
+                    Type::String,
+                    EvalValue::String(s[1..s.len() - 1].to_string()),
+                ),
                 inner,
                 source,
             ))
@@ -369,7 +382,11 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>
             let c = unescape_char(&s[1..s.len() - 1]);
 
             Ok(AstNode::from_pair(
-                TypedExpr::new(Expr::Char(c as u8), Type::Character),
+                TypedExpr::new(
+                    Expr::Literal,
+                    Type::Character,
+                    EvalValue::Character(c as u8),
+                ),
                 inner,
                 source,
             ))
@@ -395,8 +412,9 @@ fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedE
     match inner.as_rule() {
         Rule::Int => Ok(AstNode::from_pair(
             TypedExpr::new(
-                Expr::Int(i64::from_str_radix(inner.as_str(), 16).unwrap()),
+                Expr::Literal,
                 Type::Int,
+                EvalValue::Int(i32::from_str_radix(inner.as_str(), 16).unwrap()),
             ),
             inner,
             source,

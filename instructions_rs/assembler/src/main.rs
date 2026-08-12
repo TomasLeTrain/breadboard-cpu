@@ -4,10 +4,11 @@ mod error;
 mod istr_resolver;
 mod parser;
 mod types;
+mod eval;
 
 use std::{fs, rc::Rc, sync::Arc};
 
-use miette::{Context, Result};
+use miette::{Context, IntoDiagnostic, Result};
 use opcode_gen::{
     get_instruction_list,
     instructions::{AddressRegister, Instruction, Register},
@@ -43,16 +44,12 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-// wrapper for parse_source that adds the source_code if errors occur
 fn parse_file(file_path_str: &str) -> Result<()> {
     let file_path = file_path_str.to_string();
-    let asm_file = fs::read_to_string(file_path.clone()).expect("cannot read file");
+    let file = fs::read_to_string(file_path.clone())
+        .into_diagnostic()
+        .wrap_err("Failed reading file to parse")?;
 
-    parse_source(asm_file, file_path)
-}
-
-//
-fn parse_source(file: String, file_path: String) -> Result<()> {
     let source = Arc::new(NamedSourceFile::new(file, file_path));
 
     let mut program = parser::parse_file(source).wrap_err("Parsing file failed.")?;
