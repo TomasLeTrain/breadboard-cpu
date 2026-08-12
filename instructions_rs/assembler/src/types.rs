@@ -28,50 +28,36 @@ pub enum Type {
 
 impl Type {
     pub fn unify(&self, other: &Type) -> Option<Type> {
-        match (self, other) {
-            (Type::Int, Type::Int) => Some(Type::Int),
-            (Type::Bool, Type::Bool) => Some(Type::Bool),
-
-            // math on labels will mean an address
-            (Type::Label, Type::Int) | (Type::Int, Type::Label) => Some(Type::Addr),
-
-            // allow coercing characters into int
-            (Type::Character, Type::Int) | (Type::Int, Type::Character) => Some(Type::Int),
-
-            // Unknown can unify with anything
-            (Type::Unknown, t) | (t, Type::Unknown) => Some(*t),
-
-            // Type mismatch
-            _ => None,
+        if Self::int_binary_operable(self, other) {
+            Some(Type::Int)
+        } else if Self::bool_binary_operable(self, other) {
+            Some(Type::Bool)
+        } else if let (Type::Unknown, t) | (t, Type::Unknown) = (self, other) {
+            Some(*t)
+        } else {
+            None
         }
     }
 
     // returns true if types are comparable to each other
     pub fn comparable(lhs: &Type, rhs: &Type) -> bool {
-        match (lhs, rhs) {
-            (Type::Label, Type::Int) | (Type::Int, Type::Label) => true,
-            (Type::Int, Type::Int) => true,
-            (Type::Bool, Type::Bool) => true,
-
-            // Type mismatch
-            _ => false,
-        }
+        Self::int_binary_operable(lhs, rhs) || Self::bool_binary_operable(lhs, rhs)
     }
 
-    // returns true if both types are operable with arithmetic operations
-    pub fn operable(lhs: &Type, rhs: &Type) -> bool {
-        match (lhs, rhs) {
-            (Type::Int, Type::Int) => true,
+    pub fn int_operable(&self) -> bool {
+        matches!(self, Type::Int | Type::Label | Type::Character)
+    }
 
-            // allow math between labels and int
-            (Type::Label, Type::Int) | (Type::Int, Type::Label) => true,
+    pub fn bool_operable(&self) -> bool {
+        matches!(self, Type::Bool)
+    }
 
-            // allow math between characters and int
-            (Type::Character, Type::Int) | (Type::Int, Type::Character) => true,
+    pub fn int_binary_operable(lhs: &Type, rhs: &Type) -> bool {
+        lhs.int_operable() && rhs.int_operable()
+    }
 
-            // Type mismatch
-            _ => false,
-        }
+    pub fn bool_binary_operable(lhs: &Type, rhs: &Type) -> bool {
+        lhs.bool_operable() && rhs.bool_operable()
     }
 }
 
@@ -145,13 +131,11 @@ pub fn typecheck(
     statements: &mut [AstNode<Statement>],
     symbols: &mut SymbolTypeContext,
 ) -> Result<()> {
-    // TODO: can turn into label vec to verify poppped values are accurate (if pop returns val)
     let mut labels = Vec::new();
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
         if let Statement::Label { name } | Statement::BlockLabel { name, .. } = statement.inner() {
-            // TODO: ensure not duplicate
             // push into local scope
             let curr_symbol = Symbol {
                 name: name.clone(),
@@ -198,6 +182,7 @@ pub fn typecheck(
 }
 
 fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeContext) -> Result<()> {
+    let inner_span = typed_expr.span().clone();
     let inner = typed_expr.inner_mut();
 
     match &mut inner.expr {
@@ -207,15 +192,15 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
         Expr::Char(_) => inner.ty = Type::Character,
         Expr::Identity(name) => {
             // try and find identity in symbols
-            // println!("querying for symbol: {name}");
             if symbols.contains(name) {
                 if !matches!(inner.ty, Type::Unknown) {
-                    return Err(miette!("Identity already has type: {:#?}", inner.ty));
+                    Err(TypecheckExprError::new(
+                        TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
+                    ))?;
                 }
-                // println!("found symbol: {name}");
+
                 inner.ty = symbols.get(name).unwrap().symbol_type;
             } else {
-                // return Err(miette!("Symbol not found: {}", name));
                 Err(TypecheckExprError::new(
                     TypecheckExprErrorKind::SymbolNotFound(Symbol {
                         name: name.to_string(),
@@ -225,35 +210,40 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
                 ))?;
             }
         }
-        Expr::Unary { op, expr } => {
-            typecheck_expr(expr, symbols)?;
-            let expr = expr.inner_mut();
+        Expr::Unary {
+            op,
+            expr: unary_expr,
+        } => {
+            typecheck_expr(unary_expr, symbols)?;
+            let span = unary_expr.span().clone();
+            let unary_expr = unary_expr.inner_mut();
 
-            // TODO: change to consider arithmetically operable and boolean operable
             match op {
-                UnaryOp::Neg => {
-                    if expr.ty != Type::Int {
-                        return Err(miette!("Cannot negate non-integer type: {:#?}", expr.ty));
+                UnaryOp::Neg | UnaryOp::BitNegation => {
+                    if !unary_expr.ty.int_operable() {
+                        Err(TypecheckExprError::new(
+                            TypecheckExprErrorKind::InvalidUnaryOpType((span, unary_expr.ty), *op),
+                        ))?;
                     }
-                    expr.ty = Type::Int;
+                    inner.ty = Type::Int;
                 }
                 UnaryOp::Not => {
-                    if expr.ty != Type::Bool {
-                        return Err(miette!("Cannot negate non-boolean type: {:#?}", expr.ty));
+                    if !unary_expr.ty.bool_operable() {
+                        Err(TypecheckExprError::new(
+                            TypecheckExprErrorKind::InvalidUnaryOpType((span, unary_expr.ty), *op),
+                        ))?;
                     }
-                    expr.ty = Type::Bool;
-                }
-                UnaryOp::BitNegation => {
-                    if expr.ty != Type::Int {
-                        return Err(miette!("Cannot bit negate non-int type: {:#?}", expr.ty));
-                    }
-                    expr.ty = Type::Bool;
+                    inner.ty = Type::Bool;
                 }
             }
         }
         Expr::Binary { op, left, right } => {
             typecheck_expr(left, symbols)?;
             typecheck_expr(right, symbols)?;
+
+            let left_span = left.span().clone();
+            let right_span = right.span().clone();
+
             let left = left.inner_mut();
             let right = right.inner_mut();
 
@@ -268,31 +258,50 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
                 | BinaryOp::ShiftRight
                 | BinaryOp::BitAnd
                 | BinaryOp::BitXor
-                | BinaryOp::BitOr
-                // TODO: and and or should only be possible on boolean types
-                | BinaryOp::And
-                | BinaryOp::Or => {
-                    if !Type::operable(&left.ty, &right.ty) {
-                        return Err(miette!(
-                            "Arithmetic operation requires int operands, got {:#?} and {:#?}",
-                            left.ty,
-                            right.ty
-                        ));
+                | BinaryOp::BitOr => {
+                    if !Type::int_binary_operable(&left.ty, &right.ty) {
+                        Err(TypecheckExprError::new(
+                            TypecheckExprErrorKind::InvalidBinaryOpTypes(
+                                (left_span, left.ty),
+                                (right_span, right.ty),
+                                *op,
+                            ),
+                        ))?;
+                    }
+                    inner.ty = left.ty.unify(&right.ty).unwrap();
+                }
+                BinaryOp::And | BinaryOp::Or => {
+                    if !Type::bool_binary_operable(&left.ty, &right.ty) {
+                        Err(TypecheckExprError::new(
+                            TypecheckExprErrorKind::InvalidBinaryOpTypes(
+                                (left_span, left.ty),
+                                (right_span, right.ty),
+                                *op,
+                            ),
+                        ))?;
                     }
                     inner.ty = left.ty.unify(&right.ty).unwrap();
                 }
                 BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
                     if !Type::comparable(&left.ty, &right.ty) {
-                        return Err(miette!(
-                            "Comparison requires comparable operands, got {:#?} and {:#?}",
-                            left.ty,
-                            right.ty
-                        ));
+                        Err(TypecheckExprError::new(
+                            TypecheckExprErrorKind::InvalidComparisonTypes(
+                                (left_span, left.ty),
+                                (right_span, right.ty),
+                            ),
+                        ))?;
                     }
                     inner.ty = Type::Bool;
                 }
                 BinaryOp::Eq | BinaryOp::Ne => {
-                    let _ = left.ty.unify(&right.ty).unwrap();
+                    if left.ty.unify(&right.ty).is_none() {
+                        Err(TypecheckExprError::new(
+                            TypecheckExprErrorKind::InvalidEqualityTypes(
+                                (left_span, left.ty),
+                                (right_span, right.ty),
+                            ),
+                        ))?;
+                    }
                     inner.ty = Type::Bool;
                 }
             }

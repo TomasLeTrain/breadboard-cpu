@@ -41,8 +41,6 @@ pub fn parse_file(source: Source) -> Result<Ast> {
     let pairs = AssemblyParser::parse(Rule::Program, source.source())
         .map_err(|e| ParseError::from_pest(e, &source))?;
 
-    println!("{pairs:#?}");
-
     for pair in pairs.into_iter() {
         match pair.as_rule() {
             Rule::Statement => {
@@ -115,11 +113,7 @@ fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statem
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Block label parsing error",
-                vec![
-                    Rule::LabelIdentifier,
-                    Rule::Block,
-                    Rule::COMMENT,
-                ],
+                vec![Rule::LabelIdentifier, Rule::Block, Rule::COMMENT],
                 vec![r],
                 &span,
             ))?,
@@ -153,11 +147,6 @@ fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNode<Statemen
 }
 
 fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
-    // let mut name: Result<String> =
-    //     Err(ParseError::from_span("Block label name not found".to_string(), pair.as_span()).into());
-    // let mut body: Result<Vec<AstNode<Statement>>> =
-    //     Err(ParseError::from_span("Block label body not found".to_string(), pair.as_span()).into());
-
     let mut name: Result<String> = Err(ParseError::from_span(
         "Instruction name not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -187,7 +176,10 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statem
                 merge(item.as_span().start(), item.as_span().end());
                 name = Ok(item.to_string());
             }
-            Rule::InstructionParameters => params = parse_instruction_parameters(item, source)?,
+            Rule::InstructionParameters => {
+                merge(item.as_span().start(), item.as_span().end());
+                params = parse_instruction_parameters(item, source)?;
+            }
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Instruction parsing error".to_string(),
@@ -200,11 +192,6 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statem
                 &AstSpan::from_span(item.as_span(), source),
             ))?,
         };
-    }
-
-    // merge span to the last param, if exists
-    if let Some(param) = params.iter().last() {
-        merge(param.span().start(), param.span().end());
     }
 
     Ok(AstNode::new(

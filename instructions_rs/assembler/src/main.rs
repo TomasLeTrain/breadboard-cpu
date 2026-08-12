@@ -1,8 +1,8 @@
 mod ast;
+mod error;
 mod istr_resolver;
 mod parser;
 mod types;
-mod error;
 
 use std::{fs, rc::Rc, sync::Arc};
 
@@ -17,8 +17,6 @@ use crate::{
     istr_resolver::gen_instruction_lookup_table,
     types::{Symbol, Type},
 };
-
-// TODO: add type of mem as argument type to differentiate lw/sw instructions
 
 // Structure:
 // ast: parsing
@@ -49,8 +47,6 @@ fn parse_file(file_path_str: &str) -> Result<()> {
     let asm_file = fs::read_to_string(file_path.clone()).expect("cannot read file");
 
     parse_source(asm_file, file_path)
-    // TODO: add functionality back
-    // .map_err(|e| e.with_source_code(NamedSource::new(file_path_str, asm_file)))
 }
 
 //
@@ -58,7 +54,6 @@ fn parse_source(file: String, file_path: String) -> Result<()> {
     let source = Arc::new(NamedSourceFile::new(file, file_path));
 
     let mut program = parser::parse_file(source).wrap_err("Parsing file failed.")?;
-    println!("{program:#?}");
 
     let mut global_symbols = types::SymbolTypeContext::new();
 
@@ -83,10 +78,11 @@ fn parse_source(file: String, file_path: String) -> Result<()> {
     types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
-    let istr_lookup = gen_instruction_lookup_table(&all_istrs).wrap_err("Failed generating instruction lookup table")?;
+    let istr_lookup = gen_instruction_lookup_table(&all_istrs)
+        .wrap_err("Failed generating instruction lookup table")?;
 
-    istr_resolver::resolve_instructions(&mut program, &istr_lookup)?;
+    istr_resolver::resolve_instructions(&mut program, &istr_lookup)
+        .wrap_err("Failed to resolve instructions")?;
 
-    println!("{:#?}", program);
     Ok(())
 }

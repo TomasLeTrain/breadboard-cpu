@@ -1,5 +1,5 @@
 cool_label:
-	jmp block_label || 2
+	jmp block_label | 2, MAR
 	jmp global_scope_label, MAR
 	; lol ; some other comment
 
@@ -11,11 +11,11 @@ block_label {
 }
 
 ; expr_test some_const + (1 + 2 / 3 * 4 + (const2 / 5) + y6)
-jmp ~0x5000 
+jmp ~0x5000, MAR
 
 block_label2 {
-	char_test '\n'
-	string_test "hello world!"
+	; char_test '\n'
+	; string_test "hello world!"
 	; literal_test some, literal
 	; label_test block_label
 	; label_test2 cool_label

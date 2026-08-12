@@ -168,14 +168,18 @@ impl InstructionType {
             InstructionType::ShiftRight(_) => "shr",
 
             // lw
-            InstructionType::LoadWordReg { .. }
-            | InstructionType::LoadWordRegImmAddr { .. }
-            | InstructionType::VramRead { .. } => "lw",
+            InstructionType::LoadWordReg { .. } | InstructionType::LoadWordRegImmAddr { .. } => {
+                "lw"
+            }
+
+            InstructionType::VramRead { .. } => "lw_vram",
 
             // sw
-            InstructionType::StoreWordReg { .. }
-            | InstructionType::StoreWordRegImmAddr { .. }
-            | InstructionType::VramWrite { .. } => "sw",
+            InstructionType::StoreWordReg { .. } | InstructionType::StoreWordRegImmAddr { .. } => {
+                "sw"
+            }
+
+            InstructionType::VramWrite { .. } => "sw_vram",
 
             InstructionType::JnzReg { .. } => "jnz",
             InstructionType::Jmp { flag, .. } | InstructionType::JmpImmAddr { flag, .. } => {
