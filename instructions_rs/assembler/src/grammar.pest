@@ -1,13 +1,13 @@
 WHITESPACE = _{ " " | "\t" }
-COMMENT    = { ";" ~ (!NEWLINE ~ ANY)* }
+COMMENT    = { Newline* ~ ";" ~ (!NEWLINE ~ ANY)* }
 
 // Program is a sequence of statements/expressions
-Program = _{ SOI ~ (Statement)* ~ EOI }
+Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { LabelStatement | BlockLabel | InstructionStatement }
+Statement             = { Newline* ~ (LabelStatement | BlockLabel | InstructionStatement) }
 
 InstructionStatement  = { InstructionLabel ~ InstructionParameters? ~ Newline+ }
 InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
@@ -18,12 +18,12 @@ InstructionParameter  = _{ Expr }
 LabelStatement = { LabelIdentifier ~ ":" ~ Newline+ }
 
 /// label { /* body (statements) */ }
-BlockLabel = { LabelIdentifier ~ Newline* ~ Block ~ Newline* }
+BlockLabel = { LabelIdentifier ~ Newline* ~ Block }
 
 // atomic to avoid having to dig into identifier
 LabelIdentifier = { Identifier }
 
-Block = { "{"  ~ Newline+ ~ Statement* ~ "}" ~ Newline+ }
+Block = { "{"  ~ Newline+ ~ Statement* ~ "}" }
 
 // Arithmetic operators
 add = { "+" }

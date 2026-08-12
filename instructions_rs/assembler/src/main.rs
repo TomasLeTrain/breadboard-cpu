@@ -6,7 +6,7 @@ mod error;
 
 use std::{fs, rc::Rc, sync::Arc};
 
-use miette::Result;
+use miette::{Context, Result};
 use opcode_gen::{
     get_instruction_list,
     instructions::{AddressRegister, Instruction, Register},
@@ -55,7 +55,7 @@ fn parse_file(file_path_str: &str) -> Result<()> {
 fn parse_source(file: String, file_path: String) -> Result<()> {
     let source = Arc::new(NamedSourceFile::new(file, file_path));
 
-    let mut program = parser::parse_file(source)?;
+    let mut program = parser::parse_file(source).wrap_err("Parsing file failed.")?;
 
     let mut global_symbols = types::SymbolTypeContext::new();
 
@@ -77,7 +77,7 @@ fn parse_source(file: String, file_path: String) -> Result<()> {
         })?;
     }
 
-    types::typecheck(&mut program, &mut global_symbols)?;
+    types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)?;

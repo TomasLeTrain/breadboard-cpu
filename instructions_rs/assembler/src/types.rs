@@ -1,10 +1,10 @@
-use std::{collections::HashMap, error::Error, fmt::Display};
+use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
-use crate::{
-    ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, TypedExpr, UnaryOp},
-    error::ParseError,
+use crate::ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
+use miette::{
+    Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, SourceCode, SourceSpan,
+    miette,
 };
-use miette::{IntoDiagnostic, Result, miette};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -99,14 +99,23 @@ pub struct Symbol {
 // allows reusing one context struct through all operations
 pub struct SymbolTypeContext {
     symbol_stack: Vec<Symbol>,
-    symbols: HashMap<String, Type>,
+    symbols: HashMap<String, Symbol>,
 }
 
-#[derive(Debug)]
+#[derive(Diagnostic, Debug)]
 pub struct DuplicateSymbolError {
     name: String,
     type1: Type,
     type2: Type,
+
+    #[source_code]
+    source: Option<NamedSource<Arc<str>>>,
+
+    #[label(primary, "Current symbol defined here")]
+    current_symbol_span: Option<SourceSpan>,
+
+    #[label("Other symbol defined here")]
+    other_symbol_span: Option<SourceSpan>,
 }
 
 #[derive(Debug)]
@@ -140,19 +149,22 @@ impl SymbolTypeContext {
 
     pub fn push(&mut self, symbol: Symbol) -> Result<()> {
         self.symbol_stack.push(symbol.clone());
-        let pushed_symbol = symbol.clone();
 
-        let push_result = self
-            .symbols
-            .insert(pushed_symbol.name, pushed_symbol.symbol_type);
+        let push_result = self.symbols.insert(symbol.clone().name, symbol.clone());
 
         if let Some(other) = push_result {
+            let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
+            let current_symbol_span = symbol.span.map(|e| e.into());
+            let other_symbol_span = other.span.map(|e| e.into());
+
             Err(DuplicateSymbolError {
                 name: symbol.name,
-                type1: other,
+                type1: other.symbol_type,
                 type2: symbol.symbol_type,
-            })
-            .into_diagnostic()
+                source,
+                current_symbol_span,
+                other_symbol_span,
+            })?
         } else {
             Ok(())
         }
@@ -165,16 +177,12 @@ impl SymbolTypeContext {
             .ok_or(EmptyStackError {})
             .into_diagnostic()?;
 
-        let returned_type = self.symbols.remove(&popped_symbol.name).unwrap();
+        let map_symbol = self.symbols.remove(&popped_symbol.name).unwrap();
 
-        Ok(Symbol {
-            name: popped_symbol.name,
-            symbol_type: returned_type,
-            span: None,
-        })
+        Ok(map_symbol)
     }
 
-    fn get(&self, name: &String) -> Option<&Type> {
+    fn get(&self, name: &String) -> Option<&Symbol> {
         self.symbols.get(name)
     }
 
@@ -192,46 +200,30 @@ pub fn typecheck(
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
-        if let Statement::Label { name } = statement.inner() {
+        if let Statement::Label { name } | Statement::BlockLabel { name, .. } = statement.inner() {
             // TODO: ensure not duplicate
             // push into local scope
             let curr_symbol = Symbol {
                 name: name.clone(),
                 symbol_type: Type::Label,
-                span: None,
+                span: Some(statement.span().clone()),
             };
-            symbols.push(curr_symbol.clone())?;
+
+            symbols
+                .push(curr_symbol.clone())
+                .wrap_err("Pushing local label symbol failed.")?;
+
             labels.push(curr_symbol);
         }
     }
 
     for statement in statements.iter_mut() {
-        // must match whole statement to get span without an additional mutable borrow
-        match statement {
-            AstNode {
-                inner: Statement::BlockLabel { name, body },
-                span,
-            } => {
-                // push into local scope
-                if let Err(_err) = symbols.push(Symbol {
-                    name: name.clone(),
-                    symbol_type: Type::Label,
-                    span: Some(span.clone()),
-                }) {
-                    Err(ParseError::from_span("Duplicate symbol in scope", span))?
-                }
-
-                // fill labels for block
+        match statement.inner_mut() {
+            Statement::BlockLabel { body, .. } => {
                 typecheck(body, symbols)?;
-
-                // remove from scope
-                symbols.pop()?;
             }
-            AstNode {
-                inner: Statement::Instruction(instruction),
-                span: _span,
-            } => {
-                for param in &mut instruction.params.iter_mut() {
+            Statement::Instruction(instruction) => {
+                for param in instruction.params.iter_mut() {
                     typecheck_expr(param, symbols)?;
                 }
             }
@@ -271,7 +263,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
                     return Err(miette!("Identity already has type: {:#?}", inner.ty));
                 }
                 println!("found symbol: {name}");
-                inner.ty = *symbols.get(name).unwrap();
+                inner.ty = symbols.get(name).unwrap().symbol_type;
             } else {
                 return Err(miette!("Symbol not found: {}", name));
             }

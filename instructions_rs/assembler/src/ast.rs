@@ -3,6 +3,7 @@ use std::{fmt::Debug, rc::Rc};
 
 use crate::types::Type;
 
+use miette::SourceSpan;
 use opcode_gen::instructions::InstructionSignature;
 use pest::{RuleType, Span, iterators::Pair};
 
@@ -44,6 +45,12 @@ pub struct AstSpan {
     start: usize,
     end: usize,
     source: Source,
+}
+
+impl From<AstSpan> for SourceSpan {
+    fn from(value: AstSpan) -> Self {
+        SourceSpan::new(value.start().into(), value.end() - value.start())
+    }
 }
 
 impl AstSpan {

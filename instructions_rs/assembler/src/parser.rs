@@ -48,7 +48,7 @@ pub fn parse_file(source: Source) -> Result<Ast> {
             Rule::Statement => {
                 program.push(parse_statement(pair, &source)?);
             }
-            Rule::COMMENT | Rule::Newline | Rule::EOI => (),
+            Rule::COMMENT | Rule::EOI => (),
             _ => {}
         }
     }
@@ -112,14 +112,13 @@ fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statem
         match item.as_rule() {
             Rule::LabelIdentifier => name = Ok(item.to_string()),
             Rule::Block => body = Ok(parse_block(item, source)?),
-            Rule::COMMENT | Rule::Newline => (),
+            Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Block label parsing error",
                 vec![
                     Rule::LabelIdentifier,
                     Rule::Block,
                     Rule::COMMENT,
-                    Rule::Newline,
                 ],
                 vec![r],
                 &span,
@@ -141,10 +140,10 @@ fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNode<Statemen
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::Statement => stmts.push(parse_statement(item, source)?),
-            Rule::COMMENT | Rule::Newline => (),
+            Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Block parsing error".to_string(),
-                vec![Rule::Statement, Rule::COMMENT, Rule::Newline],
+                vec![Rule::Statement, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
             ))?,
@@ -189,14 +188,13 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statem
                 name = Ok(item.to_string());
             }
             Rule::InstructionParameters => params = parse_instruction_parameters(item, source)?,
-            Rule::COMMENT | Rule::Newline => (),
+            Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Instruction parsing error".to_string(),
                 vec![
                     Rule::InstructionLabel,
                     Rule::InstructionParameters,
                     Rule::COMMENT,
-                    Rule::Newline,
                 ],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
@@ -224,10 +222,10 @@ fn parse_instruction_parameters(
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::Expr => params.push(parse_expr(item.into_inner(), source)?),
-            Rule::COMMENT | Rule::Newline => (),
+            Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Instruction parameter parsing error".to_string(),
-                vec![Rule::Expr, Rule::COMMENT, Rule::Newline],
+                vec![Rule::Expr, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
             ))?,
@@ -254,7 +252,7 @@ fn parse_expr<'a>(
 
                 // https://github.com/pest-parser/pest/discussions/1131
                 let no_comments: Vec<pest::iterators::Pair<'a, Rule>> = inner
-                    .filter(|x| !matches!(x.as_rule(), Rule::COMMENT | Rule::Newline))
+                    .filter(|x| !matches!(x.as_rule(), Rule::COMMENT))
                     .collect();
 
                 parse_expr(no_comments.into_iter(), source)
@@ -352,7 +350,7 @@ fn parse_expr<'a>(
                 source,
             ))
         })
-        .parse(pairs.filter(|x| !matches!(x.as_rule(), Rule::COMMENT | Rule::Newline)))
+        .parse(pairs.filter(|x| !matches!(x.as_rule(), Rule::COMMENT)))
 }
 
 fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>> {
