@@ -1,10 +1,10 @@
 mod address_alloc;
 mod ast;
 mod error;
+mod eval;
 mod istr_resolver;
 mod parser;
 mod types;
-mod eval;
 
 use std::{fs, rc::Rc, sync::Arc};
 
@@ -17,6 +17,7 @@ use opcode_gen::{
 use crate::{
     address_alloc::AllocationContext,
     ast::NamedSourceFile,
+    eval::{EvalContext, EvalSymbol, EvalValue},
     istr_resolver::gen_instruction_lookup_table,
     types::{Symbol, Type},
 };
@@ -84,7 +85,29 @@ fn parse_file(file_path_str: &str) -> Result<()> {
         .wrap_err("Failed to resolve instructions")?;
 
     address_alloc::allocate_adresses(&mut program, &mut AllocationContext::new())
-        .wrap_err("Failed to resolve instructions")?;
+        .wrap_err("Failed to allocate addresses")?;
+
+    let mut valued_symbols = EvalContext::new();
+
+    for reg in Register::iterator() {
+        valued_symbols.push(EvalSymbol {
+            name: reg.name().to_string(),
+            symbol_type: Type::Register,
+            value: EvalValue::Register(*reg),
+            span: None,
+        })?;
+    }
+
+    for reg in AddressRegister::iterator() {
+        valued_symbols.push(EvalSymbol {
+            name: reg.name().to_string(),
+            symbol_type: Type::AddressRegister,
+            value: EvalValue::AddressRegister(*reg),
+            span: None,
+        })?;
+    }
+
+    eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
 
     println!("{:#?}", program);
 
