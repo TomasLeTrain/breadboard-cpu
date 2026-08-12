@@ -54,7 +54,7 @@ pub fn parse_file(source: Source) -> Result<Ast> {
     Ok(program)
 }
 
-fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
+fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::InstructionStatement => parse_instruction(inner, source),
@@ -73,13 +73,13 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statemen
     }
 }
 
-fn parse_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
+fn parse_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::LabelIdentifier => Ok(AstNode::from_pair(
-            Statement::Label {
+            AddressedStatement::new(Statement::Label {
                 name: inner.to_string(),
-            },
+            }),
             inner,
             source,
         )),
@@ -92,13 +92,13 @@ fn parse_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> 
     }
 }
 
-fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
+fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Block label name not found",
         &AstSpan::from_span(pair.as_span(), source),
     )
     .into());
-    let mut body: Result<Vec<AstNode<Statement>>> = Err(ParseError::from_span(
+    let mut body: Result<Vec<StatementNode>> = Err(ParseError::from_span(
         "Block label body not found",
         &AstSpan::from_span(pair.as_span(), source),
     )
@@ -121,15 +121,15 @@ fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statem
     }
 
     Ok(AstNode::new(
-        Statement::BlockLabel {
+        AddressedStatement::new(Statement::BlockLabel {
             name: name?,
             body: body?,
-        },
+        }),
         span,
     ))
 }
 
-fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNode<Statement>>> {
+fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<StatementNode>> {
     let mut stmts = Vec::new();
     for item in pair.into_inner() {
         match item.as_rule() {
@@ -146,7 +146,7 @@ fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNode<Statemen
     Ok(stmts)
 }
 
-fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statement>> {
+fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Instruction name not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -195,7 +195,7 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Statem
     }
 
     Ok(AstNode::new(
-        Statement::Instruction(AstInstruction::new(name?, params)),
+        AddressedStatement::new(Statement::Instruction(AstInstruction::new(name?, params))),
         span,
     ))
 }

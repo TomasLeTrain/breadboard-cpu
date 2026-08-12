@@ -9,7 +9,8 @@ use pest::{RuleType, Span, iterators::Pair};
 
 type Address = u16;
 
-pub type Ast = Vec<AstNode<Statement>>;
+pub type Ast = Vec<StatementNode>;
+pub type StatementNode = AstNode<AddressedStatement>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NamedSourceFile {
@@ -162,8 +163,27 @@ pub struct AddressedStatement {
 }
 
 impl AddressedStatement {
-    pub fn statement<'a>(&'a self) -> &'a Statement {
+    pub fn new(statement: Statement) -> Self {
+        Self {
+            statement,
+            address: None,
+        }
+    }
+
+    pub fn set_address(&mut self, address: Option<Address>) {
+        self.address = address;
+    }
+
+    pub fn statement(&self) -> &Statement {
         &self.statement
+    }
+
+    pub fn inner(&self) -> &Statement {
+        &self.statement
+    }
+
+    pub fn inner_mut(&mut self) -> &mut Statement {
+        &mut self.statement
     }
 }
 
@@ -192,7 +212,7 @@ pub enum Statement {
     },
     BlockLabel {
         name: String,
-        body: Vec<AstNode<Statement>>,
+        body: Vec<StatementNode>,
     },
     Instruction(AstInstruction),
 }

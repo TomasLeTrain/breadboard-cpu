@@ -1,15 +1,13 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
-use crate::ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, TypedExpr, UnaryOp};
+use crate::ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, StatementNode, TypedExpr, UnaryOp};
 use miette::{
     Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, SourceSpan, miette,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
-    /// Integer type (64-bit signed)
     Int,
-    /// Boolean type
     Bool,
     String,
     Character,
@@ -22,11 +20,31 @@ pub enum Type {
 
     Label,
 
-    /// Unknown type
     Unknown,
 }
 
 impl Type {
+    pub fn int_operable(&self) -> bool {
+        matches!(self, Type::Int | Type::Label | Type::Character)
+    }
+
+    pub fn bool_operable(&self) -> bool {
+        matches!(self, Type::Bool)
+    }
+
+    // returns true if types are comparable to each other
+    pub fn comparable(lhs: &Type, rhs: &Type) -> bool {
+        Self::int_binary_operable(lhs, rhs) || Self::bool_binary_operable(lhs, rhs)
+    }
+
+    pub fn int_binary_operable(lhs: &Type, rhs: &Type) -> bool {
+        lhs.int_operable() && rhs.int_operable()
+    }
+
+    pub fn bool_binary_operable(lhs: &Type, rhs: &Type) -> bool {
+        lhs.bool_operable() && rhs.bool_operable()
+    }
+
     pub fn unify(&self, other: &Type) -> Option<Type> {
         if Self::int_binary_operable(self, other) {
             Some(Type::Int)
@@ -37,27 +55,6 @@ impl Type {
         } else {
             None
         }
-    }
-
-    // returns true if types are comparable to each other
-    pub fn comparable(lhs: &Type, rhs: &Type) -> bool {
-        Self::int_binary_operable(lhs, rhs) || Self::bool_binary_operable(lhs, rhs)
-    }
-
-    pub fn int_operable(&self) -> bool {
-        matches!(self, Type::Int | Type::Label | Type::Character)
-    }
-
-    pub fn bool_operable(&self) -> bool {
-        matches!(self, Type::Bool)
-    }
-
-    pub fn int_binary_operable(lhs: &Type, rhs: &Type) -> bool {
-        lhs.int_operable() && rhs.int_operable()
-    }
-
-    pub fn bool_binary_operable(lhs: &Type, rhs: &Type) -> bool {
-        lhs.bool_operable() && rhs.bool_operable()
     }
 }
 
@@ -127,15 +124,14 @@ impl SymbolTypeContext {
     }
 }
 
-pub fn typecheck(
-    statements: &mut [AstNode<Statement>],
-    symbols: &mut SymbolTypeContext,
-) -> Result<()> {
+pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeContext) -> Result<()> {
     let mut labels = Vec::new();
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
-        if let Statement::Label { name } | Statement::BlockLabel { name, .. } = statement.inner() {
+        if let Statement::Label { name } | Statement::BlockLabel { name, .. } =
+            statement.inner().inner()
+        {
             // push into local scope
             let curr_symbol = Symbol {
                 name: name.clone(),
@@ -152,7 +148,7 @@ pub fn typecheck(
     }
 
     for statement in statements.iter_mut() {
-        match statement.inner_mut() {
+        match statement.inner_mut().inner_mut() {
             Statement::BlockLabel { body, .. } => {
                 typecheck(body, symbols)?;
             }

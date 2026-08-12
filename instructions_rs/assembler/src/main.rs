@@ -1,3 +1,4 @@
+mod address_alloc;
 mod ast;
 mod error;
 mod istr_resolver;
@@ -83,6 +84,8 @@ fn parse_source(file: String, file_path: String) -> Result<()> {
 
     istr_resolver::resolve_instructions(&mut program, &istr_lookup)
         .wrap_err("Failed to resolve instructions")?;
+
+    address_alloc::allocate_adresses(&mut program).wrap_err("Failed to resolve instructions")?;
 
     Ok(())
 }

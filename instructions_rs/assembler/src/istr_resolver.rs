@@ -6,7 +6,7 @@ use opcode_gen::instructions::{
 };
 
 use crate::{
-    ast::{AstNode, Statement, TypedExpr},
+    ast::{AstNode, Statement, StatementNode, TypedExpr},
     error::ParseError,
     types::Type,
 };
@@ -60,11 +60,11 @@ fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> Result<ArgumentType> {
 }
 
 pub fn resolve_instructions(
-    statements: &mut [AstNode<Statement>],
+    statements: &mut [StatementNode],
     istr_lookup: &HashMap<InstructionSignature, Rc<Instruction>>,
 ) -> Result<()> {
     for statement in statements {
-        match statement.inner_mut() {
+        match statement.inner_mut().inner_mut() {
             Statement::BlockLabel { body, .. } => {
                 resolve_instructions(body, istr_lookup)?;
             }
