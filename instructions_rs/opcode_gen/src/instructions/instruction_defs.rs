@@ -236,7 +236,7 @@ impl InstructionType {
                 vec![ArgumentType::AddrReg(*dest), ArgumentType::AddrReg(*origin)]
             }
 
-            // reg, addr_reg
+            // istr reg, addr_reg
             InstructionType::JnzReg {
                 origin: reg,
                 addr: addr_reg,
@@ -253,10 +253,6 @@ impl InstructionType {
                 origin: reg,
                 dest: addr_reg,
             }
-            | InstructionType::StoreWordRegImmAddr {
-                origin: reg,
-                scrath_addr_reg: addr_reg,
-            }
             | InstructionType::VramWrite {
                 origin: reg,
                 addr: addr_reg,
@@ -270,6 +266,16 @@ impl InstructionType {
                 ArgumentType::Reg(*dest),
                 ArgumentType::Byte,
                 ArgumentType::AddrReg(*scratch_addr_reg),
+            ],
+
+            // istr reg, imm_addr, addr_reg
+            InstructionType::StoreWordRegImmAddr {
+                origin: reg,
+                scrath_addr_reg: addr_reg,
+            } => vec![
+                ArgumentType::Reg(*reg),
+                ArgumentType::Addr,
+                ArgumentType::AddrReg(*addr_reg),
             ],
 
             // istr addr_reg
@@ -766,25 +772,25 @@ pub fn pop_addr_reg_instructions() -> Vec<Instruction> {
         .with_overrides(vec![OverrideBehavior::Mar]),
     );
 
-    let sp_to_sp_through_ab = vec![
-        [MEM.bout, SP.addr, B.write, PC.cnt].into(),
-        [SP.inc].into(),
-        [MEM.bout, SP.addr, A.write].into(),
-        [B.bout, SP.hi.write].into(),
-        [A.bout, SP.lo.write].into(),
-        [SP.inc, Reset].into(),
-    ];
+    // TODO: need to encode AB somehow in argument type to have a different istr signature
+    // let sp_to_sp_through_ab = vec![
+    //     [MEM.bout, SP.addr, B.write, PC.cnt].into(),
+    //     [SP.inc].into(),
+    //     [MEM.bout, SP.addr, A.write].into(),
+    //     [B.bout, SP.hi.write].into(),
+    //     [A.bout, SP.lo.write].into(),
+    //     [SP.inc, Reset].into(),
+    // ];
 
-    // TODO: might need a different instruction to be able to differentiate from MAR variant?
-    result.push(
-        Instruction::new(
-            InstructionType::PopAddrReg(AddressRegister::Sp),
-            Imm::None,
-            "pop SP, AB".to_string(),
-            InstructionImpl::Simple(InstructionTemplate(sp_to_sp_through_ab)),
-        )
-        .with_overrides(vec![OverrideBehavior::A, OverrideBehavior::B]),
-    );
+    // result.push(
+    //     Instruction::new(
+    //         InstructionType::PopAddrReg(AddressRegister::Sp),
+    //         Imm::None,
+    //         "pop SP, AB".to_string(),
+    //         InstructionImpl::Simple(InstructionTemplate(sp_to_sp_through_ab)),
+    //     )
+    //     .with_overrides(vec![OverrideBehavior::A, OverrideBehavior::B]),
+    // );
 
     result
 }

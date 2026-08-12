@@ -18,6 +18,8 @@ use crate::{
     types::{Symbol, Type},
 };
 
+// TODO: add type of mem as argument type to differentiate lw/sw instructions
+
 // Structure:
 // ast: parsing
 // typechecked symbols: ast
