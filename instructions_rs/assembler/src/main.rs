@@ -1,4 +1,5 @@
 mod address_alloc;
+mod asm_gen;
 mod ast;
 mod error;
 mod eval;
@@ -16,6 +17,7 @@ use opcode_gen::{
 
 use crate::{
     address_alloc::AllocationContext,
+    asm_gen::AsmGenContext,
     ast::NamedSourceFile,
     eval::{EvalContext, EvalSymbol, ExprValue},
     istr_resolver::gen_instruction_lookup_table,
@@ -108,6 +110,14 @@ fn parse_file(file_path_str: &str) -> Result<()> {
     }
 
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
+
+    let max_addr_size = 1 << 15;
+
+    let mut asm_context = AsmGenContext::new(max_addr_size);
+
+    asm_gen::generate_asm(&program, &mut asm_context)?;
+
+    let asm = asm_context.into_assembly();
 
     println!("{:#?}", program);
 

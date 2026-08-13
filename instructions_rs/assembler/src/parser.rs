@@ -32,7 +32,8 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
         .op(Op::infix(multiply, Left) | Op::infix(divide, Left) | Op::infix(modulo, Left)) // * / %
         .op(Op::infix(power, Right)) // ** (right-associative)
         // Highest precedence
-        .op(Op::prefix(logical_not) | Op::prefix(negation) | Op::prefix(bit_negation)) // ! - ~ (unary)
+        .op(Op::prefix(logical_not) | Op::prefix(negation) | Op::prefix(bit_negation))
+    // ! - ~ (unary)
 });
 
 /// parse a file
@@ -381,7 +382,7 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
             let c = unescape_char(&s[1..s.len() - 1]);
 
             Ok(AstNode::from_pair(
-                Expr::new(ExprKind::Literal, Type::Byte, ExprValue::Character(c as u8)),
+                Expr::new(ExprKind::Literal, Type::Byte, ExprValue::Byte(c as u8)),
                 inner,
                 source,
             ))

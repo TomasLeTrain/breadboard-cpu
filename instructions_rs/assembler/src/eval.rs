@@ -13,7 +13,6 @@ pub enum ExprValue {
     Int(i32),
     Bool(bool),
     String(String),
-    Character(u8),
 
     Register(Register),
     AddressRegister(AddressRegister),
@@ -28,7 +27,6 @@ impl ExprValue {
     fn as_int(&self) -> Option<i32> {
         match self {
             ExprValue::Int(val) => Some(*val),
-            ExprValue::Character(val) => Some(*val as i32),
             ExprValue::Addr(val) => Some(*val as i32),
             ExprValue::Byte(val) => Some(*val as i32),
             ExprValue::Register(_)
@@ -43,7 +41,6 @@ impl ExprValue {
         match self {
             ExprValue::Bool(val) => Some(*val),
             ExprValue::Int(_)
-            | ExprValue::Character(_)
             | ExprValue::Addr(_)
             | ExprValue::Byte(_)
             | ExprValue::Register(_)
