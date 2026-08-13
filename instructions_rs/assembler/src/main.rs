@@ -17,7 +17,7 @@ use opcode_gen::{
 use crate::{
     address_alloc::AllocationContext,
     ast::NamedSourceFile,
-    eval::{EvalContext, EvalSymbol, EvalValue},
+    eval::{EvalContext, EvalSymbol, ExprValue},
     istr_resolver::gen_instruction_lookup_table,
     types::{Symbol, Type},
 };
@@ -93,7 +93,7 @@ fn parse_file(file_path_str: &str) -> Result<()> {
         valued_symbols.push(EvalSymbol {
             name: reg.name().to_string(),
             symbol_type: Type::Register,
-            value: EvalValue::Register(*reg),
+            value: ExprValue::Register(*reg),
             span: None,
         })?;
     }
@@ -102,7 +102,7 @@ fn parse_file(file_path_str: &str) -> Result<()> {
         valued_symbols.push(EvalSymbol {
             name: reg.name().to_string(),
             symbol_type: Type::AddressRegister,
-            value: EvalValue::AddressRegister(*reg),
+            value: ExprValue::AddressRegister(*reg),
             span: None,
         })?;
     }

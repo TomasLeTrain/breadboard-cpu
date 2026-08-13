@@ -1,6 +1,8 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
-use crate::ast::{AstNode, AstSpan, BinaryOp, ExprKind, StatementKind, StatementNode, Expr, UnaryOp};
+use crate::ast::{
+    AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp,
+};
 use miette::{
     Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, SourceSpan, miette,
 };
@@ -86,17 +88,34 @@ impl SymbolTypeContext {
         let push_result = self.symbols.insert(symbol.clone().name, symbol.clone());
 
         if let Some(other) = push_result {
+            let mut spans = Vec::new();
+
             let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
-            let current_symbol_span = symbol.span.as_ref().map(AstSpan::to_miette_span);
-            let other_symbol_span = other.span.as_ref().map(AstSpan::to_miette_span);
+
+            if let Some(ast_span) = symbol.span.as_ref() {
+                spans.push(LabeledSpan::new_with_span(
+                    Some(format!(
+                        "Symbol of type \"{:?}\" defined here",
+                        symbol.symbol_type
+                    )),
+                    ast_span.to_miette_span(),
+                ));
+            };
+
+            if let Some(ast_span) = other.span.as_ref() {
+                spans.push(LabeledSpan::new_with_span(
+                    Some(format!(
+                        "Symbol of type \"{:?}\" defined here",
+                        other.symbol_type
+                    )),
+                    ast_span.to_miette_span(),
+                ));
+            };
 
             Err(DuplicateSymbolError {
                 name: symbol.name,
-                type1: other.symbol_type,
-                type2: symbol.symbol_type,
                 source,
-                current_symbol_span,
-                other_symbol_span,
+                spans,
             })?
         } else {
             Ok(())
@@ -305,36 +324,29 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &SymbolTypeContext) -
 }
 
 #[derive(Diagnostic, Debug)]
+#[diagnostic(code(eval::duplicate_symbol))]
 pub struct DuplicateSymbolError {
     name: String,
-    type1: Type,
-    type2: Type,
 
     #[source_code]
     source: Option<NamedSource<Arc<str>>>,
 
-    #[label(primary, "Current symbol defined here")]
-    current_symbol_span: Option<SourceSpan>,
+    #[label(collection, "Defined here")]
+    spans: Vec<LabeledSpan>,
+}
 
-    #[label("Other symbol defined here")]
-    other_symbol_span: Option<SourceSpan>,
+impl Error for DuplicateSymbolError {}
+
+impl Display for DuplicateSymbolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Symbol \"{}\" already in context", self.name)
+    }
 }
 
 #[derive(Debug)]
 pub struct EmptyStackError;
 
-impl Error for DuplicateSymbolError {}
 impl Error for EmptyStackError {}
-
-impl Display for DuplicateSymbolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Symbol already in context - name: {:?}, type1: {:?}, type2: {:?}",
-            self.name, self.type1, self.type2
-        )
-    }
-}
 
 impl Display for EmptyStackError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

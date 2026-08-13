@@ -13,6 +13,7 @@ block_label {
 add A, (1 + 2 / 3 * 4 + (3 / 5) + 5)
 jmp ~0x5000, MAR
 
+
 block_label2 {
 	; char_test '\n'
 	; string_test "hello world!"

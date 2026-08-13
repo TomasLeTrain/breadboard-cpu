@@ -4,12 +4,12 @@ use miette::{Context, Diagnostic, LabeledSpan, NamedSource, Result, SourceSpan, 
 use opcode_gen::instructions::{AddressRegister, Register};
 
 use crate::{
-    ast::{AstNode, AstSpan, BinaryOp, ExprKind, StatementKind, StatementNode, Expr, UnaryOp},
+    ast::{AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp},
     types::Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum EvalValue {
+pub enum ExprValue {
     Int(i32),
     Bool(bool),
     String(String),
@@ -24,32 +24,32 @@ pub enum EvalValue {
     Unknown,
 }
 
-impl EvalValue {
+impl ExprValue {
     fn as_int(&self) -> Option<i32> {
         match self {
-            EvalValue::Int(val) => Some(*val),
-            EvalValue::Character(val) => Some(*val as i32),
-            EvalValue::Addr(val) => Some(*val as i32),
-            EvalValue::Byte(val) => Some(*val as i32),
-            EvalValue::Register(_)
-            | EvalValue::AddressRegister(_)
-            | EvalValue::Unknown
-            | EvalValue::Bool(_)
-            | EvalValue::String(_) => None,
+            ExprValue::Int(val) => Some(*val),
+            ExprValue::Character(val) => Some(*val as i32),
+            ExprValue::Addr(val) => Some(*val as i32),
+            ExprValue::Byte(val) => Some(*val as i32),
+            ExprValue::Register(_)
+            | ExprValue::AddressRegister(_)
+            | ExprValue::Unknown
+            | ExprValue::Bool(_)
+            | ExprValue::String(_) => None,
         }
     }
 
     fn as_bool(&self) -> Option<bool> {
         match self {
-            EvalValue::Bool(val) => Some(*val),
-            EvalValue::Int(_)
-            | EvalValue::Character(_)
-            | EvalValue::Addr(_)
-            | EvalValue::Byte(_)
-            | EvalValue::Register(_)
-            | EvalValue::AddressRegister(_)
-            | EvalValue::Unknown
-            | EvalValue::String(_) => None,
+            ExprValue::Bool(val) => Some(*val),
+            ExprValue::Int(_)
+            | ExprValue::Character(_)
+            | ExprValue::Addr(_)
+            | ExprValue::Byte(_)
+            | ExprValue::Register(_)
+            | ExprValue::AddressRegister(_)
+            | ExprValue::Unknown
+            | ExprValue::String(_) => None,
         }
     }
 
@@ -126,7 +126,7 @@ impl EvalValue {
 pub struct EvalSymbol {
     pub name: String,
     pub symbol_type: Type,
-    pub value: EvalValue,
+    pub value: ExprValue,
     pub span: Option<AstSpan>,
 }
 
@@ -151,19 +151,33 @@ impl EvalContext {
         let push_result = self.symbols.insert(symbol.clone().name, symbol.clone());
 
         if let Some(other) = push_result {
-            // let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
-            // let current_symbol_span = symbol.span.as_ref().map(AstSpan::to_miette_span);
-            // let other_symbol_span = other.span.as_ref().map(AstSpan::to_miette_span);
-            Err(miette!("duplicate symbol error"))?
+            let mut spans = Vec::new();
+            let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
 
-            // Err(DuplicateSymbolError {
-            //     name: symbol.name,
-            //     type1: other.symbol_type,
-            //     type2: symbol.symbol_type,
-            //     source,
-            //     current_symbol_span,
-            //     other_symbol_span,
-            // })?
+            if let Some(ast_span) = symbol.span.as_ref() {
+                spans.push(LabeledSpan::new_with_span(
+                    Some(format!(
+                        "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
+                        symbol.symbol_type, symbol.value
+                    )),
+                    ast_span.to_miette_span(),
+                ));
+            };
+            if let Some(ast_span) = other.span.as_ref() {
+                spans.push(LabeledSpan::new_with_span(
+                    Some(format!(
+                        "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
+                        other.symbol_type, other.value
+                    )),
+                    ast_span.to_miette_span(),
+                ));
+            };
+
+            Err(DuplicateSymbolError {
+                name: symbol.name,
+                source,
+                spans,
+            })?
         } else {
             Ok(())
         }
@@ -201,7 +215,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             let curr_symbol = EvalSymbol {
                 name: name.clone(),
                 symbol_type: Type::Label,
-                value: EvalValue::Addr(statement.inner().address().unwrap()),
+                value: ExprValue::Addr(statement.inner().address().unwrap()),
                 span: Some(statement.span().clone()),
             };
 
@@ -268,7 +282,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                         name: name.to_string(),
                         symbol_type: inner.ty,
                         span: Some(typed_expr.span.clone()),
-                        value: EvalValue::Unknown,
+                        value: ExprValue::Unknown,
                     },
                 )))?;
             }
@@ -283,13 +297,13 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
 
             match op {
                 UnaryOp::Neg => {
-                    inner.value = EvalValue::Int(-unary_expr.value.as_int().unwrap());
+                    inner.value = ExprValue::Int(-unary_expr.value.as_int().unwrap());
                 }
                 UnaryOp::BitNegation => {
-                    inner.value = EvalValue::Int(!unary_expr.value.as_int().unwrap());
+                    inner.value = ExprValue::Int(!unary_expr.value.as_int().unwrap());
                 }
                 UnaryOp::Not => {
-                    inner.value = EvalValue::Bool(!unary_expr.value.as_bool().unwrap());
+                    inner.value = ExprValue::Bool(!unary_expr.value.as_bool().unwrap());
                 }
             }
         }
@@ -315,16 +329,16 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                 | BinaryOp::BitAnd
                 | BinaryOp::BitXor
                 | BinaryOp::BitOr => {
-                    inner.value = EvalValue::apply_int_binary_op(&left.value, &right.value, op);
+                    inner.value = ExprValue::apply_int_binary_op(&left.value, &right.value, op);
                 }
                 BinaryOp::And | BinaryOp::Or => {
-                    inner.value = EvalValue::apply_bool_binary_op(&left.value, &right.value, op);
+                    inner.value = ExprValue::apply_bool_binary_op(&left.value, &right.value, op);
                 }
                 BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                    inner.value = EvalValue::apply_comparison_op(&left.value, &right.value, op);
+                    inner.value = ExprValue::apply_comparison_op(&left.value, &right.value, op);
                 }
                 BinaryOp::Eq | BinaryOp::Ne => {
-                    inner.value = EvalValue::apply_equality_op(&left.value, &right.value, op);
+                    inner.value = ExprValue::apply_equality_op(&left.value, &right.value, op);
                 }
             }
         }
@@ -333,36 +347,30 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
 }
 
 #[derive(Diagnostic, Debug)]
+#[diagnostic(code(eval::duplicate_symbol))]
 pub struct DuplicateSymbolError {
     name: String,
-    type1: Type,
-    type2: Type,
 
     #[source_code]
     source: Option<NamedSource<Arc<str>>>,
 
-    #[label(primary, "Current symbol defined here")]
-    current_symbol_span: Option<SourceSpan>,
+    #[label(collection, "Defined here")]
+    spans: Vec<LabeledSpan>,
+}
 
-    #[label("Other symbol defined here")]
-    other_symbol_span: Option<SourceSpan>,
+
+impl Error for DuplicateSymbolError {}
+
+impl Display for DuplicateSymbolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Symbol \"{}\" already in context", self.name)
+    }
 }
 
 #[derive(Debug)]
 pub struct EmptyStackError;
 
-impl Error for DuplicateSymbolError {}
 impl Error for EmptyStackError {}
-
-impl Display for DuplicateSymbolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Symbol already in context - name: {:?}, type1: {:?}, type2: {:?}",
-            self.name, self.type1, self.type2
-        )
-    }
-}
 
 impl Display for EmptyStackError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

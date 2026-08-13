@@ -2,7 +2,7 @@ use std::sync::{Arc, LazyLock};
 
 use crate::ast::*;
 use crate::error::ParseError;
-use crate::eval::EvalValue;
+use crate::eval::ExprValue;
 use crate::types::Type;
 
 use miette::Result;
@@ -349,7 +349,7 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
             Expr::new(
                 ExprKind::Literal,
                 Type::Int,
-                EvalValue::Int(inner.as_str().parse().unwrap()),
+                ExprValue::Int(inner.as_str().parse().unwrap()),
             ),
             inner,
             source,
@@ -359,7 +359,7 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
             Expr::new(
                 ExprKind::Literal,
                 Type::Bool,
-                EvalValue::Bool(inner.as_str() == "true"),
+                ExprValue::Bool(inner.as_str() == "true"),
             ),
             inner,
             source,
@@ -371,7 +371,7 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
                 Expr::new(
                     ExprKind::Literal,
                     Type::String,
-                    EvalValue::String(s[1..s.len() - 1].to_string()),
+                    ExprValue::String(s[1..s.len() - 1].to_string()),
                 ),
                 inner,
                 source,
@@ -385,7 +385,7 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
                 Expr::new(
                     ExprKind::Literal,
                     Type::Character,
-                    EvalValue::Character(c as u8),
+                    ExprValue::Character(c as u8),
                 ),
                 inner,
                 source,
@@ -414,7 +414,7 @@ fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>>
             Expr::new(
                 ExprKind::Literal,
                 Type::Int,
-                EvalValue::Int(i32::from_str_radix(inner.as_str(), 16).unwrap()),
+                ExprValue::Int(i32::from_str_radix(inner.as_str(), 16).unwrap()),
             ),
             inner,
             source,

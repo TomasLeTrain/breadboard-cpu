@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::{fmt::Debug, rc::Rc};
 
-use crate::eval::EvalValue;
+use crate::eval::ExprValue;
 use crate::types::Type;
 
 use miette::SourceSpan;
@@ -222,11 +222,11 @@ pub enum StatementKind {
 pub struct Expr {
     pub kind: ExprKind,
     pub ty: Type,
-    pub value: EvalValue,
+    pub value: ExprValue,
 }
 
 impl Expr {
-    pub fn new(kind: ExprKind, ty: Type, value: EvalValue) -> Self {
+    pub fn new(kind: ExprKind, ty: Type, value: ExprValue) -> Self {
         Self { kind, ty, value }
     }
 
@@ -234,7 +234,7 @@ impl Expr {
         Expr {
             kind,
             ty: Type::Unknown,
-            value: EvalValue::Unknown,
+            value: ExprValue::Unknown,
         }
     }
 }
