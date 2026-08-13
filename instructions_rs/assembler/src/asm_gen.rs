@@ -4,6 +4,7 @@ use crate::{
     types::Address,
 };
 use miette::{Result, miette};
+use opcode_gen::instructions::ArgumentValue;
 
 /// simple vector of bools implemented as packed bytes
 struct BoolVec {
@@ -13,7 +14,7 @@ struct BoolVec {
 impl BoolVec {
     fn new(capacity: usize) -> Self {
         Self {
-            vec: Vec::with_capacity(Self::get_vec_idx(capacity)),
+            vec: vec![0; Self::get_vec_idx(capacity)],
         }
     }
 
@@ -59,12 +60,13 @@ pub struct AsmGenContext {
 impl AsmGenContext {
     pub fn new(max_addr_size: u16) -> Self {
         Self {
-            assembly: Vec::with_capacity(max_addr_size as usize),
+            assembly: vec![0; max_addr_size as usize],
             addr_occupied: BoolVec::new(max_addr_size as usize),
         }
     }
 
     fn place_byte(&mut self, addr: Address, byte: u8) -> Result<()> {
+        println!("what {:?} {:?}", addr as usize, self.assembly.len());
         let asm_byte = self
             .assembly
             .get_mut(addr as usize)
@@ -76,9 +78,14 @@ impl AsmGenContext {
         Ok(())
     }
 
-    pub fn set_bytes(&mut self, addr: Address, bytes: &[u8]) -> Result<()> {
+    fn place_bytes(&mut self, addr: Address, bytes: &[u8]) -> Result<()> {
+        println!("placing {:?} at {:?}", bytes, addr);
+
         let end_addr = addr + bytes.len() as u16;
+
+        println!("end addr {}", end_addr);
         for (&byte, i) in bytes.iter().zip(addr..end_addr) {
+            println!("placing  {:?} at {:?}", byte, i);
             self.place_byte(i, byte)?;
         }
 
@@ -92,23 +99,20 @@ impl AsmGenContext {
 
 pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Result<()> {
     for statement in statements.iter() {
-        match statement.inner().inner() {
-            StatementKind::Instruction(ast_instruction) => {
-                // advance by however many bytes instruction takes up
+        if let StatementKind::Instruction(ast_instruction) = statement.inner().inner() {
+            let arg_values: Vec<ArgumentValue> = ast_instruction
+                .params
+                .iter()
+                .map(|e| e.inner().value.as_istr_arg_value())
+                .collect();
 
-                let arguments: Vec<ExprValue> = ast_instruction
-                    .params
-                    .iter()
-                    .map(|e| e.inner().value.clone())
-                    .collect();
+            let istr_bytes = ast_instruction
+                .instruction
+                .as_ref()
+                .unwrap()
+                .get_asm_bytes(arg_values);
 
-                // let istr_size = ast_instruction
-                //     .instruction
-                //     .as_ref()
-                //     .unwrap()
-                //     .get_byte_size();
-            }
-            _ => (),
+            ctx.place_bytes(statement.inner().address().unwrap(), &istr_bytes)?;
         };
     }
 

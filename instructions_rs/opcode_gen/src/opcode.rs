@@ -52,4 +52,12 @@ impl InstructionOpcode {
     pub fn byte_size(&self) -> usize {
         if self.ir2.is_some() { 2 } else { 1 }
     }
+
+    pub fn get_opcode_bytes(&self) -> Vec<u8> {
+        if self.ir2.is_some() {
+            vec![self.ir, self.ir2.unwrap()]
+        } else {
+            vec![self.ir]
+        }
+    }
 }

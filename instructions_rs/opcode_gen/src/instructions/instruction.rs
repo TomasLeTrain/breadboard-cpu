@@ -1,7 +1,10 @@
 /// public interface for interacting with instructions
 use crate::{
     action::Action,
-    instructions::{InstructionImpl, instruction_defs::InstructionType},
+    instructions::{
+        InstructionImpl,
+        instruction_defs::{ArgumentValue, InstructionType},
+    },
     opcode::{InstructionOpcode, Opcode},
     output::Output,
 };
@@ -86,6 +89,16 @@ impl Instruction {
     pub fn get_byte_size(&self) -> usize {
         // TODO: wrap in result in case opcode is not set
         self.opcode().as_ref().unwrap().byte_size() + self.istr_type.get_imm_byte_size()
+    }
+
+    // TODO: wrap in result for various possible error cases
+    pub fn get_asm_bytes(&self, arg_values: Vec<ArgumentValue>) -> Vec<u8> {
+        let mut res = Vec::new();
+
+        res.append(&mut self.opcode().as_ref().unwrap().get_opcode_bytes());
+        res.append(&mut self.istr_type.get_imm_bytes(arg_values));
+
+        res
     }
 }
 

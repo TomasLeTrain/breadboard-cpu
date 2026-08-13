@@ -115,11 +115,14 @@ fn parse_file(file_path_str: &str) -> Result<()> {
 
     let mut asm_context = AsmGenContext::new(max_addr_size);
 
+    // println!("{:#?}", program);
+
     asm_gen::generate_asm(&program, &mut asm_context)?;
 
     let asm = asm_context.into_assembly();
 
-    println!("{:#?}", program);
+    println!("{:#?}", asm);
+
 
     Ok(())
 }

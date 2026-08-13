@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
-use opcode_gen::instructions::{AddressRegister, Register};
+use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
     ast::{AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp},
@@ -158,6 +158,23 @@ impl ExprValue {
             }
 
             Type::Unknown => unreachable!(),
+        }
+    }
+
+    pub fn as_istr_arg_value(&self) -> ArgumentValue {
+        match self {
+            ExprValue::Register(register) => ArgumentValue::Reg(*register),
+            ExprValue::AddressRegister(address_register) => {
+                ArgumentValue::AddrReg(*address_register)
+            }
+            ExprValue::Addr(addr) => ArgumentValue::Addr(*addr),
+            ExprValue::Byte(byte) => ArgumentValue::Byte(*byte),
+
+            // TODO: add errors
+            ExprValue::Unknown => panic!(),
+            ExprValue::Int(_) => panic!(),
+            ExprValue::Bool(_) => panic!(),
+            ExprValue::String(_) => panic!(),
         }
     }
 }
@@ -317,13 +334,13 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                     // ))?;
                 }
 
-                inner.value = symbol.value.clone();
+                inner.value = symbol.value.clone().cast_value(&inner.ty);
             } else {
                 Err(EvalExprError::new(EvalExprErrorKind::SymbolNotFound(
                     EvalSymbol {
                         name: name.to_string(),
                         symbol_type: inner.ty,
-                        span: Some(typed_expr.span.clone()),
+                        span: Some(inner_span),
                         value: ExprValue::Unknown,
                     },
                 )))?;
@@ -337,17 +354,11 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             // let span = unary_expr.span().clone();
             let unary_expr = unary_expr.inner_mut();
 
-            match op {
-                UnaryOp::Neg => {
-                    inner.value = ExprValue::Int(-unary_expr.value.as_int().unwrap());
-                }
-                UnaryOp::BitNegation => {
-                    inner.value = ExprValue::Int(!unary_expr.value.as_int().unwrap());
-                }
-                UnaryOp::Not => {
-                    inner.value = ExprValue::Bool(!unary_expr.value.as_bool().unwrap());
-                }
-            }
+            inner.value = match op {
+                UnaryOp::Neg => ExprValue::Int(-unary_expr.value.as_int().unwrap()),
+                UnaryOp::BitNegation => ExprValue::Int(!unary_expr.value.as_int().unwrap()),
+                UnaryOp::Not => ExprValue::Bool(!unary_expr.value.as_bool().unwrap()),
+            };
         }
         ExprKind::Binary { op, left, right } => {
             eval_expr(left, ctx)?;
@@ -381,9 +392,12 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                     ExprValue::apply_equality_op(&left.value, &right.value, op)
                 }
             }
-            .cast_value(&inner.ty)
         }
     }
+
+    // ensure value confines to the type
+    inner.value = inner.value.clone().cast_value(&inner.ty);
+
     Ok(())
 }
 

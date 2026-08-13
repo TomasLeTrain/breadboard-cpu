@@ -111,6 +111,15 @@ pub enum ArgumentType {
     GenericImm,
 }
 
+#[derive(Hash, PartialEq, Debug, Clone, Copy, Eq)]
+pub enum ArgumentValue {
+    Reg(Register),
+    AddrReg(AddressRegister),
+    Byte(u8),
+    Addr(u16),
+    GenericImm,
+}
+
 impl ArgumentType {
     /// makes imm's into generic imm to allow loopkup without knowing the exact imm type
     pub fn to_generic(self) -> Self {
@@ -318,6 +327,37 @@ impl InstructionType {
                 ArgumentType::GenericImm => unreachable!(),
             })
             .sum()
+    }
+
+    /// returns size in bytes imm takes up according to all imm instruction params
+    pub fn get_imm_bytes(&self, arg_values: Vec<ArgumentValue>) -> Vec<u8> {
+        // TODO: add errors for incompatible arg values
+        self.arguments()
+            .iter()
+            .zip(arg_values)
+            .filter(|(e, _)| matches!(e, ArgumentType::Byte | ArgumentType::Addr))
+            .map(|(e, value)| match e {
+                ArgumentType::Byte => {
+                    if let ArgumentValue::Byte(byte) = value {
+                        vec![byte]
+                    } else {
+                        panic!()
+                    }
+                }
+                ArgumentType::Addr => {
+                    assert!(matches!(value, ArgumentValue::Addr(_)));
+                    if let ArgumentValue::Addr(addr) = value {
+                        // msb first - big endian
+                        vec![((addr >> 8) & 0xff) as u8, (addr & 0xff) as u8]
+                    } else {
+                        panic!()
+                    }
+                }
+                // should not occur since arguments are constructed non-generically
+                _ => unreachable!(),
+            })
+            .flatten()
+            .collect()
     }
 }
 

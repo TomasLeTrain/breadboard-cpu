@@ -11,7 +11,7 @@ block_label {
 }
 
 add A, (100 + 2 / 3 * 4 + (3 / 5) + 5)
-jmp ~0x5000, MAR
+jmp 0x5000, MAR
 
 
 block_label2 {
