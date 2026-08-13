@@ -66,7 +66,6 @@ impl AsmGenContext {
     }
 
     fn place_byte(&mut self, addr: Address, byte: u8) -> Result<()> {
-        println!("what {:?} {:?}", addr as usize, self.assembly.len());
         let asm_byte = self
             .assembly
             .get_mut(addr as usize)
@@ -79,13 +78,9 @@ impl AsmGenContext {
     }
 
     fn place_bytes(&mut self, addr: Address, bytes: &[u8]) -> Result<()> {
-        println!("placing {:?} at {:?}", bytes, addr);
-
         let end_addr = addr + bytes.len() as u16;
 
-        println!("end addr {}", end_addr);
         for (&byte, i) in bytes.iter().zip(addr..end_addr) {
-            println!("placing  {:?} at {:?}", byte, i);
             self.place_byte(i, byte)?;
         }
 

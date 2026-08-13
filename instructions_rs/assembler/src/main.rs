@@ -1,5 +1,6 @@
 mod address_alloc;
 mod asm_gen;
+mod asm_output;
 mod ast;
 mod error;
 mod eval;
@@ -18,6 +19,7 @@ use opcode_gen::{
 use crate::{
     address_alloc::AllocationContext,
     asm_gen::AsmGenContext,
+    asm_output::{AsmOutput, BinaryOutput, LogisimOutput},
     ast::NamedSourceFile,
     eval::{EvalContext, EvalSymbol, ExprValue},
     istr_resolver::gen_instruction_lookup_table,
@@ -42,12 +44,17 @@ use crate::{
 fn main() -> Result<()> {
     let file_path_str = "src/program.asm";
 
-    parse_file(file_path_str)?;
+    let rom_size = 1 << 17;
+
+    let asm = parse_file(file_path_str)?;
+
+    LogisimOutput::new("asm_logisim.img")?.generate_output(asm.clone())?;
+    BinaryOutput::new("asm_bin.bin", rom_size)?.generate_output(asm)?;
 
     Ok(())
 }
 
-fn parse_file(file_path_str: &str) -> Result<()> {
+fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
     let file_path = file_path_str.to_string();
     let file = fs::read_to_string(file_path.clone())
         .into_diagnostic()
@@ -121,8 +128,7 @@ fn parse_file(file_path_str: &str) -> Result<()> {
 
     let asm = asm_context.into_assembly();
 
-    println!("{:#?}", asm);
+    // println!("{:#?}", asm);
 
-
-    Ok(())
+    Ok(asm)
 }
