@@ -2,13 +2,10 @@ use std::sync::Arc;
 use std::{fmt::Debug, rc::Rc};
 
 use crate::eval::ExprValue;
-use crate::types::Type;
+use crate::types::{Address, Type};
 
 use miette::SourceSpan;
-use opcode_gen::instructions::InstructionSignature;
 use pest::{RuleType, Span, iterators::Pair};
-
-pub type Address = u16;
 
 pub type Ast = Vec<StatementNode>;
 pub type StatementNode = AstNode<Statement>;
@@ -192,7 +189,6 @@ impl Statement {
 pub struct AstInstruction {
     pub name: String,
     pub params: Vec<AstNode<Expr>>,
-    pub istr_signature: Option<InstructionSignature>,
     pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
 }
 impl AstInstruction {
@@ -200,7 +196,6 @@ impl AstInstruction {
         AstInstruction {
             name,
             params,
-            istr_signature: None,
             instruction: None,
         }
     }

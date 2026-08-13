@@ -1,11 +1,11 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
-use miette::{Context, Diagnostic, LabeledSpan, NamedSource, Result, SourceSpan, miette};
+use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 use opcode_gen::instructions::{AddressRegister, Register};
 
 use crate::{
     ast::{AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp},
-    types::Type,
+    types::{Address, Type},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -18,7 +18,7 @@ pub enum ExprValue {
     Register(Register),
     AddressRegister(AddressRegister),
 
-    Addr(u16),
+    Addr(Address),
     Byte(u8),
 
     Unknown,
@@ -120,6 +120,49 @@ impl ExprValue {
             _ => unreachable!(),
         })
     }
+
+    fn cast_value(self, ty: &Type) -> Self {
+        match ty {
+            Type::Bool => {
+                assert!(matches!(self, Self::Bool(_)));
+                self
+            }
+
+            Type::Int => {
+                // casting from any int-able value
+                Self::Int(self.as_int().unwrap())
+            }
+            Type::Addr => {
+                // casting from any int-able value
+                Self::Addr(self.as_int().unwrap().try_into().unwrap())
+            }
+            Type::Byte => {
+                // casting from any int-able value
+                Self::Byte(self.as_int().unwrap().try_into().unwrap())
+            }
+
+            Type::Label => {
+                assert!(matches!(self, Self::Addr(_)));
+                self
+            }
+
+            Type::Register => {
+                assert!(matches!(self, Self::Register(_)));
+                self
+            }
+            Type::AddressRegister => {
+                assert!(matches!(self, Self::AddressRegister(_)));
+                self
+            }
+
+            Type::String => {
+                assert!(matches!(self, Self::String(_)));
+                self
+            }
+
+            Type::Unknown => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -187,7 +230,8 @@ impl EvalContext {
         let popped_symbol = self
             .symbol_stack
             .pop()
-            .ok_or(miette!("empty stack error"))?;
+            .ok_or(EmptyStackError {})
+            .into_diagnostic()?;
 
         let map_symbol = self.symbols.remove(&popped_symbol.name).unwrap();
 
@@ -269,6 +313,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             if ctx.contains(name) {
                 let symbol = ctx.get(name).unwrap();
 
+                // TODO: already valued error
                 if inner.ty != symbol.symbol_type {
                     // Err(EvalExprError::new(
                     //     TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
@@ -277,7 +322,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
 
                 inner.value = symbol.value.clone();
             } else {
-                Err(EvalExprError::new(TypecheckExprErrorKind::SymbolNotFound(
+                Err(EvalExprError::new(EvalExprErrorKind::SymbolNotFound(
                     EvalSymbol {
                         name: name.to_string(),
                         symbol_type: inner.ty,
@@ -317,7 +362,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             let left = left.inner_mut();
             let right = right.inner_mut();
 
-            match op {
+            inner.value = match op {
                 BinaryOp::Add
                 | BinaryOp::Sub
                 | BinaryOp::Mul
@@ -328,19 +373,18 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                 | BinaryOp::ShiftRight
                 | BinaryOp::BitAnd
                 | BinaryOp::BitXor
-                | BinaryOp::BitOr => {
-                    inner.value = ExprValue::apply_int_binary_op(&left.value, &right.value, op);
-                }
+                | BinaryOp::BitOr => ExprValue::apply_int_binary_op(&left.value, &right.value, op),
                 BinaryOp::And | BinaryOp::Or => {
-                    inner.value = ExprValue::apply_bool_binary_op(&left.value, &right.value, op);
+                    ExprValue::apply_bool_binary_op(&left.value, &right.value, op)
                 }
                 BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                    inner.value = ExprValue::apply_comparison_op(&left.value, &right.value, op);
+                    ExprValue::apply_comparison_op(&left.value, &right.value, op)
                 }
                 BinaryOp::Eq | BinaryOp::Ne => {
-                    inner.value = ExprValue::apply_equality_op(&left.value, &right.value, op);
+                    ExprValue::apply_equality_op(&left.value, &right.value, op)
                 }
             }
+            .cast_value(&inner.ty)
         }
     }
     Ok(())
@@ -357,7 +401,6 @@ pub struct DuplicateSymbolError {
     #[label(collection, "Defined here")]
     spans: Vec<LabeledSpan>,
 }
-
 
 impl Error for DuplicateSymbolError {}
 
@@ -379,7 +422,7 @@ impl Display for EmptyStackError {
 }
 
 #[derive(Debug)]
-pub enum TypecheckExprErrorKind {
+pub enum EvalExprErrorKind {
     IdentityAlreadyTyped((AstSpan, Type)),
     SymbolNotFound(EvalSymbol),
     InvalidBinaryOpTypes((AstSpan, Type), (AstSpan, Type), BinaryOp),
@@ -388,16 +431,16 @@ pub enum TypecheckExprErrorKind {
     InvalidUnaryOpType((AstSpan, Type), UnaryOp),
 }
 
-impl TypecheckExprErrorKind {
+impl EvalExprErrorKind {
     fn get_spans(&self) -> Vec<LabeledSpan> {
         match self {
-            TypecheckExprErrorKind::IdentityAlreadyTyped((span, ty)) => {
+            EvalExprErrorKind::IdentityAlreadyTyped((span, ty)) => {
                 vec![LabeledSpan::new_with_span(
                     Some(format!("Identity of type \"{:?}\" defined here", ty)),
                     span,
                 )]
             }
-            TypecheckExprErrorKind::SymbolNotFound(symbol) => {
+            EvalExprErrorKind::SymbolNotFound(symbol) => {
                 if let Some(span) = &symbol.span {
                     vec![LabeledSpan::new_with_span(
                         Some("Symbol defined here".to_string()),
@@ -407,9 +450,9 @@ impl TypecheckExprErrorKind {
                     vec![]
                 }
             }
-            TypecheckExprErrorKind::InvalidBinaryOpTypes((span1, ty1), (span2, ty2), _)
-            | TypecheckExprErrorKind::InvalidEqualityTypes((span1, ty1), (span2, ty2))
-            | TypecheckExprErrorKind::InvalidComparisonTypes((span1, ty1), (span2, ty2)) => {
+            EvalExprErrorKind::InvalidBinaryOpTypes((span1, ty1), (span2, ty2), _)
+            | EvalExprErrorKind::InvalidEqualityTypes((span1, ty1), (span2, ty2))
+            | EvalExprErrorKind::InvalidComparisonTypes((span1, ty1), (span2, ty2)) => {
                 vec![
                     LabeledSpan::new_with_span(
                         Some(format!("Defined with type \"{:?}\" here", ty1)),
@@ -421,7 +464,7 @@ impl TypecheckExprErrorKind {
                     ),
                 ]
             }
-            TypecheckExprErrorKind::InvalidUnaryOpType((span, ty), _) => {
+            EvalExprErrorKind::InvalidUnaryOpType((span, ty), _) => {
                 vec![LabeledSpan::new_with_span(
                     Some(format!("Defined with type \"{:?}\" here", ty)),
                     span,
@@ -432,47 +475,47 @@ impl TypecheckExprErrorKind {
 
     fn get_source(&self) -> Option<NamedSource<Arc<str>>> {
         match self {
-            TypecheckExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
-            | TypecheckExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
-            | TypecheckExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
-            | TypecheckExprErrorKind::InvalidUnaryOpType((ast_span, _), _)
-            | TypecheckExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => {
+            EvalExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
+            | EvalExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
+            | EvalExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
+            | EvalExprErrorKind::InvalidUnaryOpType((ast_span, _), _)
+            | EvalExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => {
                 Some(ast_span.to_miette_source_code())
             }
-            TypecheckExprErrorKind::SymbolNotFound(symbol) => {
+            EvalExprErrorKind::SymbolNotFound(symbol) => {
                 symbol.span.as_ref().map(AstSpan::to_miette_source_code)
             }
         }
     }
 }
 
-impl Display for TypecheckExprErrorKind {
+impl Display for EvalExprErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypecheckExprErrorKind::IdentityAlreadyTyped((_, ty)) => {
+            EvalExprErrorKind::IdentityAlreadyTyped((_, ty)) => {
                 write!(f, "Identity already has type \"{:?}\"", ty)
             }
-            TypecheckExprErrorKind::SymbolNotFound(symbol) => {
+            EvalExprErrorKind::SymbolNotFound(symbol) => {
                 write!(f, "Symbol \"{}\" not found", symbol.name)
             }
-            TypecheckExprErrorKind::InvalidBinaryOpTypes((_, ty1), (_, ty2), op) => {
+            EvalExprErrorKind::InvalidBinaryOpTypes((_, ty1), (_, ty2), op) => {
                 write!(
                     f,
                     "Cannot perform operation \"{:?}\" on types \"{:?}\" and \"{:?}\"",
                     op, ty1, ty2
                 )
             }
-            TypecheckExprErrorKind::InvalidComparisonTypes((_, ty1), (_, ty2)) => {
+            EvalExprErrorKind::InvalidComparisonTypes((_, ty1), (_, ty2)) => {
                 write!(f, "Cannot compare types \"{:?}\" and \"{:?}\"", ty1, ty2)
             }
-            TypecheckExprErrorKind::InvalidEqualityTypes((_, ty1), (_, ty2)) => {
+            EvalExprErrorKind::InvalidEqualityTypes((_, ty1), (_, ty2)) => {
                 write!(
                     f,
                     "Cannot check types for equality \"{:?}\" and \"{:?}\"",
                     ty1, ty2
                 )
             }
-            TypecheckExprErrorKind::InvalidUnaryOpType((_, ty), op) => {
+            EvalExprErrorKind::InvalidUnaryOpType((_, ty), op) => {
                 write!(
                     f,
                     "Cannot perform operation \"{:?}\" on type \"{:?}\"",
@@ -487,7 +530,7 @@ impl Display for TypecheckExprErrorKind {
 pub struct EvalExprError {
     #[source_code]
     source: Option<NamedSource<Arc<str>>>,
-    kind: TypecheckExprErrorKind,
+    kind: EvalExprErrorKind,
 
     #[label(collection, "Defined here")]
     spans: Vec<LabeledSpan>,
@@ -502,7 +545,7 @@ impl Display for EvalExprError {
 }
 
 impl EvalExprError {
-    fn new(kind: TypecheckExprErrorKind) -> Self {
+    fn new(kind: EvalExprErrorKind) -> Self {
         let spans = kind.get_spans();
         let source = kind.get_source();
 

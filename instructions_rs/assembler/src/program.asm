@@ -10,7 +10,7 @@ block_label {
 	add A, Z
 }
 
-add A, (1 + 2 / 3 * 4 + (3 / 5) + 5)
+add A, (100 + 2 / 3 * 4 + (3 / 5) + 5)
 jmp ~0x5000, MAR
 
 

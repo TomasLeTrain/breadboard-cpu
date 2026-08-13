@@ -3,22 +3,21 @@ use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 use crate::ast::{
     AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp,
 };
-use miette::{
-    Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, SourceSpan, miette,
-};
+use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
+
+pub type Address = u16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
     Int,
+    Addr,
+    Byte,
+
     Bool,
     String,
-    Character,
 
     Register,
     AddressRegister,
-
-    Addr,
-    Byte,
 
     Label,
 
@@ -27,7 +26,7 @@ pub enum Type {
 
 impl Type {
     pub fn int_operable(&self) -> bool {
-        matches!(self, Type::Int | Type::Label | Type::Character)
+        matches!(self, Type::Int | Type::Label | Type::Byte | Type::Addr)
     }
 
     pub fn bool_operable(&self) -> bool {

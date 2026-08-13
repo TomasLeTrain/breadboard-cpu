@@ -196,15 +196,14 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<StatementNode>
     }
 
     Ok(AstNode::new(
-        Statement::new(StatementKind::Instruction(AstInstruction::new(name?, params))),
+        Statement::new(StatementKind::Instruction(AstInstruction::new(
+            name?, params,
+        ))),
         span,
     ))
 }
 
-fn parse_instruction_parameters(
-    pair: Pair<Rule>,
-    source: &Source,
-) -> Result<Vec<AstNode<Expr>>> {
+fn parse_instruction_parameters(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNode<Expr>>> {
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
@@ -382,11 +381,7 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
             let c = unescape_char(&s[1..s.len() - 1]);
 
             Ok(AstNode::from_pair(
-                Expr::new(
-                    ExprKind::Literal,
-                    Type::Character,
-                    ExprValue::Character(c as u8),
-                ),
+                Expr::new(ExprKind::Literal, Type::Byte, ExprValue::Character(c as u8)),
                 inner,
                 source,
             ))

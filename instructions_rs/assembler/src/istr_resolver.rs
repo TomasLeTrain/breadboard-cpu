@@ -6,7 +6,7 @@ use opcode_gen::instructions::{
 };
 
 use crate::{
-    ast::{AstNode, StatementKind, StatementNode, Expr},
+    ast::{AstNode, Expr, StatementKind, StatementNode},
     error::ParseError,
     types::Type,
 };
@@ -91,15 +91,26 @@ pub fn resolve_instructions(
                     .into());
                 }
 
-                // save non-generic instruction
-                let signature = instruction
+                // non-generic arguments
+                let arguments = instruction
                     .instruction
                     .as_ref()
                     .unwrap()
                     .istr_type()
-                    .get_signature();
+                    .arguments();
 
-                instruction.istr_signature = Some(signature);
+                // set argument types based on the actual signature, to ensure at the eval stage
+                // that casting to the correct types is possible
+                for (arg, expr) in arguments.iter().zip(instruction.params.iter_mut()) {
+                    match arg {
+                        ArgumentType::Reg(_) => expr.inner_mut().ty = Type::Register,
+                        ArgumentType::AddrReg(_) => expr.inner_mut().ty = Type::AddressRegister,
+                        ArgumentType::Byte => expr.inner_mut().ty = Type::Byte,
+                        ArgumentType::Addr => expr.inner_mut().ty = Type::Addr,
+                        // non-generic should never have generic imm
+                        ArgumentType::GenericImm => unreachable!(),
+                    }
+                }
             }
             _ => (),
         }

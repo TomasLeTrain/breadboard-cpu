@@ -1,4 +1,7 @@
-use crate::ast::{Address, StatementKind, StatementNode};
+use crate::{
+    ast::{StatementKind, StatementNode},
+    types::Address,
+};
 use miette::Result;
 
 // TODO: keep track of used spaces to catch conflicts or perform that later?
