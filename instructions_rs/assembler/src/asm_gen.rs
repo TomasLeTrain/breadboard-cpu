@@ -94,20 +94,26 @@ impl AsmGenContext {
 
 pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Result<()> {
     for statement in statements.iter() {
-        if let StatementKind::Instruction(ast_instruction) = statement.inner().inner() {
-            let arg_values: Vec<ArgumentValue> = ast_instruction
-                .params
-                .iter()
-                .map(|e| e.inner().value.as_istr_arg_value())
-                .collect();
+        match statement.inner().inner() {
+            StatementKind::BlockLabel { body, .. } => {
+                generate_asm(body, ctx)?;
+            }
+            StatementKind::Instruction(ast_instruction) => {
+                let arg_values: Vec<ArgumentValue> = ast_instruction
+                    .params
+                    .iter()
+                    .map(|e| e.inner().value.as_istr_arg_value())
+                    .collect();
 
-            let istr_bytes = ast_instruction
-                .instruction
-                .as_ref()
-                .unwrap()
-                .get_asm_bytes(arg_values);
+                let istr_bytes = ast_instruction
+                    .instruction
+                    .as_ref()
+                    .unwrap()
+                    .get_asm_bytes(arg_values);
 
-            ctx.place_bytes(statement.inner().address().unwrap(), &istr_bytes)?;
+                ctx.place_bytes(statement.inner().address().unwrap(), &istr_bytes)?;
+            }
+            _ => (),
         };
     }
 
