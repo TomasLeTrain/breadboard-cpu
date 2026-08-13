@@ -42,11 +42,14 @@ pub fn parse_file(source: Source) -> Result<Ast> {
 
     let pairs = AssemblyParser::parse(Rule::Program, source.source())
         .map_err(|e| ParseError::from_pest(e, &source))?;
+    // println!("{:#?}", pairs);
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {
             Rule::Statement => {
-                program.push(parse_statement(pair, &source)?);
+                if let Some(statement) = parse_statement(pair, &source)? {
+                    program.push(statement);
+                }
             }
             Rule::COMMENT | Rule::EOI => (),
             _ => {}
@@ -56,18 +59,21 @@ pub fn parse_file(source: Source) -> Result<Ast> {
     Ok(program)
 }
 
-fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<StatementNode>> {
     let inner = pair.into_inner().next().unwrap();
+
     match inner.as_rule() {
-        Rule::InstructionStatement => parse_instruction(inner, source),
-        Rule::LabelStatement => parse_label(inner, source),
-        Rule::BlockLabel => parse_block_label(inner, source),
+        Rule::InstructionStatement => Ok(Some(parse_instruction(inner, source)?)),
+        Rule::LabelStatement => Ok(Some(parse_label(inner, source)?)),
+        Rule::BlockLabel => Ok(Some(parse_block_label(inner, source)?)),
+        Rule::COMMENT => Ok(None),
         r => Err(ParseError::from_expected(
             "Statement parsing error".to_string(),
             vec![
                 Rule::InstructionStatement,
                 Rule::LabelStatement,
                 Rule::BlockLabel,
+                Rule::COMMENT,
             ],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
@@ -132,10 +138,14 @@ fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode>
 }
 
 fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<StatementNode>> {
-    let mut stmts = Vec::new();
+    let mut statements = Vec::new();
     for item in pair.into_inner() {
         match item.as_rule() {
-            Rule::Statement => stmts.push(parse_statement(item, source)?),
+            Rule::Statement => {
+                if let Some(statement) = parse_statement(item, source)? {
+                    statements.push(statement);
+                }
+            }
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Block parsing error".to_string(),
@@ -145,7 +155,8 @@ fn parse_block(pair: Pair<Rule>, source: &Source) -> Result<Vec<StatementNode>> 
             ))?,
         }
     }
-    Ok(stmts)
+
+    Ok(statements)
 }
 
 fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
@@ -406,7 +417,7 @@ fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>>
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
-        Rule::Int => Ok(AstNode::from_pair(
+        Rule::HexadecimalDigit => Ok(AstNode::from_pair(
             Expr::new(
                 ExprKind::Literal,
                 Type::Int,

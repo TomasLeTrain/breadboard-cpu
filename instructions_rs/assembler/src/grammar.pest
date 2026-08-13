@@ -78,7 +78,8 @@ Primary = _{ Literal | (Identifier ~ !":") | "(" ~ Expr ~ ")" }
 // Hex must have higher precedence otherwise gets recognized as int
 Literal =  { Bool | Hexadecimal | Int  | String | Character }
 
-Hexadecimal       = { ^"0x" ~ Int }
+HexadecimalDigit = @{ ASCII_HEX_DIGIT+ }
+Hexadecimal       = { ^"0x" ~ HexadecimalDigit }
 
 Int     = @{ ASCII_DIGIT+ }
 
