@@ -10,7 +10,7 @@ block_label {
 	add A, Z
 }
 
-; expr_test some_const + (1 + 2 / 3 * 4 + (const2 / 5) + y6)
+add A, (1 + 2 / 3 * 4 + (3 / 5) + 5)
 jmp ~0x5000, MAR
 
 block_label2 {
@@ -23,7 +23,7 @@ block_label2 {
 }
 
 other_label {
-	inside_label:
+	local_scope_label:
 }
 
 ; this is a comment detailing another thing

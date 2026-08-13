@@ -11,7 +11,7 @@ use pest::{RuleType, Span, iterators::Pair};
 pub type Address = u16;
 
 pub type Ast = Vec<StatementNode>;
-pub type StatementNode = AstNode<AddressedStatement>;
+pub type StatementNode = AstNode<Statement>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NamedSourceFile {
@@ -158,13 +158,13 @@ impl<T> AstNode<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct AddressedStatement {
-    statement: Statement,
+pub struct Statement {
+    statement: StatementKind,
     address: Option<Address>,
 }
 
-impl AddressedStatement {
-    pub fn new(statement: Statement) -> Self {
+impl Statement {
+    pub fn new(statement: StatementKind) -> Self {
         Self {
             statement,
             address: None,
@@ -179,15 +179,11 @@ impl AddressedStatement {
         self.address
     }
 
-    pub fn statement(&self) -> &Statement {
+    pub fn inner(&self) -> &StatementKind {
         &self.statement
     }
 
-    pub fn inner(&self) -> &Statement {
-        &self.statement
-    }
-
-    pub fn inner_mut(&mut self) -> &mut Statement {
+    pub fn inner_mut(&mut self) -> &mut StatementKind {
         &mut self.statement
     }
 }
@@ -195,12 +191,12 @@ impl AddressedStatement {
 #[derive(Debug, Clone)]
 pub struct AstInstruction {
     pub name: String,
-    pub params: Vec<AstNode<TypedExpr>>,
+    pub params: Vec<AstNode<Expr>>,
     pub istr_signature: Option<InstructionSignature>,
     pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
 }
 impl AstInstruction {
-    pub fn new(name: String, params: Vec<AstNode<TypedExpr>>) -> Self {
+    pub fn new(name: String, params: Vec<AstNode<Expr>>) -> Self {
         AstInstruction {
             name,
             params,
@@ -211,7 +207,7 @@ impl AstInstruction {
 }
 
 #[derive(Debug, Clone)]
-pub enum Statement {
+pub enum StatementKind {
     Label {
         name: String,
     },
@@ -223,20 +219,20 @@ pub enum Statement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypedExpr {
-    pub expr: Expr,
+pub struct Expr {
+    pub kind: ExprKind,
     pub ty: Type,
     pub value: EvalValue,
 }
 
-impl TypedExpr {
-    pub fn new(expr: Expr, ty: Type, value: EvalValue) -> Self {
-        Self { expr, ty, value }
+impl Expr {
+    pub fn new(kind: ExprKind, ty: Type, value: EvalValue) -> Self {
+        Self { kind, ty, value }
     }
 
-    pub fn unknown(expr: Expr) -> Self {
-        TypedExpr {
-            expr,
+    pub fn unknown(kind: ExprKind) -> Self {
+        Expr {
+            kind,
             ty: Type::Unknown,
             value: EvalValue::Unknown,
         }
@@ -244,7 +240,7 @@ impl TypedExpr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Expr {
+pub enum ExprKind {
     /// Literal
     Literal,
     /// Identity (could be var, reg, etc.)
@@ -252,19 +248,19 @@ pub enum Expr {
     /// Unary operation
     Unary {
         op: UnaryOp,
-        expr: Box<AstNode<TypedExpr>>,
+        expr: Box<AstNode<Expr>>,
     },
     /// Binary operation
     Binary {
         op: BinaryOp,
-        left: Box<AstNode<TypedExpr>>,
-        right: Box<AstNode<TypedExpr>>,
+        left: Box<AstNode<Expr>>,
+        right: Box<AstNode<Expr>>,
     },
 }
 
-impl Expr {
+impl ExprKind {
     pub fn as_identity(&self) -> Option<String> {
-        if let Expr::Identity(name) = self {
+        if let ExprKind::Identity(name) = self {
             Some(name.clone())
         } else {
             None

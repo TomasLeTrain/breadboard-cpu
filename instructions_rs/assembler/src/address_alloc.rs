@@ -1,4 +1,4 @@
-use crate::ast::{Address, Statement, StatementNode};
+use crate::ast::{Address, StatementKind, StatementNode};
 use miette::Result;
 
 // TODO: keep track of used spaces to catch conflicts or perform that later?
@@ -32,15 +32,15 @@ pub fn allocate_adresses(
         statement.inner_mut().set_address(Some(ctx.address()));
 
         match statement.inner_mut().inner_mut() {
-            Statement::Label { .. } => {
+            StatementKind::Label { .. } => {
                 // label does not advance address
             }
-            Statement::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. } => {
                 // label does not advance address
                 // allocate addresses inside body
                 allocate_adresses(body, ctx)?;
             }
-            Statement::Instruction(ast_instruction) => {
+            StatementKind::Instruction(ast_instruction) => {
                 // advance by however many bytes instruction takes up
                 let istr_size = ast_instruction
                     .instruction

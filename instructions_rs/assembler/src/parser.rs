@@ -78,7 +78,7 @@ fn parse_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::LabelIdentifier => Ok(AstNode::from_pair(
-            AddressedStatement::new(Statement::Label {
+            Statement::new(StatementKind::Label {
                 name: inner.to_string(),
             }),
             inner,
@@ -122,7 +122,7 @@ fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode>
     }
 
     Ok(AstNode::new(
-        AddressedStatement::new(Statement::BlockLabel {
+        Statement::new(StatementKind::BlockLabel {
             name: name?,
             body: body?,
         }),
@@ -154,7 +154,7 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<StatementNode>
     )
     .into());
 
-    let mut params: Vec<AstNode<TypedExpr>> = Vec::new();
+    let mut params: Vec<AstNode<Expr>> = Vec::new();
 
     let mut span = AstSpan::new(
         pair.as_span().start(),
@@ -196,7 +196,7 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<StatementNode>
     }
 
     Ok(AstNode::new(
-        AddressedStatement::new(Statement::Instruction(AstInstruction::new(name?, params))),
+        Statement::new(StatementKind::Instruction(AstInstruction::new(name?, params))),
         span,
     ))
 }
@@ -204,7 +204,7 @@ fn parse_instruction(pair: Pair<Rule>, source: &Source) -> Result<StatementNode>
 fn parse_instruction_parameters(
     pair: Pair<Rule>,
     source: &Source,
-) -> Result<Vec<AstNode<TypedExpr>>> {
+) -> Result<Vec<AstNode<Expr>>> {
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
@@ -226,12 +226,12 @@ fn parse_instruction_parameters(
 fn parse_expr<'a>(
     pairs: impl Iterator<Item = pest::iterators::Pair<'a, Rule>>,
     source: &Source,
-) -> Result<AstNode<TypedExpr>> {
+) -> Result<AstNode<Expr>> {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
             Rule::Literal => parse_literal(primary, source),
             Rule::Identifier => Ok(AstNode::from_pair(
-                TypedExpr::unknown(Expr::Identity(primary.as_str().to_string())),
+                Expr::unknown(ExprKind::Identity(primary.as_str().to_string())),
                 primary,
                 source,
             )),
@@ -306,7 +306,7 @@ fn parse_expr<'a>(
                 ))?,
             };
             Ok(AstNode::from_pair(
-                TypedExpr::unknown(Expr::Binary {
+                Expr::unknown(ExprKind::Binary {
                     op: bin_op,
                     left: Box::new(lhs?),
                     right: Box::new(rhs?),
@@ -330,7 +330,7 @@ fn parse_expr<'a>(
             };
 
             Ok(AstNode::from_pair(
-                TypedExpr::unknown(Expr::Unary {
+                Expr::unknown(ExprKind::Unary {
                     op: un_op,
                     expr: Box::new(rhs?),
                 }),
@@ -341,13 +341,13 @@ fn parse_expr<'a>(
         .parse(pairs.filter(|x| !matches!(x.as_rule(), Rule::COMMENT)))
 }
 
-fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>> {
+fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
         Rule::Int => Ok(AstNode::from_pair(
-            TypedExpr::new(
-                Expr::Literal,
+            Expr::new(
+                ExprKind::Literal,
                 Type::Int,
                 EvalValue::Int(inner.as_str().parse().unwrap()),
             ),
@@ -356,8 +356,8 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>
         )),
         Rule::Hexadecimal => parse_hexadecimal(inner, source),
         Rule::Bool => Ok(AstNode::from_pair(
-            TypedExpr::new(
-                Expr::Literal,
+            Expr::new(
+                ExprKind::Literal,
                 Type::Bool,
                 EvalValue::Bool(inner.as_str() == "true"),
             ),
@@ -368,8 +368,8 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>
             let s = inner.as_str();
             // removes "" quotes
             Ok(AstNode::from_pair(
-                TypedExpr::new(
-                    Expr::Literal,
+                Expr::new(
+                    ExprKind::Literal,
                     Type::String,
                     EvalValue::String(s[1..s.len() - 1].to_string()),
                 ),
@@ -382,8 +382,8 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>
             let c = unescape_char(&s[1..s.len() - 1]);
 
             Ok(AstNode::from_pair(
-                TypedExpr::new(
-                    Expr::Literal,
+                Expr::new(
+                    ExprKind::Literal,
                     Type::Character,
                     EvalValue::Character(c as u8),
                 ),
@@ -406,13 +406,13 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>
     }
 }
 
-fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<TypedExpr>> {
+fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
         Rule::Int => Ok(AstNode::from_pair(
-            TypedExpr::new(
-                Expr::Literal,
+            Expr::new(
+                ExprKind::Literal,
                 Type::Int,
                 EvalValue::Int(i32::from_str_radix(inner.as_str(), 16).unwrap()),
             ),

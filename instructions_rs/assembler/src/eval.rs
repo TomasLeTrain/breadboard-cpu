@@ -4,7 +4,7 @@ use miette::{Context, Diagnostic, LabeledSpan, NamedSource, Result, SourceSpan, 
 use opcode_gen::instructions::{AddressRegister, Register};
 
 use crate::{
-    ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, StatementNode, TypedExpr, UnaryOp},
+    ast::{AstNode, AstSpan, BinaryOp, ExprKind, StatementKind, StatementNode, Expr, UnaryOp},
     types::Type,
 };
 
@@ -194,7 +194,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
-        if let Statement::Label { name } | Statement::BlockLabel { name, .. } =
+        if let StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } =
             statement.inner().inner()
         {
             // push into local scope
@@ -214,10 +214,10 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
     for statement in statements.iter_mut() {
         match statement.inner_mut().inner_mut() {
-            Statement::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. } => {
                 eval_program(body, ctx)?;
             }
-            Statement::Instruction(instruction) => {
+            StatementKind::Instruction(instruction) => {
                 for param in instruction.params.iter_mut() {
                     eval_expr(param, ctx)?;
                 }
@@ -243,14 +243,14 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 }
 
 // TODO: make sure int type gets casted to whatever type current expr is (say addr or byte)
-fn eval_expr(typed_expr: &mut AstNode<TypedExpr>, ctx: &mut EvalContext) -> Result<()> {
+fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()> {
     let inner_span = typed_expr.span().clone();
     let inner = typed_expr.inner_mut();
 
-    match &mut inner.expr {
+    match &mut inner.kind {
         // literals already have their value filled in
-        Expr::Literal => (),
-        Expr::Identity(name) => {
+        ExprKind::Literal => (),
+        ExprKind::Identity(name) => {
             // try and find identity in symbols
             if ctx.contains(name) {
                 let symbol = ctx.get(name).unwrap();
@@ -273,7 +273,7 @@ fn eval_expr(typed_expr: &mut AstNode<TypedExpr>, ctx: &mut EvalContext) -> Resu
                 )))?;
             }
         }
-        Expr::Unary {
+        ExprKind::Unary {
             op,
             expr: unary_expr,
         } => {
@@ -293,7 +293,7 @@ fn eval_expr(typed_expr: &mut AstNode<TypedExpr>, ctx: &mut EvalContext) -> Resu
                 }
             }
         }
-        Expr::Binary { op, left, right } => {
+        ExprKind::Binary { op, left, right } => {
             eval_expr(left, ctx)?;
             eval_expr(right, ctx)?;
 

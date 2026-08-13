@@ -109,7 +109,7 @@ fn parse_file(file_path_str: &str) -> Result<()> {
 
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
 
-    println!("{:#?}", program);
+    // println!("{:#?}", program);
 
     Ok(())
 }

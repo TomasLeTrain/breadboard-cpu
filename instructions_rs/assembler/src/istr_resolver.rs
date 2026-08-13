@@ -6,19 +6,19 @@ use opcode_gen::instructions::{
 };
 
 use crate::{
-    ast::{AstNode, Statement, StatementNode, TypedExpr},
+    ast::{AstNode, StatementKind, StatementNode, Expr},
     error::ParseError,
     types::Type,
 };
 
-fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> Result<ArgumentType> {
+fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
     let inner = expr.inner();
     Ok(match inner.ty {
         // coerce into generic imm since we dont know which it could be
         Type::Int => ArgumentType::GenericImm,
 
         Type::Register => {
-            let name = inner.expr.as_identity().ok_or(ParseError::from_span(
+            let name = inner.kind.as_identity().ok_or(ParseError::from_span(
                 "Expression with type Register is not identity",
                 expr.span(),
             ))?;
@@ -32,7 +32,7 @@ fn expr_to_argument_type(expr: &AstNode<TypedExpr>) -> Result<ArgumentType> {
         }
 
         Type::AddressRegister => {
-            let name = inner.expr.as_identity().ok_or(ParseError::from_span(
+            let name = inner.kind.as_identity().ok_or(ParseError::from_span(
                 "Expression with type AddressRegister is not identity",
                 expr.span(),
             ))?;
@@ -65,10 +65,10 @@ pub fn resolve_instructions(
 ) -> Result<()> {
     for statement in statements {
         match statement.inner_mut().inner_mut() {
-            Statement::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. } => {
                 resolve_instructions(body, istr_lookup)?;
             }
-            Statement::Instruction(instruction) => {
+            StatementKind::Instruction(instruction) => {
                 let mut param_types = Vec::new();
 
                 for param in instruction.params.iter() {

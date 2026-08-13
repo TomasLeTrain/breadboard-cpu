@@ -1,6 +1,6 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
-use crate::ast::{AstNode, AstSpan, BinaryOp, Expr, Statement, StatementNode, TypedExpr, UnaryOp};
+use crate::ast::{AstNode, AstSpan, BinaryOp, ExprKind, StatementKind, StatementNode, Expr, UnaryOp};
 use miette::{
     Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, SourceSpan, miette,
 };
@@ -129,7 +129,7 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
-        if let Statement::Label { name } | Statement::BlockLabel { name, .. } =
+        if let StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } =
             statement.inner().inner()
         {
             // push into local scope
@@ -149,10 +149,10 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
 
     for statement in statements.iter_mut() {
         match statement.inner_mut().inner_mut() {
-            Statement::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. } => {
                 typecheck(body, symbols)?;
             }
-            Statement::Instruction(instruction) => {
+            StatementKind::Instruction(instruction) => {
                 for param in instruction.params.iter_mut() {
                     typecheck_expr(param, symbols)?;
                 }
@@ -177,14 +177,14 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
     Ok(())
 }
 
-fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeContext) -> Result<()> {
+fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &SymbolTypeContext) -> Result<()> {
     let inner_span = typed_expr.span().clone();
     let inner = typed_expr.inner_mut();
 
-    match &mut inner.expr {
+    match &mut inner.kind {
         // literals already have their typed filled in
-        Expr::Literal => (),
-        Expr::Identity(name) => {
+        ExprKind::Literal => (),
+        ExprKind::Identity(name) => {
             // try and find identity in symbols
             if symbols.contains(name) {
                 if !matches!(inner.ty, Type::Unknown) {
@@ -204,7 +204,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
                 ))?;
             }
         }
-        Expr::Unary {
+        ExprKind::Unary {
             op,
             expr: unary_expr,
         } => {
@@ -231,7 +231,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<TypedExpr>, symbols: &SymbolTypeConte
                 }
             }
         }
-        Expr::Binary { op, left, right } => {
+        ExprKind::Binary { op, left, right } => {
             typecheck_expr(left, symbols)?;
             typecheck_expr(right, symbols)?;
 
