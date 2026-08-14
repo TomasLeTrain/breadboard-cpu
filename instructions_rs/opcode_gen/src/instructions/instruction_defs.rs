@@ -223,9 +223,9 @@ impl InstructionType {
             // istr reg, imm8 or istr imm8, reg
             InstructionType::MathImm { reg, imm_lhs, .. } => {
                 if *imm_lhs {
-                    vec![ArgumentType::Reg(*reg), ArgumentType::Byte]
-                } else {
                     vec![ArgumentType::Byte, ArgumentType::Reg(*reg)]
+                } else {
+                    vec![ArgumentType::Reg(*reg), ArgumentType::Byte]
                 }
             }
 

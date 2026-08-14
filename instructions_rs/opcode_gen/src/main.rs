@@ -100,7 +100,7 @@ fn interactive_mode() -> io::Result<()> {
         let raw_data = istr_set.opcode_to_output(opcode).get_output_data();
 
         println!("istr: {istr:#?}");
-        println!("data: {data:#?}");
+        println!("data: {data:?}");
         println!("raw_data: {raw_data:#?}");
     }
 }
