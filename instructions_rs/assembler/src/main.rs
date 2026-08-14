@@ -64,6 +64,8 @@ fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
 
     let mut program = parser::parse_file(source).wrap_err("Parsing file failed.")?;
 
+    // println!("initial: {:#?}", program);
+
     let mut global_symbols = types::SymbolTypeContext::new();
 
     // add global symbols reserved for register names and the like
@@ -115,6 +117,7 @@ fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
             span: None,
         })?;
     }
+    // println!("{:#?}", program);
 
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
 

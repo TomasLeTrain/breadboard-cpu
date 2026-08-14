@@ -42,7 +42,7 @@ pub fn parse_file(source: Source) -> Result<Ast> {
 
     let pairs = AssemblyParser::parse(Rule::Program, source.source())
         .map_err(|e| ParseError::from_pest(e, &source))?;
-    // println!("{:#?}", pairs);
+    println!("bruh: {:#?}", pairs);
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {

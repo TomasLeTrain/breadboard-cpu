@@ -3,6 +3,9 @@ start:
 	lda SP, 0xffe0 ; lda sp, sp_start_addr
 
 	; set up variables for fib routine
+
+	; this is some more comments
+	; these are next to each other
 	
 	; TODO: this only works since we know the push_return will be smaller than 256 - need to implement addr placeholder 
 	push 0           ; push return addr (high byte)

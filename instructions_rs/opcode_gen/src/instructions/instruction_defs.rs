@@ -198,7 +198,7 @@ impl InstructionType {
             InstructionType::Dec(_) => "dec",
             InstructionType::Inc(_) => "inc",
             InstructionType::Halt => "halt",
-            InstructionType::Error => "halt",
+            InstructionType::Error => "error",
             InstructionType::Nop => "nop",
         }
     }
@@ -960,13 +960,13 @@ pub fn misc_instructions() -> Vec<Instruction> {
 
 // equivalent to halt in function, but distinct opcode to distinguish between them
 pub fn error_instruction() -> Instruction {
-    let halt = vec![[Halt].into()];
+    let error = vec![[Halt].into()];
 
     Instruction::new(
         InstructionType::Error,
         Imm::None,
         "error".to_string(),
-        InstructionImpl::Simple(InstructionTemplate(halt)),
+        InstructionImpl::Simple(InstructionTemplate(error)),
     )
 }
 

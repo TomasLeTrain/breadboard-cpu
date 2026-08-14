@@ -1,5 +1,8 @@
 WHITESPACE = _{ " " | "\t" }
-COMMENT    = { Newline* ~ ";" ~ (!NEWLINE ~ ANY)* }
+// COMMENT    = _{ Newline* ~ ";" ~ (!NEWLINE ~ ANY)* }
+COMMENT    = _{ "####" }
+
+Comment    = _{ Newline* ~ WHITESPACE* ~ ";" ~ (!NEWLINE ~ ANY)* }
 
 // Program is a sequence of statements/expressions
 Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
@@ -7,9 +10,9 @@ Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { Newline* ~ (LabelStatement | BlockLabel | InstructionStatement) }
+Statement             = { Comment* ~ Newline* ~ (LabelStatement | BlockLabel | InstructionStatement) ~ Comment? }
 
-InstructionStatement  = { InstructionLabel ~ InstructionParameters? ~ Newline+ }
+InstructionStatement  = { InstructionLabel ~ InstructionParameters? ~ Comment? ~ Newline+ }
 InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
 InstructionLabel      = { Identifier }
 InstructionParameter  = _{ Expr }
