@@ -123,6 +123,13 @@ impl AstSpan {
     pub fn get_str(&self) -> &str {
         &self.source.source()[self.start..self.end]
     }
+
+    pub fn get_line_str(&self) -> &str {
+        self.get_str().lines().next().unwrap()
+    }
+
+    // pub fn get_line_number(&self) -> usize {
+    // }
 }
 
 /// wraps T with additional information tied to each token (ex. parent file, span, etc.)
@@ -143,6 +150,10 @@ impl<T> AstNode<T> {
 
     pub fn inner(&self) -> &T {
         &self.inner
+    }
+
+    pub fn into_inner(self) -> T {
+        self.inner
     }
 
     pub fn inner_mut(&mut self) -> &mut T {
@@ -178,6 +189,10 @@ impl Statement {
 
     pub fn inner(&self) -> &StatementKind {
         &self.statement
+    }
+
+    pub fn into_inner(self) -> StatementKind {
+        self.statement
     }
 
     pub fn inner_mut(&mut self) -> &mut StatementKind {

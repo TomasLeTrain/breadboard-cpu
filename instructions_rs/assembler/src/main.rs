@@ -121,7 +121,7 @@ fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
 
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
 
-    println!("{:#?}", program);
+    // println!("{:#?}", program);
 
     let max_addr_size = 1 << 15;
 
@@ -129,9 +129,12 @@ fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
 
     asm_gen::generate_asm(&program, &mut asm_context)?;
 
-    let asm = asm_context.into_assembly();
+    // println!("{:#?}", asm_context);
 
-    // println!("{:#?}", asm);
+    println!("Annotated rogram:");
+    println!("{}", asm_context.format_pretty());
+
+    let asm = asm_context.into_assembly();
 
     Ok(asm)
 }
