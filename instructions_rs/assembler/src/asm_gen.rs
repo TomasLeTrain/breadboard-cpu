@@ -1,8 +1,10 @@
-use std::{cmp::Ordering, fmt::Display};
+use owo_colors::{
+    AnsiColors, OwoColorize, Style,
+    colors::{self, xterm::CodGray},
+};
 
 use crate::{
-    ast::{AstInstruction, AstNode, StatementKind, StatementNode},
-    eval::ExprValue,
+    ast::{StatementKind, StatementNode},
     types::Address,
 };
 use miette::{Result, miette};
@@ -56,7 +58,9 @@ impl BoolVec {
 
 #[derive(Debug, Clone)]
 struct AsmSpan {
-    statement: StatementNode,
+    // statement: StatementNode,
+    src_line: String,
+    style: Style,
     span: (u16, u16),
 }
 
@@ -108,7 +112,8 @@ impl AsmGenContext {
 
     fn place_statement(
         &mut self,
-        statement: StatementNode,
+        src_line: String,
+        style: Style,
         addr: Address,
         bytes: &[u8],
     ) -> Result<()> {
@@ -117,7 +122,8 @@ impl AsmGenContext {
         }
         let end_addr = addr + (bytes.len() as u16);
         self.istr_slices.push(AsmSpan {
-            statement,
+            src_line,
+            style,
             span: (addr, end_addr),
         });
         Ok(())
@@ -145,23 +151,30 @@ impl AsmGenContext {
         result.push_str(&format!("Addr | {:^10} | Text Assembly\n", "Bytes"));
         result.push('\n');
 
-
         for span in spans.iter() {
+            let mut line = String::new();
             // addr  | bytes | program
-            result.push_str(&format!("{:>4} | ", format!("{:X}", span.span.0)));
+            line.push_str(&format!(
+                "{:>4} | ",
+                format!("{:X}", span.span.0).fg::<colors::xterm::DarkTachaOrange>()
+            ));
 
-            let thing: Vec<_> = self
+            let str_bytes: Vec<_> = self
                 .get_bytes_from_span(span)
                 .iter()
                 .map(|byte| format!("{byte:02X}"))
                 .collect();
 
-            let formatted_bytes = thing.join(" ");
+            line.push_str(&format!(
+                "{:<10} | ",
+                str_bytes.join(" ").fg::<colors::Green>()
+            ));
 
-            result.push_str(&format!("{:<10} | ", formatted_bytes));
+            line.push_str(&format!("{}", span.src_line.style(span.style)));
+            line.push('\n');
 
-            result.push_str(span.statement.span.get_line_str());
-            result.push('\n');
+            // result.push_str(&format!("{}", line.style(span.style)));
+            result.push_str(&line);
         }
 
         result
@@ -171,8 +184,23 @@ impl AsmGenContext {
 pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Result<()> {
     for statement in statements.iter() {
         match statement.inner().inner() {
+            StatementKind::Label { .. } => {
+                ctx.place_statement(
+                    statement.span.get_line_str().to_string(),
+                    // Style::new().fg::<colors::Green>().dimmed(),
+                    Style::new().dimmed(),
+                    statement.inner().address().unwrap(),
+                    &[],
+                )?;
+            }
             StatementKind::BlockLabel { body, .. } => {
-                ctx.place_statement(statement.clone(), statement.inner().address().unwrap(), &[])?;
+                ctx.place_statement(
+                    statement.span.get_line_str().to_string(),
+                    // Style::new().fg::<colors::Red>(),
+                    Style::new().dimmed(),
+                    statement.inner().address().unwrap(),
+                    &[],
+                )?;
                 generate_asm(body, ctx)?;
             }
             StatementKind::Instruction(ast_instruction) => {
@@ -189,7 +217,9 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     .get_asm_bytes(arg_values);
 
                 ctx.place_statement(
-                    statement.clone(),
+                    statement.span.get_line_str().to_string(),
+                    // Style::new().fg::<colors::Green>(),
+                    Style::new(),
                     statement.inner().address().unwrap(),
                     &istr_bytes,
                 )?;
