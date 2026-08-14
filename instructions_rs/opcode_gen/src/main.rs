@@ -1,6 +1,6 @@
 use std::{
     fs::OpenOptions,
-    io::{self, Write},
+    io::{self, BufWriter, Write},
 };
 
 use opcode_gen::{
@@ -9,16 +9,20 @@ use opcode_gen::{
 };
 
 fn write_contents_logisim(data: &(Vec<u8>, Vec<u8>)) -> std::io::Result<()> {
-    let mut rom0_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open("rom0_logisim.img")?;
-    let mut rom1_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open("rom1_logisim.img")?;
+    let mut rom0_file = BufWriter::new(
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open("rom0_logisim.img")?,
+    );
+    let mut rom1_file = BufWriter::new(
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open("rom1_logisim.img")?,
+    );
 
     rom0_file.write_all(b"v3.0 hex words plain\n")?;
     rom1_file.write_all(b"v3.0 hex words plain\n")?;
