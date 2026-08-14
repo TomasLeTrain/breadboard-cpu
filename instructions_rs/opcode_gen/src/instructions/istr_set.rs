@@ -143,8 +143,8 @@ impl IstrSet {
         }
     }
 
-    // attempts to place simple at specified ir idx
-    fn place_simple_idx(
+    /// attempts to place simple at specified ir idx
+    pub fn place_simple_idx(
         &mut self,
         istr: Rc<RefCell<Instruction>>,
         idx: u8,
@@ -265,7 +265,7 @@ impl fmt::Display for FilledRangesError {
 }
 
 #[derive(Debug)]
-struct AllocationError;
+pub struct AllocationError;
 
 impl Error for AllocationError {}
 

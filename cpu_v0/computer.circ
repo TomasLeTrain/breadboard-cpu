@@ -66,7 +66,7 @@
     <a name="circuit" val="main_expanded"/>
     <a name="circuitnamedboxfixedsize" val="true"/>
     <a name="downloadFrequency" val="2083333.3333333333"/>
-    <a name="simulationFrequency" val="16.0"/>
+    <a name="simulationFrequency" val="32.0"/>
     <appear>
       <rect fill="none" height="50" stroke="#000000" width="220" x="50" y="50"/>
       <rect fill="none" height="63" stroke="#000000" width="46" x="85" y="151"/>
@@ -3128,17 +3128,16 @@
       <a name="facing" val="south"/>
       <a name="label" val="SUB_SBC"/>
     </comp>
-    <comp lib="0" loc="(7120,2340)" name="Tunnel">
-      <a name="facing" val="south"/>
-      <a name="label" val="CLK4"/>
+    <comp lib="0" loc="(7100,910)" name="Tunnel">
+      <a name="label" val="REV_CARRY"/>
     </comp>
-    <comp lib="0" loc="(7120,860)" name="Tunnel">
+    <comp lib="0" loc="(7100,910)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="SUB_SBC"/>
     </comp>
-    <comp lib="0" loc="(7120,900)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="SUB_SBC2"/>
+    <comp lib="0" loc="(7120,2340)" name="Tunnel">
+      <a name="facing" val="south"/>
+      <a name="label" val="CLK4"/>
     </comp>
     <comp lib="0" loc="(7140,2310)" name="Tunnel">
       <a name="facing" val="south"/>
@@ -3197,6 +3196,10 @@
     </comp>
     <comp lib="0" loc="(7180,510)" name="Constant">
       <a name="facing" val="north"/>
+    </comp>
+    <comp lib="0" loc="(7180,880)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="REV_CARRY"/>
     </comp>
     <comp lib="0" loc="(7190,2400)" name="Constant">
       <a name="facing" val="south"/>
@@ -3566,7 +3569,6 @@
       <a name="width" val="16"/>
     </comp>
     <comp lib="1" loc="(6960,620)" name="AND Gate"/>
-    <comp lib="1" loc="(7180,880)" name="AND Gate"/>
     <comp lib="2" loc="(2140,330)" name="Decoder">
       <a name="select" val="4"/>
     </comp>
@@ -5040,8 +5042,6 @@
     <wire from="(7120,380)" to="(7120,450)"/>
     <wire from="(7120,380)" to="(7160,380)"/>
     <wire from="(7120,510)" to="(7120,540)"/>
-    <wire from="(7120,860)" to="(7130,860)"/>
-    <wire from="(7120,900)" to="(7130,900)"/>
     <wire from="(7140,2310)" to="(7140,2400)"/>
     <wire from="(7140,2670)" to="(7140,2730)"/>
     <wire from="(7140,2790)" to="(7140,2860)"/>
@@ -9076,11 +9076,11 @@
       <a name="width" val="16"/>
     </comp>
     <comp lib="0" loc="(2670,790)" name="Tunnel">
-      <a name="label" val="FLAG_WRITE"/>
-    </comp>
-    <comp lib="0" loc="(2670,790)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="FLAG_BIN_EN"/>
+    </comp>
+    <comp lib="0" loc="(2670,790)" name="Tunnel">
+      <a name="label" val="FLAG_WRITE"/>
     </comp>
     <comp lib="0" loc="(2740,670)" name="Constant">
       <a name="facing" val="north"/>
@@ -13203,12 +13203,12 @@ e8 400 5*f 358 128 400 5*f 358
     </appear>
     <comp lib="0" loc="(1010,590)" name="NoConnect"/>
     <comp lib="0" loc="(300,420)" name="Tunnel">
-      <a name="label" val="D"/>
+      <a name="facing" val="east"/>
+      <a name="label" val="BIN"/>
       <a name="width" val="8"/>
     </comp>
     <comp lib="0" loc="(300,420)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="BIN"/>
+      <a name="label" val="D"/>
       <a name="width" val="8"/>
     </comp>
     <comp lib="0" loc="(310,310)" name="Pin">
@@ -13661,12 +13661,12 @@ e8 400 5*f 358 128 400 5*f 358
     </comp>
     <comp lib="0" loc="(1700,670)" name="NoConnect"/>
     <comp lib="0" loc="(200,610)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="AIN"/>
+      <a name="label" val="D"/>
       <a name="width" val="16"/>
     </comp>
     <comp lib="0" loc="(200,610)" name="Tunnel">
-      <a name="label" val="D"/>
+      <a name="facing" val="east"/>
+      <a name="label" val="AIN"/>
       <a name="width" val="16"/>
     </comp>
     <comp lib="0" loc="(210,650)" name="Pin">
@@ -18281,6 +18281,12 @@ d 29 9 29 29 2e 36 52
       <a name="label" val="Y1"/>
     </comp>
     <comp lib="0" loc="(1480,800)" name="Splitter">
+      <a name="appear" val="center"/>
+      <a name="facing" val="west"/>
+      <a name="fanout" val="7"/>
+      <a name="incoming" val="7"/>
+    </comp>
+    <comp lib="0" loc="(1480,800)" name="Splitter">
       <a name="appear" val="right"/>
       <a name="bit1" val="0"/>
       <a name="bit2" val="1"/>
@@ -18291,12 +18297,6 @@ d 29 9 29 29 2e 36 52
       <a name="fanout" val="3"/>
       <a name="incoming" val="7"/>
       <a name="spacing" val="3"/>
-    </comp>
-    <comp lib="0" loc="(1480,800)" name="Splitter">
-      <a name="appear" val="center"/>
-      <a name="facing" val="west"/>
-      <a name="fanout" val="7"/>
-      <a name="incoming" val="7"/>
     </comp>
     <comp lib="0" loc="(1490,2020)" name="Splitter">
       <a name="appear" val="right"/>
@@ -27290,7 +27290,7 @@ b b 8*8 a a 6*8 a a
 bf ff e0 b4 0 b4 c 96
 0 f 18 b 19 6 c5 a0
 0 a1 1 a2 5 be 0 18
-21 8 22 2 f d 1 86
+21 8 22 2 f 4 1 86
 8d
 </a>
       <a name="label" val="MEM_ROM"/>

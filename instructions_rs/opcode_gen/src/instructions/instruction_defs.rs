@@ -99,6 +99,7 @@ pub enum InstructionType {
     Dec(AddressRegister),
     Inc(AddressRegister),
     Halt,
+    Error,
     Nop,
 }
 
@@ -197,6 +198,7 @@ impl InstructionType {
             InstructionType::Dec(_) => "dec",
             InstructionType::Inc(_) => "inc",
             InstructionType::Halt => "halt",
+            InstructionType::Error => "halt",
             InstructionType::Nop => "nop",
         }
     }
@@ -306,8 +308,7 @@ impl InstructionType {
             }
 
             // istr (no arguments)
-            InstructionType::Halt => vec![],
-            InstructionType::Nop => vec![],
+            InstructionType::Halt | InstructionType::Error | InstructionType::Nop => vec![],
         }
     }
 
@@ -336,7 +337,7 @@ impl InstructionType {
             .iter()
             .zip(arg_values)
             .filter(|(e, _)| matches!(e, ArgumentType::Byte | ArgumentType::Addr))
-            .map(|(e, value)| match e {
+            .flat_map(|(e, value)| match e {
                 ArgumentType::Byte => {
                     if let ArgumentValue::Byte(byte) = value {
                         vec![byte]
@@ -356,7 +357,6 @@ impl InstructionType {
                 // should not occur since arguments are constructed non-generically
                 _ => unreachable!(),
             })
-            .flatten()
             .collect()
     }
 }
@@ -955,26 +955,42 @@ pub fn misc_instructions() -> Vec<Instruction> {
         InstructionImpl::Simple(InstructionTemplate(mar_inc)),
     ));
 
+    result
+}
+
+// equivalent to halt in function, but distinct opcode to distinguish between them
+pub fn error_instruction() -> Instruction {
     let halt = vec![[Halt].into()];
 
-    result.push(Instruction::new(
+    Instruction::new(
+        InstructionType::Error,
+        Imm::None,
+        "error".to_string(),
+        InstructionImpl::Simple(InstructionTemplate(halt)),
+    )
+}
+
+pub fn halt_instruction() -> Instruction {
+    let halt = vec![[Halt].into()];
+
+    Instruction::new(
         InstructionType::Halt,
         Imm::None,
         "halt".to_string(),
         InstructionImpl::Simple(InstructionTemplate(halt)),
-    ));
+    )
+}
 
+pub fn nop_instruction() -> Instruction {
     // 2 instruction nop
     let nop = vec![[PC.cnt, Reset].into()];
 
-    result.push(Instruction::new(
+    Instruction::new(
         InstructionType::Nop,
         Imm::None,
         "nop".to_string(),
         InstructionImpl::Simple(InstructionTemplate(nop)),
-    ));
-
-    result
+    )
 }
 
 pub fn vram_read_instructions() -> Vec<Instruction> {

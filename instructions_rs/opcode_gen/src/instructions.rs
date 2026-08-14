@@ -21,6 +21,23 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
     let mut istr_set = IstrSet::new();
     let mut all_istrs = Vec::new();
 
+    // place some special instructions for specific spots before any others
+    for istr in [error_instruction(), halt_instruction(), nop_instruction()] {
+        let idx = match istr.istr_type() {
+            InstructionType::Error => 0,
+            InstructionType::Nop => 254,
+            InstructionType::Halt => 255,
+            _ => unreachable!(),
+        };
+
+        let istr = Rc::new(RefCell::new(istr));
+        all_istrs.push(Rc::clone(&istr));
+
+        let istr_opcode = istr_set.place_simple_idx(Rc::clone(&istr), idx).unwrap();
+
+        istr.borrow_mut().set_opcode(Some(istr_opcode));
+    }
+
     // math types can only exist in specific ranges, need to place those first
     let all_math_istrs_iter = math_reg_instructions()
         .into_iter()
