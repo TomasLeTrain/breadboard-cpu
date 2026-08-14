@@ -65,8 +65,6 @@ fn parse_addr(line: String) -> Option<u32> {
         .trim_start_matches("0x")
         .trim_end_matches(char::is_whitespace);
 
-    let thing = u32::from_str_radix(nums, 16);
-
     u32::from_str_radix(nums, 16).ok()
 }
 

@@ -46,7 +46,7 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
         .chain(not_reg_instructions());
 
     for (istr, math_type) in all_math_istrs_iter {
-        let math_given_bits = math_type.to_ir_bits();
+        let math_given_bits = math_type.as_ir_bits();
 
         let math_range = math_given_bits << 4;
         let math_end_range = ((math_given_bits + 1) << 4) - 1;

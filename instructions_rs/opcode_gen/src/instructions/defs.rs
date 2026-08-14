@@ -339,7 +339,7 @@ impl MathIstrTypes {
         DIRECTIONS.iter()
     }
 
-    pub fn to_action(&self) -> Action {
+    pub fn as_action(&self) -> Action {
         if matches!(self, MathIstrTypes::SubCarry | MathIstrTypes::AddCarry) {
             FlagCarry
         } else {
@@ -347,10 +347,17 @@ impl MathIstrTypes {
         }
     }
 
-    pub fn to_ir_bits(&self) -> u8 {
+    pub fn as_ir_bits(&self) -> u8 {
         match self {
-            MathIstrTypes::SubNoCarry | MathIstrTypes::Cmp => 0,
-            MathIstrTypes::SubCarry => 1,
+            // the only difference between these is the flag_select (direct vs. carry flag)
+            // both have their carry inverted
+            MathIstrTypes::SubNoCarry | MathIstrTypes::SubCarry => 0,
+            // this op does not have its carry inverted but the decoded alu select is the same as
+            // sub
+            // TODO: could support subNoCarry and SubCarry without carry inverted?
+            MathIstrTypes::Cmp => 1,
+            // TODO: could technically support add with inverted carry
+            // (i.e. have it invert)
             MathIstrTypes::AddNoCarry => 2,
             MathIstrTypes::AddCarry => 3,
             MathIstrTypes::Not => 4,

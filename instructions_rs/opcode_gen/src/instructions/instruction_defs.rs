@@ -489,7 +489,7 @@ pub fn lw_template_addr_reg_instructions() -> Vec<(Instruction, AddressRegister)
                         addr: *addr_reg,
                     },
                     Imm::None,
-                    format!("lw {}, mem[{}]", reg.name(), addr_reg.name()),
+                    format!("lw {}, {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ),
                 *addr_reg,
@@ -562,7 +562,7 @@ pub fn lw_template_imm16_instructions() -> Vec<(Instruction, AddressRegister)> {
                         scratch_addr_reg: *addr_reg,
                     },
                     Imm::Addr,
-                    format!("lw {}, mem[imm16], {}", reg.name(), addr_reg.name()),
+                    format!("lw {}, imm16, {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ),
                 *addr_reg,
@@ -641,7 +641,7 @@ pub fn sw_instructions() -> Vec<(Instruction, AddressRegister)> {
                                 scrath_addr_reg: *addr_reg,
                             },
                             Imm::Addr,
-                            format!("sw {}, mem[imm16], {}", reg.name(), addr_reg.name()),
+                            format!("sw {}, imm16, {}", reg.name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
                         *addr_reg,
@@ -654,7 +654,7 @@ pub fn sw_instructions() -> Vec<(Instruction, AddressRegister)> {
                                 dest: *addr_reg,
                             },
                             Imm::Addr,
-                            format!("sw {}, mem[{}]", reg.name(), addr_reg.name()),
+                            format!("sw {}, {}", reg.name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
                         *addr_reg,
@@ -1064,7 +1064,7 @@ pub fn vram_read_instructions() -> Vec<Instruction> {
                     addr: *addr_reg,
                 },
                 Imm::None,
-                format!("lw {}, vram[{}]", reg.name(), addr_reg.name()),
+                format!("lw_vram {}, {}", reg.name(), addr_reg.name()),
                 InstructionImpl::Vram(VramInstructionTemplate {
                     active_odd: InstructionTemplate(odd_current),
                     active_even: InstructionTemplate(even_current),
@@ -1121,7 +1121,7 @@ pub fn vram_write_instructions() -> Vec<Instruction> {
                     addr: *addr_reg,
                 },
                 Imm::None,
-                format!("sw {}, vram[{}]", reg.name(), addr_reg.name()),
+                format!("sw_vram {}, {}", reg.name(), addr_reg.name()),
                 InstructionImpl::Simple(InstructionTemplate(current)),
             ));
         }
@@ -1306,7 +1306,7 @@ pub fn math_imm_instructions() -> Vec<(Instruction, MathIstrTypes)> {
 
                 reg.fill_reg0(&mut current);
 
-                fill_flag_select(&mut current, math_type.to_action());
+                fill_flag_select(&mut current, math_type.as_action());
 
                 assert!(all_regs_filled(&current));
                 assert!(flag_select_filled(&current));
@@ -1414,7 +1414,7 @@ pub fn math_reg_instructions() -> Vec<(Instruction, MathIstrTypes)> {
 
                 reg0.fill_reg0(&mut current);
                 reg1.fill_reg1(&mut current);
-                fill_flag_select(&mut current, math_type.to_action());
+                fill_flag_select(&mut current, math_type.as_action());
 
                 assert!(all_regs_filled(&current));
                 assert!(flag_select_filled(&current));
