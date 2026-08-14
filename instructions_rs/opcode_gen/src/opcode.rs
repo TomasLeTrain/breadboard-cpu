@@ -55,8 +55,8 @@ impl InstructionOpcode {
     }
 
     pub fn get_opcode_bytes(&self) -> Vec<u8> {
-        if self.ir2.is_some() {
-            vec![self.ir, self.ir2.unwrap()]
+        if let Some(ir2) = self.ir2 {
+            vec![self.ir, ir2]
         } else {
             vec![self.ir]
         }

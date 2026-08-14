@@ -94,10 +94,14 @@ fn interactive_mode() -> io::Result<()> {
         println!("opcode: {opcode:#?}");
 
         let istr = istr_set.opcode_to_instruction(opcode.clone());
-        let data = istr_set.opcode_to_output(opcode).get_printable_data();
+        let data = istr_set
+            .opcode_to_output(opcode.clone())
+            .get_printable_data();
+        let raw_data = istr_set.opcode_to_output(opcode).get_output_data();
 
         println!("istr: {istr:#?}");
         println!("data: {data:#?}");
+        println!("raw_data: {raw_data:#?}");
     }
 }
 
@@ -117,8 +121,8 @@ fn main() -> std::io::Result<()> {
 
     println!("generated rom data, writing to files...");
 
-    // write_contents_binary(&rom_data)?;
-    // write_contents_logisim(&rom_data)?;
+    write_contents_binary(&rom_data)?;
+    write_contents_logisim(&rom_data)?;
 
     interactive_mode()?;
 

@@ -7,12 +7,13 @@ start:
 	; TODO: this only works since we know the push_return will be smaller than 256 - need to implement addr placeholder 
 	push 0           ; push return addr (high byte)
 	push push_return ; push return addr (low byte)
+
 	jmp fib, MAR     ; jump to func
 
-	push_return:
 
-	mv A,X
-	mv B,Y
+	mv A, X
+	push_return:
+	mv B, Y
 
 	halt
 
@@ -26,13 +27,14 @@ fib {
 	mv Y, 1
 	mv Z, 5
 
+	lda MAR, loop
+
 	loop {
 		add X, Y
 		add Y, X
 		
 		sub Z, 1
 
-		lda MAR, loop
 		jnz Z, MAR
 	}
 
