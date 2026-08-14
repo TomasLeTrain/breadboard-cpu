@@ -210,6 +210,16 @@ pub enum InstructionEntry {
     Empty,
 }
 
+impl OpcodeToInstruction for InstructionEntry {
+    fn opcode_to_instruction(&self, opcode: Opcode) -> Option<&Rc<RefCell<Instruction>>> {
+        match self {
+            InstructionEntry::Single(single) => single.opcode_to_instruction(opcode),
+            InstructionEntry::Extended(extended) => extended.opcode_to_instruction(opcode),
+            InstructionEntry::Empty => None,
+        }
+    }
+}
+
 impl std::fmt::Display for InstructionEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {

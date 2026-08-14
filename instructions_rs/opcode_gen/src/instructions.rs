@@ -11,7 +11,7 @@ pub use defs::{AddressRegister, Register};
 pub use instruction::Instruction;
 pub use instruction_defs::{ArgumentType, ArgumentValue, InstructionSignature, InstructionType};
 pub use istr_set::IstrSet;
-pub use istr_utils::{InstructionImpl, OpcodeToOutput};
+pub use istr_utils::{InstructionImpl, OpcodeToInstruction, OpcodeToOutput};
 
 // import all the instruction funcs
 use instruction_defs::*;

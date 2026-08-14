@@ -10,6 +10,10 @@ start:
 	jmp fib, MAR     ; jump to func
 
 	push_return:
+
+	mv A,X
+	mv B,Y
+
 	halt
 
 
@@ -25,10 +29,13 @@ fib {
 	loop {
 		add X, Y
 		add Y, X
+		
+		sub Z, 1
 
 		lda MAR, loop
 		jnz Z, MAR
 	}
+
 
 	; return routine
 	pop MAR

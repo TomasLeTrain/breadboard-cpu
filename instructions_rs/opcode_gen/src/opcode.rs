@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub struct Opcode {
     pub step: u8,
     pub ir: u8,

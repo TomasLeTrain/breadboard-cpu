@@ -273,6 +273,17 @@ impl Output {
     pub fn get_output_data(&self) -> u16 {
         self.data
     }
+
+    pub fn get_printable_data(&self) -> Vec<(OutputCategory, u8)> {
+        vec![
+            (OutputCategory::Bout, self.get_bout()),
+            (OutputCategory::Write, self.get_write()),
+            (OutputCategory::Addr, self.get_addr()),
+            (OutputCategory::Misc, self.get_misc()),
+            (OutputCategory::FlagSelect, self.get_flag_select()),
+            (OutputCategory::PcCnt, self.get_pc_cnt() as u8),
+        ]
+    }
 }
 
 impl<const N: usize> From<[Output; N]> for Output {

@@ -3,7 +3,7 @@
 use crate::action::Action::*;
 use crate::instructions::OpcodeToOutput;
 use crate::instructions::instruction::Instruction;
-use crate::instructions::istr_utils::{Extended, InstructionEntry, Single};
+use crate::instructions::istr_utils::{Extended, InstructionEntry, OpcodeToInstruction, Single};
 use crate::opcode::{InstructionOpcode, Opcode};
 use crate::output::Output;
 
@@ -27,6 +27,12 @@ impl OpcodeToOutput for IstrSet {
             InstructionEntry::Extended(extended) => extended.opcode_to_output(opcode),
             InstructionEntry::Empty => Halt.to_output(),
         }
+    }
+}
+
+impl OpcodeToInstruction for IstrSet {
+    fn opcode_to_instruction(&self, opcode: Opcode) -> Option<&Rc<RefCell<Instruction>>> {
+        self.get_istr(opcode.ir).opcode_to_instruction(opcode)
     }
 }
 
