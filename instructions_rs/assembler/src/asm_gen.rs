@@ -60,7 +60,6 @@ impl BoolVec {
 struct AsmSpan {
     // statement: StatementNode,
     src_line: String,
-    style: Style,
     span: (u16, u16),
 }
 
@@ -110,20 +109,13 @@ impl AsmGenContext {
         Ok(())
     }
 
-    fn place_statement(
-        &mut self,
-        src_line: String,
-        style: Style,
-        addr: Address,
-        bytes: &[u8],
-    ) -> Result<()> {
+    fn place_statement(&mut self, src_line: String, addr: Address, bytes: &[u8]) -> Result<()> {
         if !bytes.is_empty() {
             self.place_bytes(addr, bytes)?;
         }
         let end_addr = addr + (bytes.len() as u16);
         self.istr_slices.push(AsmSpan {
             src_line,
-            style,
             span: (addr, end_addr),
         });
         Ok(())
@@ -170,10 +162,9 @@ impl AsmGenContext {
                 str_bytes.join(" ").fg::<colors::Green>()
             ));
 
-            line.push_str(&format!("{}", span.src_line.style(span.style)));
+            line.push_str(&span.src_line);
             line.push('\n');
 
-            // result.push_str(&format!("{}", line.style(span.style)));
             result.push_str(&line);
         }
 
@@ -181,23 +172,59 @@ impl AsmGenContext {
     }
 }
 
+// super crude syntax highlighting
+// might switch to ast-based highlighting
+fn prettify_instruction(istr: String) -> String {
+    let istr_and_comment: Vec<&str> = istr.split(';').collect();
+
+    let comments = format!("{}", istr_and_comment[1..].join(";").dimmed());
+
+    let istr_text = istr_and_comment.first().unwrap();
+
+    let istr;
+    let args;
+
+    if let Some((found_istr, foudn_args)) = istr_text.split_once(' ') {
+        istr = found_istr;
+        args = foudn_args;
+    } else {
+        istr = istr_text;
+        args = "";
+    }
+
+    let formatted_istr = format!("{}", istr.red());
+
+    let formatted_args = args
+        .split(',')
+        .map(|e| format!("{}", e.blue()))
+        .collect::<Vec<String>>()
+        .join(",");
+
+    let mut res = String::new();
+    res.push_str(&formatted_istr);
+    res.push(' ');
+    res.push_str(&formatted_args);
+
+    if !comments.is_empty() {
+        res.push_str(&format!("{}", ";".dimmed()));
+        res.push_str(&comments);
+    }
+    res
+}
+
 pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Result<()> {
     for statement in statements.iter() {
         match statement.inner().inner() {
-            StatementKind::Label { .. } => {
+            StatementKind::Label { name } => {
                 ctx.place_statement(
-                    statement.span.get_line_str().to_string(),
-                    // Style::new().fg::<colors::Green>().dimmed(),
-                    Style::new().dimmed(),
+                    format!("{}:", name.dimmed()),
                     statement.inner().address().unwrap(),
                     &[],
                 )?;
             }
-            StatementKind::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, name } => {
                 ctx.place_statement(
-                    statement.span.get_line_str().to_string(),
-                    // Style::new().fg::<colors::Red>(),
-                    Style::new().dimmed(),
+                    format!("{} {{", name.dimmed()),
                     statement.inner().address().unwrap(),
                     &[],
                 )?;
@@ -217,14 +244,11 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     .get_asm_bytes(arg_values);
 
                 ctx.place_statement(
-                    statement.span.get_line_str().to_string(),
-                    // Style::new().fg::<colors::Green>(),
-                    Style::new(),
+                    prettify_instruction(statement.span.get_line_str().to_string()),
                     statement.inner().address().unwrap(),
                     &istr_bytes,
                 )?;
             }
-            _ => (),
         };
     }
 
