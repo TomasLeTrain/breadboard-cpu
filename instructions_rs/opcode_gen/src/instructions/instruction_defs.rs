@@ -416,16 +416,14 @@ pub fn move_word_imm_instructions() -> Vec<Instruction> {
     let mut result = Vec::new();
 
     let base_template = vec![
-        *UNIVERSAL_STEP_1,
-        [MEM.bout, PC.addr, Reg0Write].into(), // write immediate to reg0
-        [PC.cnt, Reset].into(),                // pc cnt
+        [PC.cnt, MEM.bout, PC.addr, Reg0Write].into(), // PC++ -> write immediate to reg0
+        [PC.cnt, Reset].into(),                        // pc cnt
     ];
 
     // writes to A first to be able to then write to reg0
     let base_template_pc = vec![
-        *UNIVERSAL_STEP_1,
-        [MEM.bout, PC.addr, A.write].into(), // write immediate to A
-        [A.bout, Reg0Write, Reset].into(),   // write A contents to PC reg
+        [PC.cnt, MEM.bout, PC.addr, A.write].into(), // PC++ -> write immediate to A
+        [A.bout, Reg0Write, Reset].into(),           // write A contents to PC reg
     ];
 
     for reg in Register::write_iterator() {
@@ -513,28 +511,22 @@ pub fn lw_template_imm16_instructions() -> Vec<(Instruction, AddressRegister)> {
     let mut result = Vec::new();
 
     let base_template = vec![
+        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
-        IMM_TO_ADDR_REG[2],
-        IMM_TO_ADDR_REG[3],
-        IMM_TO_ADDR_REG[4],
         [MEM.bout, Addr0Out, Reg0Write, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
     ];
 
     // does not include the pc.cnt since PC is getting written to
     let base_template_pc = vec![
+        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
-        IMM_TO_ADDR_REG[2],
-        IMM_TO_ADDR_REG[3],
-        IMM_TO_ADDR_REG[4],
-        [MEM.bout, Addr0Out, Reg0Write, Reset].into(), // read from addr mar into register, pc cnt
+        [MEM.bout, Addr0Out, Reg0Write, Reset].into(), // read from addr mar into register
     ];
 
     // write to A to be able to write to addr reg
     let base_template_conflict = vec![
+        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
-        IMM_TO_ADDR_REG[2],
-        IMM_TO_ADDR_REG[3],
-        IMM_TO_ADDR_REG[4],
         [MEM.bout, Addr0Out, A.write, PC.cnt].into(), // read from addr mar into register, pc cnt
         [A.bout, Reg0Write, Reset].into(),            // read from addr mar into register, pc cnt
     ];
@@ -594,19 +586,15 @@ pub fn sw_instructions() -> Vec<(Instruction, AddressRegister)> {
 
     // mem[imm16] = reg
     let sw_imm = vec![
+        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
-        IMM_TO_ADDR_REG[2],
-        IMM_TO_ADDR_REG[3],
-        IMM_TO_ADDR_REG[4],
         [MEM.write, Addr0Out, Reg0Bout, PC.cnt, Reset].into(), // read from addr mar into register, pc cnt
     ];
 
     // writes to a first to avoid bus conflicts
     let sw_imm_addr_reg = vec![
+        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
-        IMM_TO_ADDR_REG[2],
-        IMM_TO_ADDR_REG[3],
-        IMM_TO_ADDR_REG[4],
         [A.write, Reg0Bout].into(),
         [MEM.write, Addr0Out, A.bout, PC.cnt, Reset].into(),
     ];
@@ -678,15 +666,15 @@ pub fn push_reg_instructions() -> Vec<Instruction> {
     // NOTE: sp dec uses bout so it must be before Reg0Bout in all cases!
 
     let base_template = vec![
-        [PC.cnt, SP.dec].into(), // decrement before pushing value
-        [MEM.write, SP.addr, Reg0Bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
+        [PC.cnt, SP.dec].into(),                      // PC++, SP--
+        [MEM.write, SP.addr, Reg0Bout, Reset].into(), // mem[SP] = reg
     ];
 
     // have to write to A first to avoid addr bus contention
     let base_template_addr_reg = vec![
-        [PC.cnt, SP.dec].into(),
-        [A.write, Reg0Bout].into(),
-        [MEM.write, SP.addr, A.bout, Reset].into(), // read from reg into mem at sp addr, pc cnt
+        [PC.cnt, SP.dec].into(),                    // PC++, SP--
+        [A.write, Reg0Bout].into(),                 // A = reg
+        [MEM.write, SP.addr, A.bout, Reset].into(), // mem[SP] = A
     ];
 
     for reg in Register::read_iterator().filter(|e| !matches!(e, Register::PcLo | Register::PcHi)) {
@@ -922,10 +910,8 @@ pub fn lda_imm16_instructions() -> Vec<Instruction> {
     let mut result = Vec::new();
 
     let base_template = vec![
+        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
-        IMM_TO_ADDR_REG[2],
-        IMM_TO_ADDR_REG[3],
-        IMM_TO_ADDR_REG[4],
         [PC.cnt, Reset].into(), // pc cnt
     ];
 
@@ -993,7 +979,7 @@ pub fn misc_instructions() -> Vec<Instruction> {
     ));
 
     // sp cnt
-    let sp_inc = vec![*UNIVERSAL_STEP_0, [PC.cnt, SP.inc, Reset].into()];
+    let sp_inc = vec![[PC.cnt, SP.inc, Reset].into()];
 
     result.push(Instruction::new(
         InstructionType::Inc(AddressRegister::Sp),
@@ -1315,15 +1301,13 @@ pub fn math_imm_instructions() -> Vec<(Instruction, MathIstrTypes)> {
     // edge cases where register gets loaded to itself
     // all other cases have good register overwrite order
     let math_imm_a = vec![
-        [PC.cnt].into(),                     // load A into A (nop), pc cnt
-        [MEM.bout, PC.addr, B.write].into(), // load imm into B
+        [PC.cnt, MEM.bout, PC.addr, B.write].into(), // PC++ -> load imm into B
         [FAluBout, FlagWriteAlu, A.write, OutputFlagsSelector, PC.cnt].into(), // save f to Reg0, writes to flag reg
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
     ];
 
     let math_imm_b_reverse = vec![
-        [PC.cnt].into(),                     // load B into B (nop), pc cnt
-        [MEM.bout, PC.addr, A.write].into(), // load imm into A
+        [PC.cnt, MEM.bout, PC.addr, A.write].into(), // PC++ -> load imm into A
         [FAluBout, FlagWriteAlu, B.write, OutputFlagsSelector, PC.cnt].into(), // save f to B, writes to flag reg
         [Reset].into(), // must reset on separate instruction since it shares bits with flag write
     ];
@@ -1546,19 +1530,17 @@ pub fn jmp_instructions() -> Vec<(Instruction, AddressRegister)> {
 
     // jump if equal flag is carry flag is true
     let jmp_imm16_template = vec![
+        IMM_TO_ADDR_REG[0],
         IMM_TO_ADDR_REG[1],
-        IMM_TO_ADDR_REG[2],
-        IMM_TO_ADDR_REG[3],
-        IMM_TO_ADDR_REG[4],
-        [PC.cnt].into(), // note: pc cnt happens in case jump doesn't happens
-        [Addr0HiBout, PC.hi.write, OutputFlagsSelector].into(), // load from mar into pc if flag
-        [Addr0LoBout, PC.lo.write, OutputFlagsSelector, Reset].into(), // load from mar into pc if flag
+        // note: PC.cnt happens in case jump doesn't happens
+        [PC.cnt, Addr0HiBout, PC.hi.write, OutputFlagsSelector].into(), // PC++ -> pc.hi = addr_reg.hi
+        [Addr0LoBout, PC.lo.write, OutputFlagsSelector, Reset].into(),  // pc.lo = addr_reg.lo
     ];
 
     // jump if equal flag is true
     let jmp_addr_reg_template = vec![
-        [PC.cnt].into(), // note: pc cnt in case jump doesn't happen
-        [Addr0HiBout, PC.hi.write, OutputFlagsSelector].into(),
+        // note: pc cnt in case jump doesn't happen
+        [PC.cnt, Addr0HiBout, PC.hi.write, OutputFlagsSelector].into(),
         [Addr0LoBout, PC.lo.write, OutputFlagsSelector, Reset].into(),
     ];
 
@@ -1610,7 +1592,7 @@ pub fn jmp_instructions() -> Vec<(Instruction, AddressRegister)> {
     result
 }
 
-// TODO: add instruction to update flag reg on op
+// TODO: add instruction that update flag reg on op
 pub fn shift_instructions() -> Vec<Instruction> {
     let mut result = Vec::new();
 

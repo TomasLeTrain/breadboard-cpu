@@ -82,7 +82,7 @@ impl OpcodeToOutput for Extended {
     fn opcode_to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
-        let extended_prelude = [*UNIVERSAL_STEP_0, *UNIVERSAL_STEP_1, *LOAD_IR2];
+        let extended_prelude = EXTENDED_LOAD_STEPS.clone();
 
         if step < extended_prelude.len() {
             // universal steps should not be conflicting!
@@ -125,7 +125,7 @@ impl OpcodeToOutput for Single {
     fn opcode_to_output(&self, mut opcode: Opcode) -> Output {
         let step = opcode.step as usize;
 
-        let single_prelude = [*UNIVERSAL_STEP_0];
+        let single_prelude = SIMPLE_LOAD_STEPS.clone();
 
         if step < single_prelude.len() {
             return single_prelude[step].to_output().unwrap();

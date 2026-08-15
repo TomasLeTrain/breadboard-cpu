@@ -10,20 +10,28 @@ use std::sync::LazyLock;
 
 pub type IstrTemplateVec = Vec<StepTemplate>;
 
-pub static UNIVERSAL_STEP_0: LazyLock<StepTemplate> =
-    LazyLock::new(|| [MEM.bout, PC.addr, IrWrite].into());
-pub static UNIVERSAL_STEP_1: LazyLock<StepTemplate> = LazyLock::new(|| [PC.cnt].into());
-pub static LOAD_IR2: LazyLock<StepTemplate> =
-    LazyLock::new(|| [MEM.bout, PC.addr, IR2.write].into());
-
-// FIXME: remove unused first step, make use of new pc.cnt impl
-pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplateVec> = LazyLock::new(|| {
+// PC.cnt needs to happen after these steps
+pub static SIMPLE_LOAD_STEPS: LazyLock<Vec<StepTemplate>> = LazyLock::new(|| {
     vec![
-        *UNIVERSAL_STEP_0,
-        [PC.cnt].into(),
-        [MEM.bout, PC.addr, Addr0HiWrite].into(), // first byte has msb
-        [PC.cnt].into(),                          // pc cnt
-        [MEM.bout, PC.addr, Addr0LoWrite].into(), // second byte has lsb
+        [MEM.bout, PC.addr, IrWrite].into(), // IR = mem[PC]
+    ]
+});
+
+// PC.cnt needs to happen after these steps
+pub static EXTENDED_LOAD_STEPS: LazyLock<Vec<StepTemplate>> = LazyLock::new(|| {
+    vec![
+        [MEM.bout, PC.addr, IrWrite].into(),           // IR = mem[PC]
+        [PC.cnt, MEM.bout, PC.addr, IR2.write].into(), // PC++ -> ir2 = mem[PC]
+    ]
+});
+
+/// PC should need to be incremented before using
+pub static IMM_TO_ADDR_REG: LazyLock<IstrTemplateVec> = LazyLock::new(|| {
+    // NOTE: PC should need to be incremented before using
+    // NOTE: PC also needs to be increased after using
+    vec![
+        [PC.cnt, MEM.bout, PC.addr, Addr0HiWrite].into(), // PC++ -> reg.hi = mem[PC]
+        [PC.cnt, MEM.bout, PC.addr, Addr0LoWrite].into(), // PC++ -> reg.lo = mem[PC]
     ]
 });
 
