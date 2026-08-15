@@ -104,10 +104,6 @@
       <a name="label" val="FLAG_SELECT"/>
       <a name="width" val="3"/>
     </comp>
-    <comp lib="0" loc="(1070,1510)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="PC_CNT"/>
-    </comp>
     <comp lib="0" loc="(1130,1070)" name="Pin">
       <a name="appearance" val="NewPins"/>
       <a name="label" val="MANUAL_CLK"/>
@@ -3243,6 +3239,10 @@
       <a name="label" val="SP_Q1"/>
       <a name="width" val="4"/>
     </comp>
+    <comp lib="0" loc="(720,1650)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="PC_CNT"/>
+    </comp>
     <comp lib="0" loc="(7200,450)" name="NoConnect"/>
     <comp lib="0" loc="(7210,1930)" name="Splitter">
       <a name="appear" val="center"/>
@@ -3540,6 +3540,17 @@
     <comp lib="0" loc="(7930,390)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="CLK"/>
+    </comp>
+    <comp lib="0" loc="(810,1590)" name="Splitter">
+      <a name="appear" val="right"/>
+      <a name="facing" val="south"/>
+      <a name="fanout" val="8"/>
+      <a name="incoming" val="8"/>
+    </comp>
+    <comp lib="0" loc="(810,1590)" name="Tunnel">
+      <a name="facing" val="south"/>
+      <a name="label" val="UCODE_ROM1"/>
+      <a name="width" val="8"/>
     </comp>
     <comp lib="0" loc="(8200,420)" name="Tunnel">
       <a name="label" val="BBUS"/>
@@ -3950,9 +3961,6 @@
     <comp lib="9" loc="(8050,570)" name="Text">
       <a name="text" val="actual is implemented with shift register + 245"/>
     </comp>
-    <comp lib="9" loc="(815,1555)" name="Text">
-      <a name="text" val="one more ic here"/>
-    </comp>
     <comp lib="9" loc="(8190,2620)" name="Text">
       <a name="text" val="TODO: and the vram with high clock"/>
     </comp>
@@ -3975,7 +3983,6 @@
     <comp loc="(8180,420)" name="gp_register"/>
     <comp loc="(8770,2660)" name="synced_cpu_vga"/>
     <wire from="(1070,1480)" to="(1130,1480)"/>
-    <wire from="(1070,1510)" to="(1100,1510)"/>
     <wire from="(1090,1390)" to="(1370,1390)"/>
     <wire from="(1090,1400)" to="(1380,1400)"/>
     <wire from="(1090,1410)" to="(1440,1410)"/>
@@ -3984,7 +3991,6 @@
     <wire from="(1090,1440)" to="(1110,1440)"/>
     <wire from="(1090,1450)" to="(1110,1450)"/>
     <wire from="(1090,1460)" to="(1100,1460)"/>
-    <wire from="(1100,1460)" to="(1100,1510)"/>
     <wire from="(1110,1430)" to="(1330,1430)"/>
     <wire from="(1110,1440)" to="(1310,1440)"/>
     <wire from="(1110,1450)" to="(1290,1450)"/>
@@ -5094,6 +5100,7 @@
     <wire from="(7190,2790)" to="(7190,2870)"/>
     <wire from="(7190,770)" to="(7190,830)"/>
     <wire from="(7190,830)" to="(7280,830)"/>
+    <wire from="(720,1650)" to="(730,1650)"/>
     <wire from="(7200,510)" to="(7200,520)"/>
     <wire from="(7200,520)" to="(7270,520)"/>
     <wire from="(7210,2790)" to="(7210,2880)"/>
@@ -5123,6 +5130,7 @@
     <wire from="(7290,3130)" to="(7290,3220)"/>
     <wire from="(7290,420)" to="(7290,450)"/>
     <wire from="(7290,510)" to="(7290,550)"/>
+    <wire from="(730,1610)" to="(730,1650)"/>
     <wire from="(7300,770)" to="(7300,900)"/>
     <wire from="(7310,2310)" to="(7310,2400)"/>
     <wire from="(7310,2670)" to="(7310,2730)"/>
