@@ -175,35 +175,35 @@ impl AsmGenContext {
 // super crude syntax highlighting
 // might switch to ast-based highlighting
 fn prettify_instruction(istr: String) -> String {
-    let istr_and_comment: Vec<&str> = istr.split(';').collect();
-
-    let comments = format!("{}", istr_and_comment[1..].join(";").dimmed());
-
-    let istr_text = istr_and_comment.first().unwrap();
-
-    let istr;
-    let args;
-
-    if let Some((found_istr, foudn_args)) = istr_text.split_once(' ') {
-        istr = found_istr;
-        args = foudn_args;
+    let (istr_text, comments) = if let Some((found_istr, found_comments)) = istr.split_once(';') {
+        (
+            found_istr.to_string(),
+            format!("{}", found_comments.dimmed()),
+        )
     } else {
-        istr = istr_text;
-        args = "";
-    }
+        (istr, "".to_string())
+    };
+
+    let (istr, args) = if let Some((found_istr, foudn_args)) = istr_text.split_once(' ') {
+        let formatted_args = foudn_args
+            .split(',')
+            .map(|e| format!("{}", e.blue()))
+            .collect::<Vec<String>>()
+            .join(",");
+
+        (found_istr.to_string(), " ".to_string() + &formatted_args)
+    } else {
+        (istr_text.to_string(), "".to_string())
+    };
 
     let formatted_istr = format!("{}", istr.red());
 
-    let formatted_args = args
-        .split(',')
-        .map(|e| format!("{}", e.blue()))
-        .collect::<Vec<String>>()
-        .join(",");
-
     let mut res = String::new();
+
     res.push_str(&formatted_istr);
-    res.push(' ');
-    res.push_str(&formatted_args);
+    if !args.is_empty() {
+        res.push_str(&args);
+    }
 
     if !comments.is_empty() {
         res.push_str(&format!("{}", ";".dimmed()));
