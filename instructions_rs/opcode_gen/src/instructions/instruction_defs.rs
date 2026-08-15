@@ -2,7 +2,7 @@
 
 use crate::action::Action::*;
 use crate::instructions::defs::*;
-use crate::instructions::instruction::{Imm, Instruction, OverrideBehavior};
+use crate::instructions::instruction::{Instruction, OverrideBehavior};
 use crate::instructions::istr_utils::{
     InstructionImpl, InstructionTemplate, VramInstructionTemplate,
 };
@@ -35,7 +35,9 @@ pub enum InstructionType {
     },
 
     PushReg(Register),
-    PushImm,
+    PushAddrReg(AddressRegister),
+    PushByte,
+    PushAddr,
 
     PopReg(Register),
     PopAddrReg(AddressRegister),
@@ -170,7 +172,10 @@ impl InstructionType {
             InstructionType::MathReg { math_type, .. }
             | InstructionType::MathImm { math_type, .. } => math_type.istr_name(),
             InstructionType::Not(..) | InstructionType::NotReg { .. } => "not",
-            InstructionType::PushReg(..) | InstructionType::PushImm => "push",
+            InstructionType::PushReg(..)
+            | InstructionType::PushAddrReg(..)
+            | InstructionType::PushByte => "push",
+            InstructionType::PushAddr => "pusha",
             InstructionType::PopReg(..) | InstructionType::PopAddrReg(..) => "pop",
             InstructionType::LdaImmAddr(..) => "lda",
             InstructionType::MoveAddrReg { .. } => "mva",
@@ -239,7 +244,7 @@ impl InstructionType {
             | InstructionType::PopReg(reg) => vec![ArgumentType::Reg(*reg)],
 
             // istr byte
-            InstructionType::PushImm => vec![ArgumentType::Byte],
+            InstructionType::PushByte => vec![ArgumentType::Byte],
 
             // istr addr_reg, imm_addr
             InstructionType::LdaImmAddr(addr_reg) => {
@@ -295,6 +300,7 @@ impl InstructionType {
 
             // istr addr_reg
             InstructionType::PopAddrReg(addr_reg)
+            | InstructionType::PushAddrReg(addr_reg)
             | InstructionType::Jmp { addr: addr_reg, .. }
             | InstructionType::Dec(addr_reg)
             | InstructionType::Inc(addr_reg) => vec![ArgumentType::AddrReg(*addr_reg)],
@@ -305,6 +311,11 @@ impl InstructionType {
                 ..
             } => {
                 vec![ArgumentType::Addr, ArgumentType::AddrReg(*addr_reg)]
+            }
+
+            // istr imm_addr
+            InstructionType::PushAddr => {
+                vec![ArgumentType::Addr]
             }
 
             // istr (no arguments)
@@ -392,7 +403,6 @@ pub fn move_word_reg_instructions() -> Vec<Instruction> {
                     dest: *reg0,
                     origin: *reg1,
                 },
-                Imm::None,
                 format!("mv {}, {}", reg0.name(), reg1.name()),
                 InstructionImpl::Simple(InstructionTemplate(current)),
             ));
@@ -433,7 +443,6 @@ pub fn move_word_imm_instructions() -> Vec<Instruction> {
 
         result.push(Instruction::new(
             InstructionType::MoveWordImm(*reg),
-            Imm::Byte,
             format!("mv {}, imm8", reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
         ));
@@ -488,7 +497,6 @@ pub fn lw_template_addr_reg_instructions() -> Vec<(Instruction, AddressRegister)
                         dest: *reg,
                         addr: *addr_reg,
                     },
-                    Imm::None,
                     format!("lw {}, {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ),
@@ -561,7 +569,6 @@ pub fn lw_template_imm16_instructions() -> Vec<(Instruction, AddressRegister)> {
                         dest: *reg,
                         scratch_addr_reg: *addr_reg,
                     },
-                    Imm::Addr,
                     format!("lw {}, imm16, {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ),
@@ -640,7 +647,6 @@ pub fn sw_instructions() -> Vec<(Instruction, AddressRegister)> {
                                 origin: *reg,
                                 scrath_addr_reg: *addr_reg,
                             },
-                            Imm::Addr,
                             format!("sw {}, imm16, {}", reg.name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
@@ -653,7 +659,6 @@ pub fn sw_instructions() -> Vec<(Instruction, AddressRegister)> {
                                 origin: *reg,
                                 dest: *addr_reg,
                             },
-                            Imm::Addr,
                             format!("sw {}, {}", reg.name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
@@ -705,7 +710,6 @@ pub fn push_reg_instructions() -> Vec<Instruction> {
 
         result.push(Instruction::new(
             InstructionType::PushReg(*reg),
-            Imm::None,
             format!("push {}", reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
         ));
@@ -713,27 +717,86 @@ pub fn push_reg_instructions() -> Vec<Instruction> {
     result
 }
 
+pub fn push_addr_reg_instructions() -> Vec<Instruction> {
+    let mut result = Vec::new();
+
+    // NOTE: pushes hi then lo
+    let push_mar = vec![
+        [SP.dec, PC.cnt].into(),                    // SP--, PC.cnt
+        [MAR.hi.bout, A.write].into(),              // A = MAR.hi
+        [MEM.write, SP.addr, A.bout].into(),        // mem[SP] = A
+        [SP.dec].into(),                            // SP--
+        [MAR.lo.bout, A.write].into(),              // A = MAR.lo
+        [MEM.write, SP.addr, A.bout, Reset].into(), // mem[SP] = A
+    ];
+
+    result.push(
+        Instruction::new(
+            InstructionType::PushAddrReg(AddressRegister::Mar),
+            "push MAR".to_string(),
+            InstructionImpl::Simple(InstructionTemplate(push_mar)),
+        )
+        .with_overrides(vec![OverrideBehavior::A]),
+    );
+
+    // NOTE: pushes lo then hi since pop order is hi then lo
+    let push_sp = vec![
+        [SP.dec, PC.cnt].into(),                    // SP--, PC.cnt
+        [SP.hi.bout, A.write].into(),               // A = SP.hi
+        [MEM.write, SP.addr, A.bout].into(),        // mem[SP] = A
+        [SP.dec].into(),                            // SP--
+        [SP.lo.bout, A.write].into(),               // A = SP.lo
+        [MEM.write, SP.addr, A.bout, Reset].into(), // mem[SP] = A
+    ];
+
+    result.push(
+        Instruction::new(
+            InstructionType::PushAddrReg(AddressRegister::Sp),
+            "push SP".to_string(),
+            InstructionImpl::Simple(InstructionTemplate(push_sp)),
+        )
+        .with_overrides(vec![OverrideBehavior::A]),
+    );
+
+    result
+}
+
 // [sp--] = imm8, overrides a reg
 pub fn push_imm8_instructions() -> Vec<Instruction> {
     let mut result = Vec::new();
 
-    let current = vec![
-        [PC.cnt, SP.dec].into(),             // decrement before pushing value
-        [MEM.bout, PC.addr, A.write].into(), // write into ir2
+    let push_byte = vec![
+        [PC.cnt, SP.dec].into(), // decrement before pushing value
+        [MEM.bout, PC.addr, A.write].into(),
         [MEM.write, SP.addr, A.bout, PC.cnt, Reset].into(), // read from ir2 into [sp], pc cnt
     ];
 
     result.push(
         Instruction::new(
-            InstructionType::PushImm,
-            Imm::Byte,
+            InstructionType::PushByte,
             "push imm8".to_string(),
-            InstructionImpl::Simple(InstructionTemplate(current)),
+            InstructionImpl::Simple(InstructionTemplate(push_byte)),
         )
         .with_overrides(vec![OverrideBehavior::A]),
     );
 
-    // TODO: implement push imm16
+    let push_addr = vec![
+        [PC.cnt, SP.dec].into(),                            // SP--, PC++
+        [MEM.bout, PC.addr, A.write].into(),                // A = mem[PC]  ; hi byte
+        [MEM.write, SP.addr, A.bout].into(),                // mem[SP] = A
+        [PC.cnt, SP.dec].into(),                            // SP--, PC++
+        [MEM.bout, PC.addr, A.write].into(),                // A = mem[PC]  ; lo byte
+        [MEM.write, SP.addr, A.bout, PC.cnt, Reset].into(), // mem[SP] = A, PC++
+    ];
+
+    result.push(
+        Instruction::new(
+            InstructionType::PushAddr,
+            "push imm16".to_string(),
+            InstructionImpl::Simple(InstructionTemplate(push_addr)),
+        )
+        .with_overrides(vec![OverrideBehavior::A]),
+    );
 
     result
 }
@@ -780,7 +843,6 @@ pub fn pop_reg_instructions() -> Vec<Instruction> {
 
         let istr = Instruction::new(
             InstructionType::PopReg(*reg),
-            Imm::None,
             format!("pop {}", reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
         );
@@ -799,33 +861,33 @@ pub fn pop_reg_instructions() -> Vec<Instruction> {
 pub fn pop_addr_reg_instructions() -> Vec<Instruction> {
     let mut result = Vec::new();
 
+    // NOTE: pop lo then hi since push puts hi then lo
     let sp_to_mar = vec![
-        [MEM.bout, SP.addr, MAR.hi.write, PC.cnt].into(),
-        [SP.inc].into(),
-        [MEM.bout, SP.addr, MAR.lo.write].into(),
-        [SP.inc, Reset].into(),
+        [MEM.bout, SP.addr, MAR.lo.write, PC.cnt].into(), // MAR.lo = mem[SP]
+        [SP.inc].into(),                                  // SP++
+        [MEM.bout, SP.addr, MAR.hi.write].into(),         // MAR.hi = mem[SP]
+        [SP.inc, Reset].into(),                           // SP++, PC++
     ];
 
     result.push(Instruction::new(
         InstructionType::PopAddrReg(AddressRegister::Mar),
-        Imm::None,
         "pop MAR".to_string(),
         InstructionImpl::Simple(InstructionTemplate(sp_to_mar)),
     ));
 
+    // NOTE: pop lo then hi since push puts hi then lo
     let sp_to_sp_through_mar = vec![
-        [MEM.bout, SP.addr, MAR.hi.write, PC.cnt].into(),
-        [SP.inc].into(),
-        [MEM.bout, SP.addr, MAR.lo.write].into(),
-        [MAR.hi.bout, SP.hi.write].into(),
-        [MAR.lo.bout, SP.lo.write].into(),
-        [SP.inc, Reset].into(),
+        [MEM.bout, SP.addr, MAR.lo.write, PC.cnt].into(), // MAR.lo = mem[SP], PC++
+        [SP.inc].into(),                                  // SP++
+        [MEM.bout, SP.addr, MAR.hi.write].into(),         // MAR.hi = mem[SP]
+        [MAR.lo.bout, SP.lo.write].into(),                // SP.lo = MAR.lo
+        [MAR.hi.bout, SP.hi.write].into(),                // SP.hi = MAR.hi
+        [SP.inc, Reset].into(),                           // SP++, Reset
     ];
 
     result.push(
         Instruction::new(
             InstructionType::PopAddrReg(AddressRegister::Sp),
-            Imm::None,
             "pop SP, MAR".to_string(),
             InstructionImpl::Simple(InstructionTemplate(sp_to_sp_through_mar)),
         )
@@ -845,7 +907,7 @@ pub fn pop_addr_reg_instructions() -> Vec<Instruction> {
     // result.push(
     //     Instruction::new(
     //         InstructionType::PopAddrReg(AddressRegister::Sp),
-    //         Imm::None,
+    //
     //         "pop SP, AB".to_string(),
     //         InstructionImpl::Simple(InstructionTemplate(sp_to_sp_through_ab)),
     //     )
@@ -876,7 +938,6 @@ pub fn lda_imm16_instructions() -> Vec<Instruction> {
 
         result.push(Instruction::new(
             InstructionType::LdaImmAddr(*addr_reg),
-            Imm::Addr,
             format!("lda {}, imm16", addr_reg.name()),
             InstructionImpl::Simple(InstructionTemplate(current)),
         ));
@@ -909,7 +970,6 @@ pub fn mv_addr_reg_instructions() -> Vec<Instruction> {
                     dest: *addr_reg0,
                     origin: *addr_reg1,
                 },
-                Imm::None,
                 format!("mva {}, {}", addr_reg0.name(), addr_reg1.name()),
                 InstructionImpl::Simple(InstructionTemplate(current)),
             ));
@@ -928,7 +988,6 @@ pub fn misc_instructions() -> Vec<Instruction> {
 
     result.push(Instruction::new(
         InstructionType::Dec(AddressRegister::Sp),
-        Imm::None,
         "dec SP".to_string(),
         InstructionImpl::Simple(InstructionTemplate(sp_dec)),
     ));
@@ -938,7 +997,6 @@ pub fn misc_instructions() -> Vec<Instruction> {
 
     result.push(Instruction::new(
         InstructionType::Inc(AddressRegister::Sp),
-        Imm::None,
         "inc SP".to_string(),
         InstructionImpl::Simple(InstructionTemplate(sp_inc)),
     ));
@@ -950,7 +1008,6 @@ pub fn misc_instructions() -> Vec<Instruction> {
 
     result.push(Instruction::new(
         InstructionType::Inc(AddressRegister::Mar),
-        Imm::None,
         "inc MAR".to_string(),
         InstructionImpl::Simple(InstructionTemplate(mar_inc)),
     ));
@@ -964,7 +1021,6 @@ pub fn error_instruction() -> Instruction {
 
     Instruction::new(
         InstructionType::Error,
-        Imm::None,
         "error".to_string(),
         InstructionImpl::Simple(InstructionTemplate(error)),
     )
@@ -975,7 +1031,6 @@ pub fn halt_instruction() -> Instruction {
 
     Instruction::new(
         InstructionType::Halt,
-        Imm::None,
         "halt".to_string(),
         InstructionImpl::Simple(InstructionTemplate(halt)),
     )
@@ -987,7 +1042,6 @@ pub fn nop_instruction() -> Instruction {
 
     Instruction::new(
         InstructionType::Nop,
-        Imm::None,
         "nop".to_string(),
         InstructionImpl::Simple(InstructionTemplate(nop)),
     )
@@ -1063,7 +1117,6 @@ pub fn vram_read_instructions() -> Vec<Instruction> {
                     dest: *reg,
                     addr: *addr_reg,
                 },
-                Imm::None,
                 format!("lw_vram {}, {}", reg.name(), addr_reg.name()),
                 InstructionImpl::Vram(VramInstructionTemplate {
                     active_odd: InstructionTemplate(odd_current),
@@ -1120,7 +1173,6 @@ pub fn vram_write_instructions() -> Vec<Instruction> {
                     origin: *reg,
                     addr: *addr_reg,
                 },
-                Imm::None,
                 format!("sw_vram {}, {}", reg.name(), addr_reg.name()),
                 InstructionImpl::Simple(InstructionTemplate(current)),
             ));
@@ -1161,7 +1213,6 @@ pub fn not_instructions() -> Vec<(Instruction, MathIstrTypes)> {
         result.push((
             Instruction::new(
                 InstructionType::Not(*reg),
-                Imm::None,
                 format!("not {}", reg.name()),
                 InstructionImpl::Simple(InstructionTemplate(current)),
             )
@@ -1217,7 +1268,6 @@ pub fn not_reg_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                         dest: *reg0,
                         origin: *reg1,
                     },
-                    Imm::None,
                     format!("not {}, {}", reg0.name(), reg1.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 )
@@ -1324,7 +1374,6 @@ pub fn math_imm_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                             reg: *reg,
                             imm_lhs,
                         },
-                        Imm::Byte,
                         name,
                         InstructionImpl::Simple(InstructionTemplate(current)),
                     )
@@ -1426,7 +1475,6 @@ pub fn math_reg_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                             lhs: *reg0,
                             rhs: *reg1,
                         },
-                        Imm::None,
                         format!("{} {}, {}", math_type, reg0.name(), reg1.name()),
                         InstructionImpl::Simple(InstructionTemplate(current)),
                     )
@@ -1482,7 +1530,6 @@ pub fn jnz_reg_instructions() -> Vec<(Instruction, AddressRegister)> {
                         origin: *reg,
                         addr: *addr_reg,
                     },
-                    Imm::None,
                     format!("jnz {}, {}", reg.name(), addr_reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 )
@@ -1539,7 +1586,6 @@ pub fn jmp_instructions() -> Vec<(Instruction, AddressRegister)> {
                                 flag: *flag,
                                 scrath_addr_reg: *addr_reg,
                             },
-                            Imm::None,
                             format!("{} imm16, {}", flag.get_jump_name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
@@ -1552,7 +1598,6 @@ pub fn jmp_instructions() -> Vec<(Instruction, AddressRegister)> {
                                 flag: *flag,
                                 addr: *addr_reg,
                             },
-                            Imm::None,
                             format!("{} {}", flag.get_jump_name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
                         ),
@@ -1585,14 +1630,12 @@ pub fn shift_instructions() -> Vec<Instruction> {
             if dir_left {
                 result.push(Instruction::new(
                     InstructionType::ShiftLeft(reg),
-                    Imm::None,
                     format!("shl {}", reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ));
             } else {
                 result.push(Instruction::new(
                     InstructionType::ShiftRight(reg),
-                    Imm::None,
                     format!("shr {}", reg.name()),
                     InstructionImpl::Simple(InstructionTemplate(current)),
                 ));

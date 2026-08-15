@@ -100,6 +100,7 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
     let simple_istrs = move_word_imm_instructions()
         .into_iter()
         .chain(push_reg_instructions())
+        .chain(push_addr_reg_instructions())
         .chain(push_imm8_instructions())
         .chain(pop_reg_instructions())
         .chain(pop_addr_reg_instructions())

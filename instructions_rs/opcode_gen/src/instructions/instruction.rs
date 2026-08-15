@@ -9,13 +9,6 @@ use crate::{
     output::Output,
 };
 
-#[derive(Debug)]
-pub enum Imm {
-    Byte,
-    Addr,
-    None,
-}
-
 /// Possible registers that can get overwritten by instructions
 #[derive(Debug)]
 pub enum OverrideBehavior {
@@ -30,23 +23,16 @@ pub enum OverrideBehavior {
 pub struct Instruction {
     istr_type: InstructionType,
     opcode: Option<InstructionOpcode>,
-    imm: Imm,
     overrides: Vec<OverrideBehavior>,
     name: String,
     template: InstructionImpl,
 }
 
 impl Instruction {
-    pub fn new(
-        istr_type: InstructionType,
-        imm: Imm,
-        name: String,
-        template: InstructionImpl,
-    ) -> Self {
+    pub fn new(istr_type: InstructionType, name: String, template: InstructionImpl) -> Self {
         Instruction {
             istr_type,
             name,
-            imm,
             template,
             opcode: None,
             overrides: Vec::new(),
@@ -59,10 +45,6 @@ impl Instruction {
 
     pub fn opcode(&self) -> &Option<InstructionOpcode> {
         &self.opcode
-    }
-
-    pub fn imm(&self) -> &Imm {
-        &self.imm
     }
 
     pub fn name(&self) -> &str {

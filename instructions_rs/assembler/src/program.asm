@@ -8,8 +8,7 @@ start:
 	; these are next to each other
 	
 	; TODO: this only works since we know the push_return will be smaller than 256 - need to implement addr placeholder 
-	push push_return ; push return addr (low byte)
-	push 0           ; push return addr (high byte)
+	push push_return
 
 	jmp fib, MAR     ; jump to func
 
