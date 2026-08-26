@@ -1,7 +1,7 @@
 //! Implements how the output of the roms is represented and stored.
 
 use std::error::Error;
-use std::fmt;
+use std::fmt::{self, Display};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Output {
@@ -46,6 +46,20 @@ impl fmt::Display for SetCategoryError {
                 )
             }
         }
+    }
+}
+
+impl Display for OutputCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            OutputCategory::Bout => "Bout",
+            OutputCategory::Write => "Write",
+            OutputCategory::Addr => "Addr",
+            OutputCategory::Misc => "Misc",
+            OutputCategory::FlagSelect => "FlagSelect",
+            OutputCategory::PcCnt => "PcCnt",
+        };
+        write!(f, "{name}")
     }
 }
 

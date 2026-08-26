@@ -1,4 +1,7 @@
-use std::{error::Error, fmt};
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
 
 use crate::{action::Action, output::Output};
 
@@ -46,6 +49,16 @@ impl StepTemplate {
             size: self.size,
             index: 0,
         }
+    }
+}
+
+impl Display for StepTemplate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut res = Vec::new();
+        for e in self {
+            res.push(format!("what"));
+        }
+        write!(f, "{}", res.join(", "))
     }
 }
 
@@ -146,7 +159,7 @@ pub struct MergingActionsError(Action, Action);
 
 impl Error for MergingActionsError {}
 
-impl fmt::Display for MergingActionsError {
+impl Display for MergingActionsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,

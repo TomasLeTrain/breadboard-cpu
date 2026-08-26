@@ -5,7 +5,7 @@ use crate::instructions::{Instruction, IstrSet};
 pub mod action;
 pub mod instructions;
 pub mod opcode;
-mod output;
+pub mod output;
 mod step_template;
 
 /// vec full of all instructions as well as IstrSet struct that allows lookup of instructions from opcodes
