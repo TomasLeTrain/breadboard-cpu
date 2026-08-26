@@ -1,12 +1,12 @@
 use std::{
     error::Error,
-    fmt::{self, Display},
+    fmt::{self, Debug, Display},
 };
 
 use crate::{action::Action, output::Output};
 
 // custom max-capacity runtime-size implementation that fits in 8 bytes
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct StepTemplate {
     arr: [Action; 7],
     size: u8,
@@ -19,9 +19,14 @@ impl StepTemplate {
             size: 0,
         }
     }
+
     fn push(&mut self, value: Action) {
         self.arr[self.size as usize] = value;
         self.size += 1;
+    }
+
+    fn to_arr(self) -> Vec<Action> {
+        self.iter().take(self.size.into()).copied().collect()
     }
 
     fn from_arr<const N: usize>(arr: [Action; N]) -> Self {
@@ -54,11 +59,21 @@ impl StepTemplate {
 
 impl Display for StepTemplate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut res = Vec::new();
-        for e in self {
-            res.push(format!("what"));
-        }
-        write!(f, "{}", res.join(", "))
+        // let mut res = Vec::new();
+        // for i in 0..self.size {
+        //     res.push(format!("{:?}", self.arr[i as usize]));
+        // }
+        // write!(f, "{}", res.join(", "))
+        write!(f, "{:?}", self.to_arr())
+    }
+}
+
+impl Debug for StepTemplate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StepTemplate")
+            .field("arr", &self.to_arr())
+            .field("size", &self.size)
+            .finish()
     }
 }
 

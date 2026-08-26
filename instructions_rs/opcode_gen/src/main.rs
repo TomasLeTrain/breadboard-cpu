@@ -123,17 +123,25 @@ fn pretty_print_opcode(opcode: Opcode, is_extended: bool) -> String {
             if is_extended {
                 format!("Step 1, Ir: {}, Ir2: Unknown", opcode.ir)
             } else {
-                format!("Step 1, Ir: {}", opcode.ir)
+                format!("Step 1, Template Step 0, Ir: {}", opcode.ir)
             }
         }
         _ => {
             if is_extended {
                 format!(
-                    "Step {}, Ir: {}, Ir2: {}",
-                    opcode.step, opcode.ir, opcode.ir2
+                    "Step {}, Template Step {}, Ir: {}, Ir2: {}",
+                    opcode.step,
+                    opcode.step - 2,
+                    opcode.ir,
+                    opcode.ir2
                 )
             } else {
-                format!("Step {}, Ir: {}", opcode.step, opcode.ir)
+                format!(
+                    "Step {}, Template Step {}, Ir: {}",
+                    opcode.step,
+                    opcode.step - 1,
+                    opcode.ir
+                )
             }
         }
     }
