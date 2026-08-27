@@ -45,3 +45,6 @@ fib {
 	pop MAR
 	jmp MAR
 }
+
+fn function_test() {
+}

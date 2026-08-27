@@ -3,18 +3,31 @@ COMMENT    = _{ Newline* ~ ";" ~ (!NEWLINE ~ ANY)* }
 // COMMENT    = _{ "####" }
 // Comment    = _{ Newline* ~ WHITESPACE* ~ ";" ~ (!NEWLINE ~ ANY)* }
 
+
+KEYWORD = @{
+    "fn" | "true" | "false" | "int" | "bool"
+}
+
 // Program is a sequence of statements/expressions
 Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { Newline* ~ (LabelStatement | BlockLabel | InstructionStatement) }
+Statement             = { Newline* ~ (FunctionStatement | LabelStatement | BlockLabel | InstructionStatement) }
 
 InstructionStatement  = { InstructionLabel ~ InstructionParameters? ~ Newline+ }
 InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
 InstructionLabel      = { Identifier }
 InstructionParameter  = _{ Expr }
+
+TypedParameter = { Identifier ~ ":" ~ Type }
+
+FunctionStatement = { "fn" ~ FunctionName ~ "(" ~ FunctionParameters? ~ ")" ~ FunctionReturnType? ~ Newline* ~ Block }
+FunctionParameters = { FunctionParameter ~ ("," ~ FunctionParameter)* }
+FunctionName      = { Identifier }
+FunctionParameter  = _{ TypedParameter }
+FunctionReturnType = { "->" ~ Type }
 
 // label:
 LabelStatement = { LabelIdentifier ~ ":" ~ Newline+ }
@@ -82,6 +95,13 @@ Literal =  { Bool | Hexadecimal | Int  | String | Character }
 
 HexadecimalDigit = @{ ASCII_HEX_DIGIT+ }
 Hexadecimal       = { ^"0x" ~ HexadecimalDigit }
+
+Type = { IntType | BoolType | LabelType | AddrType | ByteType }
+IntType = { "int" }
+BoolType = { "bool" }
+LabelType = { "Label" }
+AddrType = { "Address" }
+ByteType = { "Byte" }
 
 Int     = @{ ASCII_DIGIT+ }
 
