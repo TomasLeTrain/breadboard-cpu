@@ -63,6 +63,7 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
+        Rule::FunctionStatement => Ok(Some(parse_function(inner, source)?)),
         Rule::InstructionStatement => Ok(Some(parse_instruction(inner, source)?)),
         Rule::LabelStatement => Ok(Some(parse_label(inner, source)?)),
         Rule::BlockLabel => Ok(Some(parse_block_label(inner, source)?)),
@@ -79,6 +80,66 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
             &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
+}
+
+fn parse_function(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+    let mut name: Result<String> = Err(ParseError::from_span(
+        "Instruction name not found".to_string(),
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
+
+    let mut params: Vec<AstNode<Expr>> = Vec::new();
+
+    let mut span = AstSpan::new(
+        pair.as_span().start(),
+        pair.as_span().start() + 1,
+        Arc::clone(source),
+    );
+
+    // used to merge spans, even if non contiguous
+    let mut merge = |start: usize, end: usize| -> () {
+        span.set_span(
+            core::cmp::min(span.start(), start),
+            core::cmp::max(span.end(), end),
+        );
+    };
+
+    for item in pair.into_inner() {
+        match item.as_rule() {
+            Rule::FunctionName => {
+                // merge span covering label in case no params
+                merge(item.as_span().start(), item.as_span().end());
+                name = Ok(item.to_string());
+            }
+            Rule::FunctionParameters => {
+                merge(item.as_span().start(), item.as_span().end());
+                params = parse_instruction_parameters(item, source)?;
+            }
+            Rule::FunctionReturnType => {
+                merge(item.as_span().start(), item.as_span().end());
+                params = parse_instruction_parameters(item, source)?;
+            }
+            Rule::Block => {
+                merge(item.as_span().start(), item.as_span().end());
+                params = parse_instruction_parameters(item, source)?;
+            }
+            Rule::COMMENT => (),
+            r => Err(ParseError::from_expected(
+                "Instruction parsing error".to_string(),
+                vec![Rule::FunctionName, Rule::FunctionParameters, Rule::COMMENT],
+                vec![r],
+                &AstSpan::from_span(item.as_span(), source),
+            ))?,
+        };
+    }
+
+    Ok(AstNode::new(
+        Statement::new(StatementKind::Instruction(AstInstruction::new(
+            name?, params,
+        ))),
+        span,
+    ))
 }
 
 fn parse_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {

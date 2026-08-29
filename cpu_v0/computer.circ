@@ -154,7 +154,7 @@
     <comp lib="0" loc="(1230,1500)" name="Constant">
       <a name="facing" val="south"/>
     </comp>
-    <comp lib="0" loc="(1270,1500)" name="Constant">
+    <comp lib="0" loc="(1250,1500)" name="Constant">
       <a name="facing" val="south"/>
       <a name="value" val="0x0"/>
     </comp>
@@ -3155,11 +3155,11 @@
       <a name="label" val="SUB_SBC"/>
     </comp>
     <comp lib="0" loc="(7100,910)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="SUB_SBC"/>
+      <a name="label" val="REV_CARRY"/>
     </comp>
     <comp lib="0" loc="(7100,910)" name="Tunnel">
-      <a name="label" val="REV_CARRY"/>
+      <a name="facing" val="east"/>
+      <a name="label" val="SUB_SBC"/>
     </comp>
     <comp lib="0" loc="(7120,2340)" name="Tunnel">
       <a name="facing" val="south"/>
@@ -4018,9 +4018,9 @@
     <wire from="(1210,1490)" to="(1210,1500)"/>
     <wire from="(1210,1560)" to="(1210,1690)"/>
     <wire from="(1230,1560)" to="(1230,1720)"/>
-    <wire from="(1250,1480)" to="(1250,1500)"/>
-    <wire from="(1250,1480)" to="(1540,1480)"/>
     <wire from="(1250,1560)" to="(1250,1750)"/>
+    <wire from="(1270,1480)" to="(1270,1500)"/>
+    <wire from="(1270,1480)" to="(1540,1480)"/>
     <wire from="(1270,1560)" to="(1270,1780)"/>
     <wire from="(1290,1450)" to="(1290,1500)"/>
     <wire from="(1290,1560)" to="(1290,1810)"/>

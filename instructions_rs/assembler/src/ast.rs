@@ -206,6 +206,7 @@ pub struct AstInstruction {
     pub params: Vec<AstNode<Expr>>,
     pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
 }
+
 impl AstInstruction {
     pub fn new(name: String, params: Vec<AstNode<Expr>>) -> Self {
         AstInstruction {
@@ -218,6 +219,7 @@ impl AstInstruction {
 
 #[derive(Debug, Clone)]
 pub enum StatementKind {
+    Function(Function),
     Label {
         name: String,
     },
@@ -226,6 +228,13 @@ pub enum StatementKind {
         body: Vec<StatementNode>,
     },
     Instruction(AstInstruction),
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub params: Vec<AstNode<Expr>>,
+    pub return_type: Type,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
