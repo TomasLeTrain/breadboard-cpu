@@ -242,6 +242,13 @@ pub enum StatementKind {
     Instruction(AstInstruction),
 }
 
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub params: Vec<AstNode<Expr>>,
+    pub return_type: Type,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
     pub name: String,
