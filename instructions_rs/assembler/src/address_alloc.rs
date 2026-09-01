@@ -52,6 +52,8 @@ pub fn allocate_adresses(
                     .get_byte_size();
                 ctx.advance_address(istr_size as u16);
             }
+            // nothing else requires addr alloc
+            _ => (),
         };
     }
 

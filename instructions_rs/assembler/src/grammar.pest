@@ -5,7 +5,7 @@ COMMENT    = _{ Newline* ~ ";" ~ (!NEWLINE ~ ANY)* }
 
 
 KEYWORD = @{
-    "fn" | "true" | "false" | "int" | "bool"
+    "fn" | "true" | "false" | "int" | "bool" | "return"
 }
 
 // Program is a sequence of statements/expressions
@@ -14,12 +14,15 @@ Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { Newline* ~ (FunctionStatement | LabelStatement | BlockLabel | InstructionStatement) }
+Statement             = { Newline* ~ (FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | InstructionStatement) }
 
 InstructionStatement  = { InstructionLabel ~ InstructionParameters? ~ Newline+ }
 InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
 InstructionLabel      = { Identifier }
 InstructionParameter  = _{ Expr }
+
+ReturnStatement = { "return" ~ ReturnParameter }
+ReturnParameter = { Block | Expr }
 
 TypedParameter = { Identifier ~ ":" ~ Type }
 

@@ -46,5 +46,5 @@ fib {
 	jmp MAR
 }
 
-fn function_test() {
+fn function_test(what: byte, addr: u16) {
 }

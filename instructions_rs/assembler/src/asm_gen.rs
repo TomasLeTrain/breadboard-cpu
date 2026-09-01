@@ -249,6 +249,8 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     &istr_bytes,
                 )?;
             }
+            // nothing else emmits asm
+            _ => (),
         };
     }
 

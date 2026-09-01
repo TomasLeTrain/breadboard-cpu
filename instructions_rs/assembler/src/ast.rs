@@ -227,14 +227,37 @@ pub enum StatementKind {
         name: String,
         body: Vec<StatementNode>,
     },
+    Block {
+        body: Vec<StatementNode>,
+    },
     Instruction(AstInstruction),
 }
 
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
-    pub params: Vec<AstNode<Expr>>,
+    pub params: Vec<AstNode<TypedParameter>>,
     pub return_type: Type,
+    pub is_macro: bool,
+}
+
+
+impl Function {
+    pub fn new(name: String, params: Vec<AstNode<TypedParameter>>) -> Self {
+        Function {
+            name,
+            params,
+            return_type: Type::Unknown,
+            is_macro: false
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypedParameter {
+    pub name: String,
+    pub ty: Type,
+    pub value: ExprValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
