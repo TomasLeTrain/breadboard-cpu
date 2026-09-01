@@ -32,6 +32,9 @@ FunctionCallParameter  = _{ Expr }
 ReturnStatement = { "return" ~ ReturnParameter ~ Newline* }
 ReturnParameter = _{ Block | Expr }
 
+ReturnStatement = { "return" ~ ReturnParameter }
+ReturnParameter = { Block | Expr }
+
 TypedParameter = { Identifier ~ ":" ~ Type }
 
 FunctionStatement = { "fn" ~ FunctionName ~ "(" ~ FunctionParameters? ~ ")" ~ FunctionReturnType? ~ Newline* ~ Block }
