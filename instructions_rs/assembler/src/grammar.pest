@@ -14,7 +14,7 @@ Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { Newline* ~ (FunctionCall | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | InstructionStatement) }
+Statement             = { Newline* ~ ((FunctionCall ~ Newline*) | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | InstructionStatement) }
 
 
 ExprParameters = { ExprParameter ~ ("," ~ ExprParameter)* }
@@ -23,7 +23,7 @@ ExprParameter  = _{ Expr }
 InstructionStatement  = { InstructionLabel ~ ExprParameters? ~ Newline+ }
 InstructionLabel      = { Identifier }
 
-FunctionCall = { FunctionCallName ~ "(" ~ ExprParameters? ~ ")" ~ Newline* }
+FunctionCall = { FunctionCallName ~ "(" ~ ExprParameters? ~ ")" }
 FunctionCallName      = { Identifier }
 FunctionCallParameter  = _{ Expr }
 
@@ -98,7 +98,7 @@ bit_negation = { "~" }
 logical_not = { "!" }
 
 // Primary expressions
-Primary = _{ Literal | (Identifier ~ !":") | "(" ~ Expr ~ ")" }
+Primary = _{ FunctionCall | Literal | (Identifier ~ !":") | "(" ~ Expr ~ ")" }
 
 // Literals
 // Hex must have higher precedence otherwise gets recognized as int

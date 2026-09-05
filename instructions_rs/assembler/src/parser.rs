@@ -64,7 +64,7 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
 
     match inner.as_rule() {
         Rule::FunctionStatement => Ok(Some(parse_function(inner, source)?)),
-        Rule::FunctionCall => Ok(Some(parse_function_call(inner, source)?)),
+        Rule::FunctionCall => Ok(Some(parse_function_call_statement(inner, source)?)),
         Rule::InstructionStatement => Ok(Some(parse_instruction(inner, source)?)),
         Rule::ReturnStatement => Ok(Some(parse_return_statement(inner, source)?)),
         Rule::LabelStatement => Ok(Some(parse_label(inner, source)?)),
@@ -111,7 +111,17 @@ fn parse_block_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementN
     ))
 }
 
-fn parse_function_call(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+fn parse_function_call_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+    let span = AstSpan::from_span(pair.as_span(), source);
+    Ok(AstNode::new(
+        Statement::new(StatementKind::FunctionCall(parse_function_call(
+            pair, source,
+        )?)),
+        span,
+    ))
+}
+
+fn parse_function_call(pair: Pair<Rule>, source: &Source) -> Result<FunctionCall> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Function call name not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -119,8 +129,6 @@ fn parse_function_call(pair: Pair<Rule>, source: &Source) -> Result<StatementNod
     .into());
 
     let mut params: Vec<AstNode<Expr>> = Vec::new();
-
-    let span = AstSpan::from_span(pair.as_span(), source);
 
     for item in pair.into_inner() {
         match item.as_rule() {
@@ -141,12 +149,7 @@ fn parse_function_call(pair: Pair<Rule>, source: &Source) -> Result<StatementNod
         };
     }
 
-    Ok(AstNode::new(
-        Statement::new(StatementKind::FunctionCall(FunctionCall::new(
-            name?, params,
-        ))),
-        span,
-    ))
+    Ok(FunctionCall::new(name?, params))
 }
 
 fn parse_function(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
@@ -453,6 +456,15 @@ fn parse_expr_parameters(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNod
     Ok(params)
 }
 
+fn parse_function_call_expr(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
+    let span = AstSpan::from_span(pair.as_span(), source);
+
+    Ok(AstNode::new(
+        Expr::unknown(ExprKind::FunctionCall(parse_function_call(pair, source)?)),
+        span,
+    ))
+}
+
 fn parse_expr<'a>(
     pairs: impl Iterator<Item = pest::iterators::Pair<'a, Rule>>,
     source: &Source,
@@ -460,6 +472,7 @@ fn parse_expr<'a>(
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
             Rule::Literal => parse_literal(primary, source),
+            Rule::FunctionCall => parse_function_call_expr(primary, source),
             Rule::Identifier => Ok(AstNode::from_pair(
                 Expr::unknown(ExprKind::Identity(primary.as_str().to_string())),
                 primary,
@@ -477,7 +490,12 @@ fn parse_expr<'a>(
             }
             r => Err(ParseError::from_expected(
                 "Primary parsing error".to_string(),
-                vec![Rule::Literal, Rule::Identifier, Rule::Expr],
+                vec![
+                    Rule::FunctionCall,
+                    Rule::Literal,
+                    Rule::Identifier,
+                    Rule::Expr,
+                ],
                 vec![r],
                 &AstSpan::from_span(primary.as_span(), source),
             ))?,

@@ -154,7 +154,45 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
     for statement in statements.iter_mut() {
         if let StatementKind::Function(function) = statement.inner_mut().inner_mut() {
             // first typecheck body
+            // TODO: the typecheck context should exclude labels
+            // the body context also includes the parameters
+
+            for param in &function.params {
+                // push into local scope
+                let inner = param.inner();
+                let curr_symbol = Symbol {
+                    name: inner.name.clone(),
+                    symbol_type: inner.ty,
+                    span: Some(param.span().clone()),
+                };
+
+                symbols
+                    .push(curr_symbol.clone())
+                    .wrap_err("Pushing local label symbol failed.")?;
+            }
+
             typecheck(&mut function.body, symbols)?;
+
+            // now pop all the symbols that were just added
+            for param in function.params.iter().rev() {
+                // push into local scope
+                let inner = param.inner();
+                let curr_symbol = Symbol {
+                    name: inner.name.clone(),
+                    symbol_type: inner.ty,
+                    span: Some(param.span().clone()),
+                };
+
+                let poppped = symbols.pop()?;
+                if poppped != curr_symbol {
+                    // TODO: make specific type for error with more details
+                    return Err(miette!(
+                        "Popped symbol does not match - original: {:?}, got: {:?}",
+                        curr_symbol,
+                        poppped,
+                    ));
+                }
+            }
 
             // then find type of return statement
             let return_statement = function
