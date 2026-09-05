@@ -231,6 +231,27 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 }
             }
 
+            // now pop all the symbols that were just added
+            for param in function.params.iter().rev() {
+                // push into local scope
+                let inner = param.inner();
+                let curr_symbol = Symbol {
+                    name: inner.name.clone(),
+                    symbol_type: inner.ty,
+                    span: Some(param.span().clone()),
+                };
+
+                let poppped = symbols.pop()?;
+                if poppped != curr_symbol {
+                    // TODO: make specific type for error with more details
+                    return Err(miette!(
+                        "Popped symbol does not match - original: {:?}, got: {:?}",
+                        curr_symbol,
+                        poppped,
+                    ));
+                }
+            }
+
             // then find type of return statement
             let return_statement = function
                 .body
