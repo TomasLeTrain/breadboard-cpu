@@ -14,12 +14,20 @@ Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { Newline* ~ (FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | InstructionStatement) }
+Statement             = { Newline* ~ (FunctionCall | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | InstructionStatement) }
 
-InstructionStatement  = { InstructionLabel ~ InstructionParameters? ~ Newline+ }
-InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
+
+ExprParameters = { ExprParameter ~ ("," ~ ExprParameter)* }
+ExprParameter  = _{ Expr }
+
+InstructionStatement  = { InstructionLabel ~ ExprParameters? ~ Newline+ }
 InstructionLabel      = { Identifier }
-InstructionParameter  = _{ Expr }
+
+FunctionCall = { FunctionCallName ~ "(" ~ ExprParameters? ~ ")" ~ Newline* }
+FunctionCallName      = { Identifier }
+FunctionCallParameter  = _{ Expr }
+
+
 
 ReturnStatement = { "return" ~ ReturnParameter ~ Newline* }
 ReturnParameter = _{ Block | Expr }

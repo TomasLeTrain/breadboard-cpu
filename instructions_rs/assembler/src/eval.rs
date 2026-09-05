@@ -324,6 +324,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
     match &mut inner.kind {
         // literals already have their value filled in
         ExprKind::Literal => (),
+        ExprKind::FunctionCall(function_call) => todo!(),
         ExprKind::Identity(name) => {
             // try and find identity in symbols
             if ctx.contains(name) {

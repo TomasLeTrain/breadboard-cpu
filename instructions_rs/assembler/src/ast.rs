@@ -227,6 +227,8 @@ pub enum ReturnKind {
 pub enum StatementKind {
     Function(Function),
     Return(ReturnKind),
+    // this kind of call is always a macro (not an expr) so not wrapped in type/value
+    FunctionCall(FunctionCall),
     Label {
         name: String,
     },
@@ -240,13 +242,24 @@ pub enum StatementKind {
     Instruction(AstInstruction),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionCall {
+    pub name: String,
+    pub params: Vec<AstNode<Expr>>,
+}
+
+impl FunctionCall {
+    pub fn new(name: String, params: Vec<AstNode<Expr>>) -> Self {
+        Self { name, params }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
     pub params: Vec<AstNode<TypedParameter>>,
     pub body: Vec<StatementNode>,
     pub return_type: Type,
-    pub is_macro: bool,
 }
 
 impl Function {
@@ -260,8 +273,12 @@ impl Function {
             params,
             body,
             return_type: Type::Unknown,
-            is_macro: false,
         }
+    }
+
+    // macro is implicitly defined as being required only when returning instructions
+    pub fn is_macro(&self) -> bool {
+        matches!(self.return_type, Type::Block)
     }
 }
 
@@ -309,6 +326,8 @@ pub enum ExprKind {
     Literal,
     /// Identity (could be var, reg, etc.)
     Identity(String),
+    FunctionCall(FunctionCall),
+
     /// Unary operation
     Unary {
         op: UnaryOp,

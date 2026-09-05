@@ -1,7 +1,8 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
 use crate::ast::{
-    AstNode, AstSpan, BinaryOp, Expr, ExprKind, ReturnKind, StatementKind, StatementNode, UnaryOp,
+    AstNode, AstSpan, BinaryOp, Expr, ExprKind, FunctionCall, ReturnKind, StatementKind,
+    StatementNode, UnaryOp,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
@@ -255,7 +256,8 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &SymbolTypeContext) -
     match &mut inner.kind {
         // literals already have their typed filled in
         ExprKind::Literal => (),
-        ExprKind::Identity(name) => {
+        // NOTE: assumes unique function names
+        ExprKind::FunctionCall(FunctionCall { name, .. }) | ExprKind::Identity(name) => {
             // try and find identity in symbols
             if symbols.contains(name) {
                 if !matches!(inner.ty, Type::Unknown) {

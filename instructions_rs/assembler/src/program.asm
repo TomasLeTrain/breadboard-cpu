@@ -42,6 +42,8 @@ fib {
 	; return routine
 	pop MAR
 	jmp MAR
+
+	function_test(0, 0)
 }
 
 fn function_test(what: u8, addr: u16) {
