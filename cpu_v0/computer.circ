@@ -124,6 +124,14 @@
     <comp lib="0" loc="(1160,1140)" name="Tunnel">
       <a name="label" val="SWITCH_CLK"/>
     </comp>
+    <comp lib="0" loc="(1160,1630)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nSP_CNTDOWN"/>
+    </comp>
+    <comp lib="0" loc="(1160,1660)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nSP_CNTUP"/>
+    </comp>
     <comp lib="0" loc="(1160,1690)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="nVRAM_READ"/>
@@ -284,14 +292,6 @@
     <comp lib="0" loc="(2000,1020)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="nRESET"/>
-    </comp>
-    <comp lib="0" loc="(2040,1680)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nSP_CNTDOWN"/>
-    </comp>
-    <comp lib="0" loc="(2040,1710)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nSP_CNTUP"/>
     </comp>
     <comp lib="0" loc="(2040,1740)" name="Tunnel">
       <a name="facing" val="east"/>
@@ -3155,11 +3155,11 @@
       <a name="label" val="SUB_SBC"/>
     </comp>
     <comp lib="0" loc="(7100,910)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="SUB_SBC"/>
+      <a name="label" val="REV_CARRY"/>
     </comp>
     <comp lib="0" loc="(7100,910)" name="Tunnel">
-      <a name="label" val="REV_CARRY"/>
+      <a name="facing" val="east"/>
+      <a name="label" val="SUB_SBC"/>
     </comp>
     <comp lib="0" loc="(7120,2340)" name="Tunnel">
       <a name="facing" val="south"/>
@@ -3886,9 +3886,6 @@
     <comp lib="9" loc="(1085,830)" name="Text">
       <a name="text" val="TODO: pass these clocks through Schmitt trigger inverters"/>
     </comp>
-    <comp lib="9" loc="(1100,1650)" name="Text">
-      <a name="text" val="two unused!"/>
-    </comp>
     <comp lib="9" loc="(1210,960)" name="Text">
       <a name="text" val="clock"/>
     </comp>
@@ -3900,6 +3897,9 @@
     </comp>
     <comp lib="9" loc="(1630,1435)" name="Text">
       <a name="text" val="WRITE 1"/>
+    </comp>
+    <comp lib="9" loc="(1854,1706)" name="Text">
+      <a name="text" val="two free on bout"/>
     </comp>
     <comp lib="9" loc="(2080,1460)" name="Text">
       <a name="text" val="BOUT 0"/>
