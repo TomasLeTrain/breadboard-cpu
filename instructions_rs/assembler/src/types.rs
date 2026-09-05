@@ -72,6 +72,8 @@ pub struct Symbol {
 
 // keeps track of symbols by keeping track of their scope as well
 // allows reusing one context struct through all operations
+// TODO: should keep context of labels and functions separately
+// should also keep track of function signatures themselves?
 pub struct SymbolTypeContext {
     symbol_stack: Vec<Symbol>,
     symbols: HashMap<String, Symbol>,
