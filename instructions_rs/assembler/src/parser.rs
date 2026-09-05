@@ -281,6 +281,7 @@ fn parse_type(pair: Pair<Rule>, source: &Source) -> Result<Type> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
+        // TODO: differentiate int types
         Rule::U16Type => Ok(Type::Int),
         Rule::U8Type => Ok(Type::Int),
         Rule::I16Type => Ok(Type::Int),
