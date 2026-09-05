@@ -45,7 +45,11 @@ fib {
 }
 
 fn function_test(what: u8, addr: u16) {
-	pop MAR
+	; istrs outside return end up as no op?
+
+	return {
+		pop MAR
+	}
 }
 
 ; unabeled block

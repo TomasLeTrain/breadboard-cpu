@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
 use crate::ast::{
-    AstNode, AstSpan, BinaryOp, Expr, ExprKind, Statement, StatementKind, StatementNode, UnaryOp,
+    AstNode, AstSpan, BinaryOp, Expr, ExprKind, ReturnKind, StatementKind, StatementNode, UnaryOp,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
@@ -21,6 +21,8 @@ pub enum Type {
 
     Label,
     Function,
+
+    Block,
 
     Unknown,
 }
@@ -160,14 +162,17 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
                 .find(|e| matches!(e.inner().inner(), StatementKind::Return { .. }));
 
             if let Some(statement) = return_statement {
-                if let StatementKind::Return { expr } = statement.inner().inner() {
-                    function.return_type = expr.inner().ty;
+                if let StatementKind::Return(return_kind) = statement.inner().inner() {
+                    function.return_type = match return_kind {
+                        ReturnKind::Expr(expr) => expr.inner().ty,
+                        ReturnKind::Block(_) => Type::Block,
+                    };
                 } else {
                     unreachable!()
                 }
             } else {
                 // TODO: turn into detailed error
-                return Err(miette!("No return statement inside function!",));
+                return Err(miette!("No return statement inside function!"));
             }
         }
     }
@@ -208,13 +213,15 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
     }
 
     for statement in statements.iter_mut() {
+        // NOTE: functions were already typechecked
         match statement.inner_mut().inner_mut() {
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 typecheck(body, symbols)?;
             }
-            StatementKind::Function(function) => {
-                typecheck(&mut function.body, symbols)?;
-            }
+            StatementKind::Return(kind) => match kind {
+                ReturnKind::Expr(expr) => typecheck_expr(expr, symbols)?,
+                ReturnKind::Block(block) => typecheck(block, symbols)?,
+            },
             StatementKind::Instruction(instruction) => {
                 for param in instruction.params.iter_mut() {
                     typecheck_expr(param, symbols)?;

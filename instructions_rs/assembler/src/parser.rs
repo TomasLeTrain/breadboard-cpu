@@ -65,6 +65,7 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
     match inner.as_rule() {
         Rule::FunctionStatement => Ok(Some(parse_function(inner, source)?)),
         Rule::InstructionStatement => Ok(Some(parse_instruction(inner, source)?)),
+        Rule::ReturnStatement => Ok(Some(parse_return_statement(inner, source)?)),
         Rule::LabelStatement => Ok(Some(parse_label(inner, source)?)),
         Rule::BlockLabel => Ok(Some(parse_block_label(inner, source)?)),
         Rule::Block => Ok(Some(parse_block_statement(inner, source)?)),
@@ -81,6 +82,22 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
             &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
+}
+
+fn parse_return_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+    let span = AstSpan::from_span(pair.as_span(), source);
+    let inner = pair.into_inner().next().unwrap();
+
+    let return_kind = match inner.as_rule() {
+        Rule::Block => ReturnKind::Block(parse_block(inner, source)?),
+        Rule::Expr => ReturnKind::Expr(parse_expr(inner.into_inner(), source)?),
+        _ => unreachable!(),
+    };
+
+    Ok(AstNode::new(
+        Statement::new(StatementKind::Return(return_kind)),
+        span,
+    ))
 }
 
 fn parse_block_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {

@@ -218,11 +218,15 @@ impl AstInstruction {
 }
 
 #[derive(Debug, Clone)]
+pub enum ReturnKind {
+    Expr(AstNode<Expr>),
+    Block(Vec<StatementNode>),
+}
+
+#[derive(Debug, Clone)]
 pub enum StatementKind {
     Function(Function),
-    Return {
-        expr: AstNode<Expr>,
-    },
+    Return(ReturnKind),
     Label {
         name: String,
     },
