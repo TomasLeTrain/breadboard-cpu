@@ -167,7 +167,7 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
 
     for statement in statements.iter_mut() {
         match statement.inner_mut().inner_mut() {
-            StatementKind::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 typecheck(body, symbols)?;
             }
             StatementKind::Instruction(instruction) => {

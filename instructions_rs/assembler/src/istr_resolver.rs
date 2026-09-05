@@ -65,7 +65,7 @@ pub fn resolve_instructions(
 ) -> Result<()> {
     for statement in statements {
         match statement.inner_mut().inner_mut() {
-            StatementKind::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 resolve_instructions(body, istr_lookup)?;
             }
             StatementKind::Instruction(instruction) => {

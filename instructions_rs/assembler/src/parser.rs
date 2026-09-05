@@ -67,6 +67,7 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
         Rule::InstructionStatement => Ok(Some(parse_instruction(inner, source)?)),
         Rule::LabelStatement => Ok(Some(parse_label(inner, source)?)),
         Rule::BlockLabel => Ok(Some(parse_block_label(inner, source)?)),
+        Rule::Block => Ok(Some(parse_block_statement(inner, source)?)),
         Rule::COMMENT => Ok(None),
         r => Err(ParseError::from_expected(
             "Statement parsing error".to_string(),
@@ -80,6 +81,16 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
             &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
+}
+
+fn parse_block_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+    let span = AstSpan::from_span(pair.as_span(), source);
+    let body = parse_block(pair, source)?;
+
+    Ok(AstNode::new(
+        Statement::new(StatementKind::Block { body }),
+        span,
+    ))
 }
 
 fn parse_function(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {

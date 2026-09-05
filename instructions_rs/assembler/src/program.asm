@@ -48,3 +48,8 @@ fib {
 
 fn function_test(what: u8, addr: u16) {
 }
+
+; unabeled block
+{
+	pop MAR
+}

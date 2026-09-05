@@ -230,6 +230,10 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                 )?;
                 generate_asm(body, ctx)?;
             }
+            StatementKind::Block { body } => {
+                ctx.place_statement("{".to_string(), statement.inner().address().unwrap(), &[])?;
+                generate_asm(body, ctx)?;
+            }
             StatementKind::Instruction(ast_instruction) => {
                 let arg_values: Vec<ArgumentValue> = ast_instruction
                     .params

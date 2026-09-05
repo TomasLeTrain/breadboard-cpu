@@ -286,7 +286,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
     for statement in statements.iter_mut() {
         match statement.inner_mut().inner_mut() {
-            StatementKind::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 eval_program(body, ctx)?;
             }
             StatementKind::Instruction(instruction) => {
