@@ -99,12 +99,15 @@ Literal =  { Bool | Hexadecimal | Int  | String | Character }
 HexadecimalDigit = @{ ASCII_HEX_DIGIT+ }
 Hexadecimal       = { ^"0x" ~ HexadecimalDigit }
 
-Type = { IntType | BoolType | LabelType | AddrType | ByteType }
+Type = { U16Type | U8Type | I16Type | I8Type | IntType | BoolType | LabelType | AddrType }
+U16Type = { "u16" }
+U8Type = { "u8" }
+I16Type = { "i16" }
+I8Type = { "i8" }
 IntType = { "int" }
 BoolType = { "bool" }
 LabelType = { "Label" }
 AddrType = { "Address" }
-ByteType = { "Byte" }
 
 Int     = @{ ASCII_DIGIT+ }
 

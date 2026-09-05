@@ -119,7 +119,7 @@ fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
 
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
 
-    // println!("{:#?}", program);
+    println!("{:#?}", program);
 
     let max_addr_size = 1 << 15;
 
