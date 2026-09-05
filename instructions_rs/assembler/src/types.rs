@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
 
 use crate::ast::{
-    AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp,
+    AstNode, AstSpan, BinaryOp, Expr, ExprKind, Statement, StatementKind, StatementNode, UnaryOp,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
@@ -20,6 +20,7 @@ pub enum Type {
     AddressRegister,
 
     Label,
+    Function,
 
     Unknown,
 }
@@ -145,23 +146,64 @@ impl SymbolTypeContext {
 pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeContext) -> Result<()> {
     let mut labels = Vec::new();
 
-    // first find all labels in the current scope (accessible from anywhere in scope)
+    // must first typecheck functions to get their return type if not specified
+    // only then can its symbol be constructed
+    for statement in statements.iter_mut() {
+        if let StatementKind::Function(function) = statement.inner_mut().inner_mut() {
+            // first typecheck body
+            typecheck(&mut function.body, symbols)?;
+
+            // then find type of return statement
+            let return_statement = function
+                .body
+                .iter()
+                .find(|e| matches!(e.inner().inner(), StatementKind::Return { .. }));
+
+            if let Some(statement) = return_statement {
+                if let StatementKind::Return { expr } = statement.inner().inner() {
+                    function.return_type = expr.inner().ty;
+                } else {
+                    unreachable!()
+                }
+            } else {
+                // TODO: turn into detailed error
+                return Err(miette!("No return statement inside function!",));
+            }
+        }
+    }
+
+    // first find all labels and functions in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
-        if let StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } =
-            statement.inner().inner()
-        {
-            // push into local scope
-            let curr_symbol = Symbol {
-                name: name.clone(),
-                symbol_type: Type::Label,
-                span: Some(statement.span().clone()),
-            };
+        match statement.inner().inner() {
+            StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } => {
+                // push into local scope
+                let curr_symbol = Symbol {
+                    name: name.clone(),
+                    symbol_type: Type::Label,
+                    span: Some(statement.span().clone()),
+                };
 
-            symbols
-                .push(curr_symbol.clone())
-                .wrap_err("Pushing local label symbol failed.")?;
+                symbols
+                    .push(curr_symbol.clone())
+                    .wrap_err("Pushing local label symbol failed.")?;
 
-            labels.push(curr_symbol);
+                labels.push(curr_symbol);
+            }
+            StatementKind::Function(function) => {
+                // push into local scope
+                let curr_symbol = Symbol {
+                    name: function.name.clone(),
+                    symbol_type: function.return_type,
+                    span: Some(statement.span().clone()),
+                };
+
+                symbols
+                    .push(curr_symbol.clone())
+                    .wrap_err("Pushing function symbol failed.")?;
+
+                labels.push(curr_symbol);
+            }
+            _ => (),
         }
     }
 
@@ -169,6 +211,9 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
         match statement.inner_mut().inner_mut() {
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 typecheck(body, symbols)?;
+            }
+            StatementKind::Function(function) => {
+                typecheck(&mut function.body, symbols)?;
             }
             StatementKind::Instruction(instruction) => {
                 for param in instruction.params.iter_mut() {
@@ -179,11 +224,12 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
         };
     }
 
-    // checks that all returned symbols match what was pushed in
-    // goes in reverse since pop starts from the last added element
+    // Checks that all returned symbols match what was pushed in.
+    // Goes in reverse since pop starts from the last added element
     for label in labels.into_iter().rev() {
         let curr = symbols.pop()?;
         if label != curr {
+            // TODO: make specific type for error with more details
             return Err(miette!(
                 "Popped symbol does not match - original: {:?}, got: {:?}",
                 label,

@@ -220,6 +220,9 @@ impl AstInstruction {
 #[derive(Debug, Clone)]
 pub enum StatementKind {
     Function(Function),
+    Return {
+        expr: AstNode<Expr>,
+    },
     Label {
         name: String,
     },
@@ -237,7 +240,7 @@ pub enum StatementKind {
 pub struct Function {
     pub name: String,
     pub params: Vec<AstNode<TypedParameter>>,
-    pub block: Vec<StatementNode>,
+    pub body: Vec<StatementNode>,
     pub return_type: Type,
     pub is_macro: bool,
 }
@@ -246,12 +249,12 @@ impl Function {
     pub fn new(
         name: String,
         params: Vec<AstNode<TypedParameter>>,
-        block: Vec<StatementNode>,
+        body: Vec<StatementNode>,
     ) -> Self {
         Function {
             name,
             params,
-            block,
+            body,
             return_type: Type::Unknown,
             is_macro: false,
         }

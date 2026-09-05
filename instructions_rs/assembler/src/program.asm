@@ -6,8 +6,6 @@ start:
 
 	; this is some more comments
 	; these are next to each other
-	
-	; TODO: this only works since we know the push_return will be smaller than 256 - need to implement addr placeholder 
 	push push_return
 
 	jmp fib, MAR     ; jump to func
@@ -47,6 +45,7 @@ fib {
 }
 
 fn function_test(what: u8, addr: u16) {
+	pop MAR
 }
 
 ; unabeled block

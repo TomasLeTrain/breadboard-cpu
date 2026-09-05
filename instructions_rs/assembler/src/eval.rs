@@ -158,6 +158,7 @@ impl ExprValue {
             }
 
             Type::Unknown => unreachable!(),
+            Type::Function => unreachable!(),
         }
     }
 
