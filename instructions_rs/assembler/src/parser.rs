@@ -327,7 +327,7 @@ fn parse_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
     }
 }
 
-fn parse_block_label(pair: Pairs<Rule>, source: &Source) -> Result<StatementNode> {
+fn parse_block_label(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Block label name not found",
         &AstSpan::from_span(pair.as_span(), source),
