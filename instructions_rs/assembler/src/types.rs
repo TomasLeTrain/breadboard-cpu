@@ -114,6 +114,8 @@ impl SymbolContext {
 // allows reusing one context struct through all operations
 
 // local and global separated so new context keeping global symbols but no locals is easy
+// in this context local means local to only the current scope, global means accessible to all
+// scopes below its definition
 pub struct TypecheckContext {
     local_context: SymbolContext,
     global_context: SymbolContext,
@@ -180,7 +182,8 @@ impl TypecheckContext {
 }
 
 pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -> Result<()> {
-    let mut labels = Vec::new();
+    let mut pushed_locals = Vec::new();
+    let mut pushed_globals = Vec::new();
 
     // must first typecheck functions to get their return type if not specified
     // only then can its symbol be constructed
@@ -200,7 +203,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 };
 
                 function_ctx
-                    .push_global(curr_symbol.clone())
+                    .push_local(curr_symbol.clone())
                     .wrap_err("Pushing function symbol failed.")?;
             }
 
@@ -264,7 +267,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 ctx.push_local(curr_symbol.clone())
                     .wrap_err("Pushing local label symbol failed.")?;
 
-                labels.push(curr_symbol);
+                pushed_locals.push(curr_symbol);
             }
             StatementKind::Function(function) => {
                 // push into local scope
@@ -277,7 +280,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 ctx.push_global(curr_symbol.clone())
                     .wrap_err("Pushing function symbol failed.")?;
 
-                labels.push(curr_symbol);
+                pushed_globals.push(curr_symbol);
             }
             _ => (),
         }
@@ -304,13 +307,27 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
 
     // Checks that all returned symbols match what was pushed in.
     // Goes in reverse since pop starts from the last added element
-    for label in labels.into_iter().rev() {
+    for symbol in pushed_locals.into_iter().rev() {
         let curr = ctx.pop_local()?;
-        if label != curr {
+        if symbol != curr {
             // TODO: make specific type for error with more details
             return Err(miette!(
                 "Popped symbol does not match - original: {:?}, got: {:?}",
-                label,
+                symbol,
+                curr,
+            ));
+        }
+    }
+
+    // Checks that all returned symbols match what was pushed in.
+    // Goes in reverse since pop starts from the last added element
+    for symbol in pushed_globals.into_iter().rev() {
+        let curr = ctx.pop_global()?;
+        if symbol != curr {
+            // TODO: make specific type for error with more details
+            return Err(miette!(
+                "Popped symbol does not match - original: {:?}, got: {:?}",
+                symbol,
                 curr,
             ));
         }
