@@ -64,7 +64,7 @@ impl Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Symbol {
+pub struct Symbol<T> {
     pub name: String,
     pub span: Option<AstSpan>,
     pub ty: Type,
@@ -89,14 +89,14 @@ impl SymbolContext {
         self.symbols.insert(symbol.name.clone(), symbol.clone())
     }
 
-    fn pop(&mut self) -> Result<Symbol> {
+    fn pop(&mut self) -> Result<Symbol<T>> {
         let popped_symbol = self
             .symbol_stack
             .pop()
             .ok_or(EmptyStackError {})
             .into_diagnostic()?;
 
-        let map_symbol = self.symbols.remove(&popped_symbol.name).unwrap();
+        let map_symbol = self.symbols.remove(popped_symbol.as_key()).unwrap();
 
         Ok(map_symbol)
     }
@@ -235,13 +235,13 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
             for param in function.params.iter().rev() {
                 // push into local scope
                 let inner = param.inner();
-                let curr_symbol = Symbol {
+                let curr_symbol = LabelSymbol {
                     name: inner.name.clone(),
                     symbol_type: inner.ty,
                     span: Some(param.span().clone()),
                 };
 
-                let poppped = symbols.pop()?;
+                let poppped = symbols.pop_label()?;
                 if poppped != curr_symbol {
                     // TODO: make specific type for error with more details
                     return Err(miette!(
@@ -377,7 +377,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                 inner.ty = symbols.get_local(name).unwrap().ty;
             } else {
                 Err(TypecheckExprError::new(
-                    TypecheckExprErrorKind::SymbolNotFound(Symbol {
+                    TypecheckExprErrorKind::SymbolNotFound(LabelSymbol {
                         name: name.to_string(),
                         ty: inner.ty,
                         span: Some(typed_expr.span.clone()),
@@ -547,7 +547,7 @@ impl Display for EmptyStackError {
 #[derive(Debug)]
 pub enum TypecheckExprErrorKind {
     IdentityAlreadyTyped((AstSpan, Type)),
-    SymbolNotFound(Symbol),
+    SymbolNotFound(LabelSymbol),
     InvalidBinaryOpTypes((AstSpan, Type), (AstSpan, Type), BinaryOp),
     InvalidComparisonTypes((AstSpan, Type), (AstSpan, Type)),
     InvalidEqualityTypes((AstSpan, Type), (AstSpan, Type)),
