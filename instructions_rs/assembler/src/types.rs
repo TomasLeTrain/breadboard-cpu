@@ -1,8 +1,8 @@
 use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash, sync::Arc};
 
 use crate::ast::{
-    AstNode, AstSpan, BinaryOp, Expr, ExprKind, FunctionCall, ReturnKind, StatementKind,
-    StatementNode, UnaryOp,
+    AstNode, AstSpan, BinaryOp, Expr, ExprKind, FunctionCall, FunctionSignature, ReturnKind,
+    StatementKind, StatementNode, UnaryOp,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
@@ -64,58 +64,19 @@ impl Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Symbol<T> {
+pub struct Symbol {
     pub name: String,
     pub span: Option<AstSpan>,
-    pub data: T,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LabelSymbolData {
     pub ty: Type,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionSymbolData {
-    pub signature: FunctionSignature,
+#[derive(Clone)]
+pub struct SymbolContext {
+    symbol_stack: Vec<Symbol>,
+    symbols: HashMap<String, Symbol>,
 }
 
-trait SymbolAsKey {
-    type Key: Eq + Hash + Clone;
-    fn as_key(&self) -> &Self::Key;
-}
-
-impl SymbolAsKey for Symbol<LabelSymbolData> {
-    type Key = String;
-
-    fn as_key(&self) -> &String {
-        &self.name
-    }
-}
-
-impl SymbolAsKey for Symbol<FunctionSymbolData> {
-    type Key = FunctionSignature;
-
-    fn as_key(&self) -> &FunctionSignature {
-        &self.data.signature
-    }
-}
-
-type SymbolKey<T> = <Symbol<T> as SymbolAsKey>::Key;
-
-pub struct SymbolContext<T>
-where
-    Symbol<T>: SymbolAsKey,
-{
-    symbol_stack: Vec<Symbol<T>>,
-    symbols: HashMap<SymbolKey<T>, Symbol<T>>,
-}
-
-impl<T> SymbolContext<T>
-where
-    T: Clone,
-    Symbol<T>: SymbolAsKey,
-{
+impl SymbolContext {
     pub fn new() -> Self {
         Self {
             symbol_stack: Vec::new(),
@@ -123,138 +84,146 @@ where
         }
     }
 
-    pub fn push(&mut self, symbol: &Symbol<T>) -> Option<Symbol<T>> {
-        let key = symbol.as_key();
-
+    pub fn push(&mut self, symbol: &Symbol) -> Option<Symbol> {
         self.symbol_stack.push(symbol.clone());
-        self.symbols.insert(key.clone(), symbol.clone())
+        self.symbols.insert(symbol.name.clone(), symbol.clone())
     }
 
-    fn pop(&mut self) -> Result<Symbol<T>> {
+    fn pop(&mut self) -> Result<Symbol> {
         let popped_symbol = self
             .symbol_stack
             .pop()
             .ok_or(EmptyStackError {})
             .into_diagnostic()?;
 
-        let map_symbol = self.symbols.remove(popped_symbol.as_key()).unwrap();
+        let map_symbol = self.symbols.remove(&popped_symbol.name).unwrap();
 
         Ok(map_symbol)
     }
 
-    fn get(&self, key: &SymbolKey<T>) -> Option<&Symbol<T>> {
+    fn get(&self, key: &String) -> Option<&Symbol> {
         self.symbols.get(key)
     }
 
-    fn contains(&self, key: &SymbolKey<T>) -> bool {
+    fn contains(&self, key: &String) -> bool {
         self.symbols.contains_key(key)
     }
 }
 
 // keeps track of symbols by keeping track of their scope as well
 // allows reusing one context struct through all operations
-pub struct SymbolTypeContext {
-    label_context: SymbolContext<LabelSymbolData>,
-    function_context: SymbolContext<FunctionSymbolData>,
+
+// local and global separated so new context keeping global symbols but no locals is easy
+pub struct TypecheckContext {
+    local_context: SymbolContext,
+    global_context: SymbolContext,
 }
 
-impl SymbolTypeContext {
+impl TypecheckContext {
     pub fn new() -> Self {
         Self {
-            label_context: SymbolContext::new(),
-            function_context: SymbolContext::new(),
+            local_context: SymbolContext::new(),
+            global_context: SymbolContext::new(),
         }
     }
 
-    pub fn push_label(&mut self, symbol: Symbol<LabelSymbolData>) -> Result<()> {
-        let push_result = self.label_context.push(&symbol);
+    pub fn clone_global_context(&self) -> Self {
+        Self {
+            local_context: SymbolContext::new(),
+            global_context: self.global_context.clone(),
+        }
+    }
+
+    pub fn push_local(&mut self, symbol: Symbol) -> Result<()> {
+        let push_result = self.local_context.push(&symbol);
 
         if let Some(other) = push_result {
-            DuplicateSymbolError::from_label_duplicates(symbol, other)
+            DuplicateSymbolError::from_symbols(symbol, other)
         } else {
             Ok(())
         }
     }
 
-    fn pop_label(&mut self) -> Result<Symbol<LabelSymbolData>> {
-        self.label_context.pop()
-    }
-
-    fn get_label(&self, name: &String) -> Option<&Symbol<LabelSymbolData>> {
-        self.label_context.get(name)
-    }
-
-    fn contains_label(&self, name: &String) -> bool {
-        self.label_context.contains(name)
-    }
-
-    pub fn push_function(&mut self, symbol: Symbol<FunctionSymbolData>) -> Result<()> {
-        let push_result = self.function_context.push(&symbol);
+    pub fn push_global(&mut self, symbol: Symbol) -> Result<()> {
+        let push_result = self.global_context.push(&symbol);
 
         if let Some(other) = push_result {
-            DuplicateSymbolError::from_function_duplicates(symbol, other)
+            DuplicateSymbolError::from_symbols(symbol, other)
         } else {
             Ok(())
         }
     }
 
-    fn pop_function(&mut self) -> Result<Symbol<FunctionSymbolData>> {
-        self.function_context.pop()
+    fn pop_local(&mut self) -> Result<Symbol> {
+        self.local_context.pop()
     }
 
-    fn get_function(&self, name: &FunctionSignature) -> Option<&Symbol<FunctionSymbolData>> {
-        self.function_context.get(name)
+    fn pop_global(&mut self) -> Result<Symbol> {
+        self.global_context.pop()
     }
 
-    fn contains_function(&self, name: &FunctionSignature) -> bool {
-        self.function_context.contains(name)
+    fn get_local(&self, name: &String) -> Option<&Symbol> {
+        self.local_context.get(name)
+    }
+
+    fn get_global(&self, name: &String) -> Option<&Symbol> {
+        self.global_context.get(name)
+    }
+
+    fn contains_local(&self, name: &String) -> bool {
+        self.local_context.contains(name)
+    }
+
+    fn contains_global(&self, name: &String) -> bool {
+        self.global_context.contains(name)
     }
 }
 
-pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeContext) -> Result<()> {
+pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -> Result<()> {
     let mut labels = Vec::new();
 
     // must first typecheck functions to get their return type if not specified
     // only then can its symbol be constructed
     for statement in statements.iter_mut() {
         if let StatementKind::Function(function) = statement.inner_mut().inner_mut() {
-            // first typecheck body
-            // TODO: the typecheck context should exclude labels
-            // the body context also includes the parameters
+            // only copies function context - no access to outer labels
+            let mut function_ctx = ctx.clone_global_context();
 
             for param in &function.params {
                 // push into local scope
                 let inner = param.inner();
-                let curr_symbol = LabelSymbol {
+
+                let curr_symbol = Symbol {
                     name: inner.name.clone(),
-                    symbol_type: inner.ty,
+                    ty: inner.ty,
                     span: Some(param.span().clone()),
                 };
 
-                symbols
-                    .push_label(curr_symbol.clone())
-                    .wrap_err("Pushing local label symbol failed.")?;
+                function_ctx
+                    .push_global(curr_symbol.clone())
+                    .wrap_err("Pushing function symbol failed.")?;
             }
 
-            typecheck(&mut function.body, symbols)?;
+            typecheck(&mut function.body, &mut function_ctx)?;
 
             // now pop all the symbols that were just added
             for param in function.params.iter().rev() {
-                // push into local scope
                 let inner = param.inner();
-                let curr_symbol = LabelSymbol {
+
+                let curr_symbol = Symbol {
                     name: inner.name.clone(),
-                    symbol_type: inner.ty,
+                    ty: inner.ty,
                     span: Some(param.span().clone()),
                 };
 
-                let poppped = symbols.pop_label()?;
-                if poppped != curr_symbol {
+                let pop_val = function_ctx.pop_local()?;
+
+                if pop_val != curr_symbol {
                     // TODO: make specific type for error with more details
                     return Err(miette!(
                         "Popped symbol does not match - original: {:?}, got: {:?}",
                         curr_symbol,
-                        poppped,
+                        pop_val,
                     ));
                 }
             }
@@ -289,11 +258,10 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
                 let curr_symbol = Symbol {
                     name: name.clone(),
                     span: Some(statement.span().clone()),
-                    data: LabelSymbolData { ty: Type::Label },
+                    ty: Type::Label,
                 };
 
-                symbols
-                    .push_label(curr_symbol.clone())
+                ctx.push_local(curr_symbol.clone())
                     .wrap_err("Pushing local label symbol failed.")?;
 
                 labels.push(curr_symbol);
@@ -303,13 +271,10 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
                 let curr_symbol = Symbol {
                     name: function.name.clone(),
                     span: Some(statement.span().clone()),
-                    data: FunctionSymbolData {
-                        signature: function.params
-                    },
+                    ty: function.return_type,
                 };
 
-                symbols
-                    .push_label(curr_symbol.clone())
+                ctx.push_global(curr_symbol.clone())
                     .wrap_err("Pushing function symbol failed.")?;
 
                 labels.push(curr_symbol);
@@ -322,15 +287,15 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
         // NOTE: functions were already typechecked
         match statement.inner_mut().inner_mut() {
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
-                typecheck(body, symbols)?;
+                typecheck(body, ctx)?;
             }
             StatementKind::Return(kind) => match kind {
-                ReturnKind::Expr(expr) => typecheck_expr(expr, symbols)?,
-                ReturnKind::Block(block) => typecheck(block, symbols)?,
+                ReturnKind::Expr(expr) => typecheck_expr(expr, ctx)?,
+                ReturnKind::Block(block) => typecheck(block, ctx)?,
             },
             StatementKind::Instruction(instruction) => {
                 for param in instruction.params.iter_mut() {
-                    typecheck_expr(param, symbols)?;
+                    typecheck_expr(param, ctx)?;
                 }
             }
             _ => (),
@@ -340,7 +305,7 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
     // Checks that all returned symbols match what was pushed in.
     // Goes in reverse since pop starts from the last added element
     for label in labels.into_iter().rev() {
-        let curr = symbols.pop_label()?;
+        let curr = ctx.pop_local()?;
         if label != curr {
             // TODO: make specific type for error with more details
             return Err(miette!(
@@ -354,7 +319,7 @@ pub fn typecheck(statements: &mut [StatementNode], symbols: &mut SymbolTypeConte
     Ok(())
 }
 
-fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &SymbolTypeContext) -> Result<()> {
+fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) -> Result<()> {
     let inner_span = typed_expr.span().clone();
     let inner = typed_expr.inner_mut();
 
@@ -364,19 +329,19 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &SymbolTypeContext) -
         // NOTE: assumes unique function names
         ExprKind::FunctionCall(FunctionCall { name, .. }) | ExprKind::Identity(name) => {
             // try and find identity in symbols
-            if symbols.contains_label(name) {
+            if symbols.contains_global(name) {
                 if !matches!(inner.ty, Type::Unknown) {
                     Err(TypecheckExprError::new(
                         TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
                     ))?;
                 }
 
-                inner.ty = symbols.get_label(name).unwrap().symbol_type;
+                inner.ty = symbols.get_local(name).unwrap().ty;
             } else {
                 Err(TypecheckExprError::new(
-                    TypecheckExprErrorKind::SymbolNotFound(LabelSymbol {
+                    TypecheckExprErrorKind::SymbolNotFound(Symbol {
                         name: name.to_string(),
-                        symbol_type: inner.ty,
+                        ty: inner.ty,
                         span: Some(typed_expr.span.clone()),
                     }),
                 ))?;
@@ -503,65 +468,21 @@ impl Display for DuplicateSymbolError {
 }
 
 impl DuplicateSymbolError {
-    fn from_function_duplicates(
-        symbol: Symbol<FunctionSymbolData>,
-        other: Symbol<FunctionSymbolData>,
-    ) -> Result<()> {
+    fn from_symbols(symbol: Symbol, other: Symbol) -> Result<()> {
         let mut spans = Vec::new();
 
         let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
 
         if let Some(ast_span) = symbol.span.as_ref() {
             spans.push(LabeledSpan::new_with_span(
-                Some(format!(
-                    "Symbol of signature \"{:?}\" defined here",
-                    symbol.data.signature
-                )),
+                Some(format!("Symbol of type \"{:?}\" defined here", symbol.ty)),
                 ast_span.to_miette_span(),
             ));
         };
 
         if let Some(ast_span) = other.span.as_ref() {
             spans.push(LabeledSpan::new_with_span(
-                Some(format!(
-                    "Symbol of signature \"{:?}\" defined here",
-                    other.data.signature
-                )),
-                ast_span.to_miette_span(),
-            ));
-        };
-
-        Err(DuplicateSymbolError {
-            name: symbol.name,
-            source,
-            spans,
-        })?
-    }
-
-    fn from_label_duplicates(
-        symbol: Symbol<LabelSymbolData>,
-        other: Symbol<LabelSymbolData>,
-    ) -> Result<()> {
-        let mut spans = Vec::new();
-
-        let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
-
-        if let Some(ast_span) = symbol.span.as_ref() {
-            spans.push(LabeledSpan::new_with_span(
-                Some(format!(
-                    "Symbol of type \"{:?}\" defined here",
-                    symbol.data.ty
-                )),
-                ast_span.to_miette_span(),
-            ));
-        };
-
-        if let Some(ast_span) = other.span.as_ref() {
-            spans.push(LabeledSpan::new_with_span(
-                Some(format!(
-                    "Symbol of type \"{:?}\" defined here",
-                    other.data.ty
-                )),
+                Some(format!("Symbol of type \"{:?}\" defined here", symbol.ty)),
                 ast_span.to_miette_span(),
             ));
         };
@@ -588,7 +509,7 @@ impl Display for EmptyStackError {
 #[derive(Debug)]
 pub enum TypecheckExprErrorKind {
     IdentityAlreadyTyped((AstSpan, Type)),
-    SymbolNotFound(LabelSymbol),
+    SymbolNotFound(Symbol),
     InvalidBinaryOpTypes((AstSpan, Type), (AstSpan, Type), BinaryOp),
     InvalidComparisonTypes((AstSpan, Type), (AstSpan, Type)),
     InvalidEqualityTypes((AstSpan, Type), (AstSpan, Type)),
