@@ -262,6 +262,12 @@ pub struct Function {
     pub return_type: Type,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionSignature {
+    name: String,
+    params: Vec<Type>,
+}
+
 impl Function {
     pub fn new(
         name: String,
@@ -279,6 +285,13 @@ impl Function {
     // macro is implicitly defined as being required only when returning instructions
     pub fn is_macro(&self) -> bool {
         matches!(self.return_type, Type::Block)
+    }
+
+    pub fn as_signature(&self) -> FunctionSignature {
+        FunctionSignature{
+            name: self.name.clone(),
+            params: self.name,
+        }
     }
 }
 

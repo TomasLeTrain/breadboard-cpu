@@ -23,7 +23,7 @@ use crate::{
     ast::NamedSourceFile,
     eval::{EvalContext, EvalSymbol, ExprValue},
     istr_resolver::gen_instruction_lookup_table,
-    types::{Symbol, Type},
+    types::{LabelSymbol, Type},
 };
 
 
@@ -69,7 +69,7 @@ fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
     // add global symbols reserved for register names and the like
 
     for reg in Register::iterator() {
-        global_symbols.push(Symbol {
+        global_symbols.push_label(LabelSymbol {
             name: reg.name().to_string(),
             symbol_type: Type::Register,
             span: None,
@@ -77,7 +77,7 @@ fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
     }
 
     for reg in AddressRegister::iterator() {
-        global_symbols.push(Symbol {
+        global_symbols.push_label(LabelSymbol {
             name: reg.name().to_string(),
             symbol_type: Type::AddressRegister,
             span: None,
