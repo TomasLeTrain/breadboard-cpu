@@ -3502,13 +3502,13 @@
       <a name="facing" val="north"/>
       <a name="value" val="0x0"/>
     </comp>
-    <comp lib="0" loc="(7470,1000)" name="Tunnel">
-      <a name="label" val="ALU_LOGIC"/>
-    </comp>
-    <comp lib="0" loc="(7470,970)" name="Tunnel">
+    <comp lib="0" loc="(7490,490)" name="Tunnel">
       <a name="label" val="ALU_S3"/>
     </comp>
-    <comp lib="0" loc="(7480,1050)" name="Splitter">
+    <comp lib="0" loc="(7490,520)" name="Tunnel">
+      <a name="label" val="ALU_LOGIC"/>
+    </comp>
+    <comp lib="0" loc="(7500,570)" name="Splitter">
       <a name="bit0" val="3"/>
       <a name="bit1" val="2"/>
       <a name="bit2" val="1"/>
@@ -3518,7 +3518,7 @@
       <a name="incoming" val="4"/>
       <a name="spacing" val="2"/>
     </comp>
-    <comp lib="0" loc="(7480,1050)" name="Tunnel">
+    <comp lib="0" loc="(7500,570)" name="Tunnel">
       <a name="label" val="IR_ISTR_WORD"/>
       <a name="width" val="4"/>
     </comp>
@@ -5151,10 +5151,10 @@
     <wire from="(7370,1380)" to="(7380,1380)"/>
     <wire from="(7370,430)" to="(7370,450)"/>
     <wire from="(7370,450)" to="(7370,500)"/>
-    <wire from="(7430,970)" to="(7430,1030)"/>
-    <wire from="(7430,970)" to="(7470,970)"/>
-    <wire from="(7450,1000)" to="(7450,1030)"/>
-    <wire from="(7450,1000)" to="(7470,1000)"/>
+    <wire from="(7450,490)" to="(7450,550)"/>
+    <wire from="(7450,490)" to="(7490,490)"/>
+    <wire from="(7470,520)" to="(7470,550)"/>
+    <wire from="(7470,520)" to="(7490,520)"/>
     <wire from="(7670,380)" to="(7710,380)"/>
     <wire from="(7690,400)" to="(7720,400)"/>
     <wire from="(7690,420)" to="(7730,420)"/>
