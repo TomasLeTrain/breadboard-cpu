@@ -276,10 +276,7 @@
       <a name="facing" val="east"/>
       <a name="label" val="nSWITCH_CLK"/>
     </comp>
-    <comp lib="0" loc="(1770,940)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nHALT"/>
-    </comp>
+    <comp lib="0" loc="(1770,940)" name="Constant"/>
     <comp lib="0" loc="(1830,880)" name="Tunnel">
       <a name="label" val="nCLK"/>
     </comp>
@@ -344,8 +341,9 @@
     <comp lib="0" loc="(2110,1510)" name="Constant">
       <a name="facing" val="south"/>
     </comp>
-    <comp lib="0" loc="(2130,1010)" name="Constant">
+    <comp lib="0" loc="(2130,1030)" name="Tunnel">
       <a name="facing" val="north"/>
+      <a name="label" val="nHALT"/>
     </comp>
     <comp lib="0" loc="(2130,1510)" name="Constant">
       <a name="facing" val="south"/>
@@ -3155,11 +3153,11 @@
       <a name="label" val="SUB_SBC"/>
     </comp>
     <comp lib="0" loc="(7100,910)" name="Tunnel">
-      <a name="label" val="REV_CARRY"/>
-    </comp>
-    <comp lib="0" loc="(7100,910)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="SUB_SBC"/>
+    </comp>
+    <comp lib="0" loc="(7100,910)" name="Tunnel">
+      <a name="label" val="REV_CARRY"/>
     </comp>
     <comp lib="0" loc="(7120,2340)" name="Tunnel">
       <a name="facing" val="south"/>
@@ -4133,6 +4131,7 @@
     <wire from="(2110,1570)" to="(2110,1770)"/>
     <wire from="(2110,890)" to="(2110,950)"/>
     <wire from="(2110,890)" to="(2200,890)"/>
+    <wire from="(2130,1010)" to="(2130,1030)"/>
     <wire from="(2130,1570)" to="(2130,1800)"/>
     <wire from="(2140,330)" to="(2140,370)"/>
     <wire from="(2150,1570)" to="(2150,1830)"/>
