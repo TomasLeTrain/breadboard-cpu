@@ -3,7 +3,23 @@ use opcode_gen::output::Output;
 struct Alu {}
 
 impl Alu {
-    fn update(m: u8, s: u8, a: u8, b: u8) {}
+    fn new() -> Self {
+        Self {}
+    }
+
+    fn update(&self, opcode_addr: u32, a: u8, b: u8) {
+        // TODO: impl
+    }
+
+    fn get_flags(&self) -> Option<u8> {
+        // TODO: impl
+        None
+    }
+
+    fn bout(&self) -> Option<u8> {
+        // TODO: impl
+        None
+    }
 }
 
 struct AddressRegister {
@@ -34,6 +50,7 @@ impl AddressRegister {
             *e += 1
         }
     }
+
     fn decrement(&mut self) {
         if let Some(e) = &mut self.state {
             *e -= 1
@@ -200,6 +217,8 @@ struct CpuState {
     data_rom: Rom,
     data_ram: Ram,
 
+    alu: Alu,
+
     fast_clk: bool,
     clk: bool,
 
@@ -235,6 +254,8 @@ impl CpuState {
 
             data_rom: Rom::new(1 << 15),
             data_ram: Ram::new(1 << 15),
+
+            alu: Alu::new(),
 
             fast_clk: true,
             clk: true,
@@ -274,8 +295,8 @@ impl CpuState {
 
     fn bout_value(&self) -> Option<u8> {
         let bout_val = match self.get_opcode_output().get_bout() {
-            0 => None,            // unused
-            1 => self.mem_read(), // TODO: read mem
+            0 => None, // unused
+            1 => self.mem_read(),
             2 => {
                 // lo
                 Some((self.addr_value().unwrap() & 0xff) as u8)
@@ -291,7 +312,7 @@ impl CpuState {
             8 => self.a.bout(),
             9 => self.b.bout(),
             10 => todo!(), // TODO: add keyb
-            11 => todo!(), // TODO: add Falu
+            11 => self.alu.bout(),
             12 => self.flags.bout(),
             13 => self.x.bout(),
             14 => self.y.bout(),
@@ -331,6 +352,19 @@ impl CpuState {
         Output::from_output_data(data)
     }
 
+    fn pc_jump_enabled(&self) -> bool {
+        let control_actions = self.get_opcode_output();
+        let flag_select = control_actions.get_flag_select();
+
+        // 0 is direct jump
+        if flag_select == 0 {
+            return true;
+        }
+
+        // otherwise its conditional jump
+        self.flags.bout().unwrap() & flag_select != 0
+    }
+
     fn perform_mutable_actions(&mut self) {
         // at this point the bus and addr should be already updated from the last half clock phase
         let control_actions = self.get_opcode_output();
@@ -346,8 +380,16 @@ impl CpuState {
             7 => self.z.load(self.bus_val.unwrap()),
             8 => self.a.load(self.bus_val.unwrap()),
             9 => self.b.load(self.bus_val.unwrap()),
-            10 => self.pc.load_high(self.bus_val.unwrap()),
-            11 => self.pc.load_low(self.bus_val.unwrap()),
+            10 => {
+                if self.pc_jump_enabled() {
+                    self.pc.load_high(self.bus_val.unwrap())
+                }
+            }
+            11 => {
+                if self.pc_jump_enabled() {
+                    self.pc.load_low(self.bus_val.unwrap())
+                }
+            }
             12 => unreachable!(),
             13 => self.x.load(self.bus_val.unwrap()),
             14 => self.y.load(self.bus_val.unwrap()),
@@ -370,11 +412,21 @@ impl CpuState {
         } else {
             match other {
                 0 => (),
-                1 => (),                        // TODO: FlagWriteAlu
-                2 => self.step_counter.reset(), // step reset
+                1 => self.flags.load(self.alu.get_flags().unwrap()), //FlagWriteAlu
+                2 => self.step_counter.reset(),                      // step reset
                 _ => unreachable!(),
             };
         }
+
+        match self.get_opcode_output().get_bout() {
+            0..=3 => (),
+            4 => self.mar.increment(), // MarCnt
+            5 => self.halt = true,     // Halt
+            6 => self.sp.increment(),  // SpInc
+            7 => self.sp.decrement(),  // SpDec
+            8..=15 => (),
+            _ => unreachable!(),
+        };
     }
 
     // simulates a clock cycle (higher frequency) happening
@@ -441,6 +493,8 @@ impl CpuState {
 
         self.bus_val = None;
         self.addr_val = None;
+
+        self.halt = false;
     }
 }
 
