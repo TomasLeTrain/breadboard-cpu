@@ -3142,11 +3142,11 @@
       <a name="label" val="SUB_SBC"/>
     </comp>
     <comp lib="0" loc="(7100,910)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="SUB_SBC"/>
+      <a name="label" val="REV_CARRY"/>
     </comp>
     <comp lib="0" loc="(7100,910)" name="Tunnel">
-      <a name="label" val="REV_CARRY"/>
+      <a name="facing" val="east"/>
+      <a name="label" val="SUB_SBC"/>
     </comp>
     <comp lib="0" loc="(7120,2340)" name="Tunnel">
       <a name="facing" val="south"/>
