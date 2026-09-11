@@ -7,7 +7,7 @@ mod register_defs;
 
 use std::{cell::RefCell, rc::Rc, vec::Vec};
 
-pub use defs::{AddressRegister, Register};
+pub use defs::{AddressRegister, MathIstrTypes, Register};
 pub use instruction::Instruction;
 pub use instruction_defs::{ArgumentType, ArgumentValue, InstructionSignature, InstructionType};
 pub use istr_set::IstrSet;
