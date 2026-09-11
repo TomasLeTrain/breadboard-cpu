@@ -135,6 +135,7 @@ impl ExprValue {
             }
             Type::Byte => {
                 // casting from any int-able value
+                // TODO: disallow loose casting
                 Self::Byte(self.as_int().unwrap().try_into().unwrap())
             }
 

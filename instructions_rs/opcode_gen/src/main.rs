@@ -4,7 +4,7 @@ use std::{
 };
 
 use opcode_gen::{
-    instructions::{self, OpcodeToInstruction, OpcodeToOutput},
+    instructions::{self, IstrSet, OpcodeToInstruction, OpcodeToOutput},
     opcode::{self, Opcode},
     output::Output,
 };
@@ -92,69 +92,8 @@ fn interactive_mode() -> io::Result<()> {
         }
 
         let addr = addr.unwrap();
-
-        let opcode = Opcode::from_addr(addr);
-
-        let istr = istr_set.opcode_to_instruction(opcode);
-        let output = istr_set.opcode_to_output(opcode);
-        let raw_data = istr_set.opcode_to_output(opcode).get_output_data();
-
-        let is_extended = istr
-            .map(|e| e.borrow().opcode().as_ref().unwrap().ir2.is_some())
-            .unwrap_or(false);
-
-        println!("opcode: {}", pretty_print_opcode(opcode, is_extended));
-
-        if let Some(inner) = istr {
-            println!("istr: {:#?}", inner.borrow());
-        } else {
-            println!("No instruction found on this opcode");
-        }
-
-        println!("output: {}", pretty_print_output(output));
-        println!("raw_data: {raw_data:#?}");
+        diagnostic_from_addr(addr, &istr_set);
     }
-}
-
-fn pretty_print_opcode(opcode: Opcode, is_extended: bool) -> String {
-    match opcode.step {
-        0 => "Step 0, Ir: Unknown".to_string(),
-        1 => {
-            if is_extended {
-                format!("Step 1, Ir: {}, Ir2: Unknown", opcode.ir)
-            } else {
-                format!("Step 1, Template Step 0, Ir: {}", opcode.ir)
-            }
-        }
-        _ => {
-            if is_extended {
-                format!(
-                    "Step {}, Template Step {}, Ir: {}, Ir2: {}",
-                    opcode.step,
-                    opcode.step - 2,
-                    opcode.ir,
-                    opcode.ir2
-                )
-            } else {
-                format!(
-                    "Step {}, Template Step {}, Ir: {}",
-                    opcode.step,
-                    opcode.step - 1,
-                    opcode.ir
-                )
-            }
-        }
-    }
-}
-
-fn pretty_print_output(output: Output) -> String {
-    let mut res = Vec::new();
-    for (cat, byte) in output.get_printable_data() {
-        if byte != 0 {
-            res.push(format!("{cat}: {byte}"));
-        }
-    }
-    res.join(", ")
 }
 
 fn main() -> std::io::Result<()> {
