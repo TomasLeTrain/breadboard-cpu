@@ -1,3 +1,10 @@
+macro_rules! println {
+    ($($rest:tt)*) => {
+        #[cfg(debug_assertions)]
+        std::println!($($rest)*)
+    }
+}
+
 use std::{
     fs::{self, File},
     io::Read,
@@ -613,7 +620,7 @@ impl CpuState {
             let opcode_addr = self.get_opcode_addr();
             println!("opcode_addr: {opcode_addr:x}");
 
-            diagnostic_from_addr(opcode_addr, &self.istr_set);
+            // diagnostic_from_addr(opcode_addr, &self.istr_set);
 
             self.opcode_latch0
                 .load(self.opcode_rom0.read(opcode_addr).unwrap());
@@ -624,6 +631,14 @@ impl CpuState {
 
             let control_actions = self.get_opcode_output();
             // println!("control actions {:?}", control_actions.get_printable_data());
+
+            self.alu.update(
+                opcode_addr,
+                control_actions.get_flag_select(),
+                self.flags.state(),
+                self.a.state(),
+                self.b.state(),
+            );
 
             // increment pc cnt here
             // NOTE: must happen before addr, in hardware it gets done on transition and read only
@@ -636,14 +651,6 @@ impl CpuState {
             // NOTE; must update addr first since bus depends on it
             self.addr_val = self.addr_value();
             self.bus_val = self.bout_value();
-
-            self.alu.update(
-                opcode_addr,
-                control_actions.get_flag_select(),
-                self.flags.state(),
-                self.a.state(),
-                self.b.state(),
-            );
         }
     }
 
@@ -709,6 +716,11 @@ fn main() {
 
     state.reset();
 
+    use std::time::Instant;
+
+    eprintln!("started");
+    let start = Instant::now();
+
     let mut i = 1;
     loop {
         println!();
@@ -719,6 +731,14 @@ fn main() {
         }
         i += 1;
     }
+    eprintln!(
+        "ended with {i} half cycles in {:.2?} nanoseconds",
+        start.elapsed().as_nanos()
+    );
+    let nano_per_clk = (2.0 * start.elapsed().as_nanos() as f32) / (i as f32);
+    eprintln!("nanoseconds per clock cycle {nano_per_clk}");
+    let hz = 1_000.0 * ((i as f32) / (2.0 * start.elapsed().as_nanos() as f32));
+    eprintln!("MHz: {hz}");
 
     println!();
     println!("halted!");
