@@ -158,27 +158,27 @@ impl Output {
         }
     }
 
-    fn get_bout(&self) -> u8 {
+    pub fn get_bout(&self) -> u8 {
         self.get_category(OutputCategory::Bout)
     }
 
-    fn get_write(&self) -> u8 {
+    pub fn get_write(&self) -> u8 {
         self.get_category(OutputCategory::Write)
     }
 
-    fn get_addr(&self) -> u8 {
+    pub fn get_addr(&self) -> u8 {
         self.get_category(OutputCategory::Addr)
     }
 
-    fn get_misc(&self) -> u8 {
+    pub fn get_misc(&self) -> u8 {
         self.get_category(OutputCategory::Misc)
     }
 
-    fn get_flag_select(&self) -> u8 {
+    pub fn get_flag_select(&self) -> u8 {
         self.get_category(OutputCategory::FlagSelect)
     }
 
-    fn get_pc_cnt(&self) -> bool {
+    pub fn get_pc_cnt(&self) -> bool {
         self.get_category(OutputCategory::PcCnt) != 0
     }
 
@@ -297,6 +297,10 @@ impl Output {
             (OutputCategory::FlagSelect, self.get_flag_select()),
             (OutputCategory::PcCnt, self.get_pc_cnt() as u8),
         ]
+    }
+
+    pub fn from_output_data(data: u16) -> Self {
+        Self { data }
     }
 }
 

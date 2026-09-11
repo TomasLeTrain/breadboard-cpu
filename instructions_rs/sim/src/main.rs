@@ -1,3 +1,11 @@
+use opcode_gen::output::Output;
+
+struct Alu {}
+
+impl Alu {
+    fn update(m: u8, s: u8, a: u8, b: u8) {}
+}
+
 struct AddressRegister {
     state: Option<u16>,
 }
@@ -6,12 +14,19 @@ impl AddressRegister {
     fn new() -> Self {
         Self { state: None }
     }
+
     fn reset(&mut self) {
         self.state = Some(0);
     }
 
-    fn load(&mut self, val: u16) {
-        self.state = Some(val);
+    fn load_high(&mut self, val: u8) {
+        let new_val = (self.state.unwrap() & 0xff) | ((val as u16) << 8);
+        self.state = Some(new_val);
+    }
+
+    fn load_low(&mut self, val: u8) {
+        let new_val = (self.state.unwrap() & !0xff) | ((val as u16) << 8);
+        self.state = Some(new_val);
     }
 
     fn increment(&mut self) {
@@ -188,6 +203,8 @@ struct CpuState {
     fast_clk: bool,
     clk: bool,
 
+    halt: bool,
+
     bus_val: Option<u8>,
     addr_val: Option<u16>,
 }
@@ -222,8 +239,85 @@ impl CpuState {
             fast_clk: true,
             clk: true,
 
+            halt: false,
+
             bus_val: None,
             addr_val: None,
+        }
+    }
+
+    fn mem_read(&self) -> Option<u8> {
+        let addr = self.addr_val.unwrap();
+        let masked_addr = addr & !(1 << 15);
+        if addr & 1 << 15 != 0 {
+            // ram
+            self.data_ram.read(masked_addr)
+        } else {
+            // rom
+            self.data_rom.read(masked_addr as u32)
+        }
+    }
+
+    fn mem_write(&mut self) {
+        let addr = self.addr_val.unwrap();
+        let val = self.bus_val.unwrap();
+        let masked_addr = addr & !(1 << 15);
+        if addr & 1 << 15 != 0 {
+            // ram
+            self.data_ram.write(masked_addr, val);
+        } else {
+            // rom
+            // nop
+            // TODO: alert of nop
+        }
+    }
+
+    fn bout_value(&self) -> Option<u8> {
+        let bout_val = match self.get_opcode_output().get_bout() {
+            0 => None,            // unused
+            1 => self.mem_read(), // TODO: read mem
+            2 => {
+                // lo
+                Some((self.addr_value().unwrap() & 0xff) as u8)
+            }
+            3 => {
+                // hi
+                Some(((self.addr_value().unwrap() & (0xff << 8)) >> 8) as u8)
+            }
+            4 => None, // MarCnt
+            5 => None, // Halt
+            6 => None, // SpInc
+            7 => None, // SpDec
+            8 => self.a.bout(),
+            9 => self.b.bout(),
+            10 => todo!(), // TODO: add keyb
+            11 => todo!(), // TODO: add Falu
+            12 => self.flags.bout(),
+            13 => self.x.bout(),
+            14 => self.y.bout(),
+            15 => self.z.bout(),
+            _ => unreachable!(),
+        };
+
+        if self.get_opcode_output().get_misc() == 3
+            && self.get_opcode_output().get_flag_select() == 5
+        {
+            assert_eq!(bout_val, None);
+
+            // TODO: VramRead
+            todo!()
+        } else {
+            bout_val
+        }
+    }
+
+    fn addr_value(&self) -> Option<u16> {
+        match self.get_opcode_output().get_addr() {
+            0 => None,
+            1 => self.pc.aout(),
+            2 => self.mar.aout(),
+            3 => self.sp.aout(),
+            _ => unreachable!(),
         }
     }
 
@@ -231,19 +325,64 @@ impl CpuState {
         0
     }
 
-    fn get_opcode_data(&self) -> u16 {
-        (self.opcode_latch1.bout().unwrap() as u16)
-            | ((self.opcode_latch2.bout().unwrap() as u16) << 8)
+    fn get_opcode_output(&self) -> Output {
+        let data = (self.opcode_latch1.bout().unwrap() as u16)
+            | ((self.opcode_latch2.bout().unwrap() as u16) << 8);
+        Output::from_output_data(data)
     }
 
-    fn perform_op(&mut self) {
-        let mut bus_val: Option<u8> = None;
-        let mut addr_val: Option<u16> = None;
+    fn perform_mutable_actions(&mut self) {
         // at this point the bus and addr should be already updated from the last half clock phase
+        let control_actions = self.get_opcode_output();
+
+        match control_actions.get_write() {
+            0 => (),
+            1 => self.ir2.load(self.bus_val.unwrap()),
+            2 => self.sp.load_high(self.bus_val.unwrap()),
+            3 => self.sp.load_low(self.bus_val.unwrap()),
+            4 => self.mar.load_high(self.bus_val.unwrap()),
+            5 => self.mar.load_low(self.bus_val.unwrap()),
+            6 => self.mem_write(),
+            7 => self.z.load(self.bus_val.unwrap()),
+            8 => self.a.load(self.bus_val.unwrap()),
+            9 => self.b.load(self.bus_val.unwrap()),
+            10 => self.pc.load_high(self.bus_val.unwrap()),
+            11 => self.pc.load_low(self.bus_val.unwrap()),
+            12 => unreachable!(),
+            13 => self.x.load(self.bus_val.unwrap()),
+            14 => self.y.load(self.bus_val.unwrap()),
+            15 => self.ir.load(self.bus_val.unwrap()),
+            _ => unreachable!(),
+        };
+
+        let other = control_actions.get_misc();
+
+        // other mux enabled
+        if other == 3 {
+            match control_actions.get_flag_select() {
+                0 => self.x.shift_left(),
+                1 => self.x.shift_right(),
+                2 => self.y.shift_left(),
+                3 => self.y.shift_right(),
+                4 => (), // TODO: VramWrite
+                _ => unreachable!(),
+            }
+        } else {
+            match other {
+                0 => (),
+                1 => (),                        // TODO: FlagWriteAlu
+                2 => self.step_counter.reset(), // step reset
+                _ => unreachable!(),
+            };
+        }
     }
 
     // simulates a clock cycle (higher frequency) happening
     fn step_half_clk(&mut self) {
+        if self.halt {
+            return;
+        }
+
         self.fast_clk = !self.fast_clk;
         // step on fast_clk low to high
         if self.fast_clk {
@@ -253,7 +392,7 @@ impl CpuState {
         if self.clk {
             // low->high clock right now
             // perform whatever op
-            self.perform_op();
+            self.perform_mutable_actions();
         } else {
             // high->low clock right now
             // clock in rom
@@ -264,18 +403,51 @@ impl CpuState {
             self.opcode_latch2
                 .load(self.opcode_rom2.read(opcode_addr).unwrap());
 
+            let control_actions = self.get_opcode_output();
+
             // increment pc cnt here
-            if self.get_opcode_data() & (1 << 15) != 0 {
+            if control_actions.get_pc_cnt() {
                 self.pc.increment();
             }
 
             // update outputs of all non-clocked actions (output to buses)
+            self.bus_val = self.bout_value();
+            self.addr_val = self.addr_value();
         }
+    }
+
+    fn reset(&mut self) {
+        self.a.reset();
+        self.b.reset();
+        self.x.reset();
+        self.y.reset();
+        self.z.reset();
+        self.flags.reset();
+
+        self.mar.reset();
+        self.pc.reset();
+        self.sp.reset();
+
+        self.ir.reset();
+        self.ir2.reset();
+
+        self.step_counter.reset();
+
+        self.opcode_latch1.reset();
+        self.opcode_latch2.reset();
+
+        self.fast_clk = true;
+        self.clk = true;
+
+        self.bus_val = None;
+        self.addr_val = None;
     }
 }
 
 fn main() {
     let mut state = CpuState::new();
+
+    state.reset();
 
     // TODO: load opcode roms from bin files
 
