@@ -4,6 +4,8 @@ use std::{
 };
 
 use opcode_gen::{
+    diagnostic_from_addr, get_instruction_set,
+    instructions::IstrSet,
     opcode::{self, Opcode},
     output::Output,
 };
@@ -22,7 +24,7 @@ impl AluOp {
     fn from_opcode_addr(addr: u32) -> Self {
         let opcode = Opcode::from_addr(addr);
         // higher bits of ir
-        let high_bits = (opcode.ir >> 4) & 0xf;
+        let high_bits = (opcode.ir >> 4) & 0b111;
 
         match high_bits {
             0 => Self::Subtract,
@@ -76,18 +78,19 @@ impl Alu {
             self.result = Some(match op {
                 AluOp::Addition => {
                     if using_carry {
-                        a + b + (if carry_on { 1 } else { 0 })
+                        a.wrapping_add(b).wrapping_add(if carry_on { 1 } else { 0 })
                     } else {
-                        a + b
+                        a.wrapping_add(b)
                     }
                 }
                 AluOp::Subtract => {
                     if using_carry {
                         // TODO: math might be wrong?
                         // carry is inverted for subtraction
-                        a + (!b) + (if carry_on { 0 } else { 1 })
+                        a.wrapping_add(!b)
+                            .wrapping_add(if carry_on { 0 } else { 1 })
                     } else {
-                        a + (!b) + 1
+                        a.wrapping_add(!b).wrapping_add(1)
                     }
                 }
                 AluOp::And => a & b,
@@ -95,11 +98,11 @@ impl Alu {
                 AluOp::Xor => a ^ b,
                 AluOp::Not => !a,
                 // sub mode, no carry
-                AluOp::Compare => a + (!b),
+                AluOp::Compare => a.wrapping_add(!b),
             });
 
             // TODO: impl
-            self.flags = None;
+            self.flags = Some(0);
         } else {
             self.result = None;
             self.flags = None;
@@ -117,11 +120,15 @@ impl Alu {
 
 struct AddressRegister {
     state: Option<u16>,
+    name: String,
 }
 
 impl AddressRegister {
-    fn new() -> Self {
-        Self { state: None }
+    fn new(name: &str) -> Self {
+        Self {
+            state: None,
+            name: name.to_string(),
+        }
     }
 
     fn reset(&mut self) {
@@ -129,28 +136,33 @@ impl AddressRegister {
     }
 
     fn load_high(&mut self, val: u8) {
+        println!("load {val:x} into high of {}", self.name);
         let new_val = (self.state.unwrap() & 0xff) | ((val as u16) << 8);
         self.state = Some(new_val);
     }
 
     fn load_low(&mut self, val: u8) {
-        let new_val = (self.state.unwrap() & !0xff) | ((val as u16) << 8);
+        println!("load {val:x} into low of {}", self.name);
+        let new_val = (self.state.unwrap() & !0xff) | (val as u16);
         self.state = Some(new_val);
     }
 
     fn increment(&mut self) {
+        println!("increment {}", self.name);
         if let Some(e) = &mut self.state {
             *e += 1
         }
     }
 
     fn decrement(&mut self) {
+        println!("decrement {}", self.name);
         if let Some(e) = &mut self.state {
             *e -= 1
         }
     }
 
     fn aout(&self) -> Option<u16> {
+        println!("aout value {:x?} from {}", self.state, self.name);
         self.state
     }
 }
@@ -158,27 +170,35 @@ impl AddressRegister {
 trait DataRegister {
     fn state_as_mut(&mut self) -> &mut Option<u8>;
     fn state(&self) -> Option<u8>;
+    fn name(&self) -> &str;
 
     fn load(&mut self, val: u8) {
+        println!("load {val:x} into {}", self.name());
         *self.state_as_mut() = Some(val);
     }
 
     fn bout(&self) -> Option<u8> {
+        println!("bout {:x?} from {}", self.state(), self.name());
         self.state()
     }
 
     fn reset(&mut self) {
+        println!("reset {}", self.name());
         *self.state_as_mut() = Some(0);
     }
 }
 
 struct Register {
     state: Option<u8>,
+    name: String,
 }
 
 impl Register {
-    fn new() -> Self {
-        Self { state: None }
+    fn new(name: &str) -> Self {
+        Self {
+            state: None,
+            name: name.to_string(),
+        }
     }
 }
 
@@ -190,10 +210,15 @@ impl DataRegister for Register {
     fn state(&self) -> Option<u8> {
         self.state
     }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 }
 
 struct ShiftRegister {
     state: Option<u8>,
+    name: String,
 }
 
 impl DataRegister for ShiftRegister {
@@ -204,12 +229,20 @@ impl DataRegister for ShiftRegister {
     fn state(&self) -> Option<u8> {
         self.state
     }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 }
 
 impl ShiftRegister {
-    fn new() -> Self {
-        Self { state: None }
+    fn new(name: &str) -> Self {
+        Self {
+            state: None,
+            name: name.to_string(),
+        }
     }
+
     fn shift_left(&mut self) {
         if let Some(e) = &mut self.state {
             *e <<= 1;
@@ -225,6 +258,7 @@ impl ShiftRegister {
 
 struct CountRegister {
     state: Option<u8>,
+    name: String,
 }
 
 impl DataRegister for CountRegister {
@@ -235,12 +269,20 @@ impl DataRegister for CountRegister {
     fn state(&self) -> Option<u8> {
         self.state
     }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 }
 
 impl CountRegister {
-    fn new() -> Self {
-        Self { state: None }
+    fn new(name: &str) -> Self {
+        Self {
+            state: None,
+            name: name.to_string(),
+        }
     }
+
     fn increment(&mut self) {
         if let Some(e) = &mut self.state {
             *e += 1
@@ -264,6 +306,7 @@ impl Ram {
     }
 
     fn write(&mut self, addr: u16, val: u8) {
+        println!("writing {val:x} at {addr:x} to ram");
         self.state[addr as usize] = Some(val);
     }
 }
@@ -323,31 +366,34 @@ struct CpuState {
 
     bus_val: Option<u8>,
     addr_val: Option<u16>,
+
+    // used for debugging
+    istr_set: IstrSet,
 }
 
 impl CpuState {
     fn new() -> Self {
         Self {
-            a: Register::new(),
-            b: Register::new(),
-            x: ShiftRegister::new(),
-            y: ShiftRegister::new(),
-            z: Register::new(),
-            flags: Register::new(),
+            a: Register::new("A"),
+            b: Register::new("B"),
+            x: ShiftRegister::new("X"),
+            y: ShiftRegister::new("Y"),
+            z: Register::new("Z"),
+            flags: Register::new("FLAGS"),
 
-            mar: AddressRegister::new(),
-            pc: AddressRegister::new(),
-            sp: AddressRegister::new(),
+            mar: AddressRegister::new("MAR"),
+            pc: AddressRegister::new("PC"),
+            sp: AddressRegister::new("SP"),
 
-            ir: Register::new(),
-            ir2: Register::new(),
+            ir: Register::new("IR"),
+            ir2: Register::new("IR2"),
 
-            step_counter: CountRegister::new(),
+            step_counter: CountRegister::new("STEP"),
             opcode_rom0: Rom::new(1 << 17),
             opcode_rom1: Rom::new(1 << 17),
 
-            opcode_latch0: Register::new(),
-            opcode_latch1: Register::new(),
+            opcode_latch0: Register::new("OPCODE_LATCH1"),
+            opcode_latch1: Register::new("OPCODE_LATCH2"),
 
             data_rom: Rom::new(1 << 17),
             data_ram: Ram::new(1 << 15),
@@ -360,6 +406,7 @@ impl CpuState {
 
             bus_val: None,
             addr_val: None,
+            istr_set: get_instruction_set().1,
         }
     }
 
@@ -369,10 +416,14 @@ impl CpuState {
         let masked_addr = addr & !(1 << 15);
         if addr & 1 << 15 != 0 {
             // ram
-            self.data_ram.read(masked_addr)
+            let data = self.data_ram.read(masked_addr);
+            println!("ram read {data:x?} from {masked_addr:x}");
+            data
         } else {
             // rom
-            self.data_rom.read(masked_addr as u32)
+            let data = self.data_rom.read(masked_addr as u32);
+            println!("rom read: {data:x?} from {masked_addr:x}");
+            data
         }
     }
 
@@ -387,6 +438,7 @@ impl CpuState {
             // rom
             // nop
             // TODO: alert of nop
+            panic!("writing to rom!")
         }
     }
 
@@ -441,17 +493,17 @@ impl CpuState {
 
     fn get_opcode_addr(&self) -> u32 {
         Opcode {
-            step: self.step_counter.bout().unwrap(),
-            ir: self.ir.bout().unwrap(),
-            ir2: self.ir2.bout().unwrap(),
+            step: self.step_counter.state().unwrap(),
+            ir: self.ir.state().unwrap(),
+            ir2: self.ir2.state().unwrap(),
             not_vram_active: false,
         }
         .to_addr()
     }
 
     fn get_opcode_output(&self) -> Output {
-        let data = (self.opcode_latch0.bout().unwrap() as u16)
-            | ((self.opcode_latch1.bout().unwrap() as u16) << 8);
+        let data = (self.opcode_latch0.state().unwrap() as u16)
+            | ((self.opcode_latch1.state().unwrap() as u16) << 8);
         Output::from_output_data(data)
     }
 
@@ -465,7 +517,7 @@ impl CpuState {
         }
 
         // otherwise its conditional jump
-        self.flags.bout().unwrap() & flag_select != 0
+        self.flags.state().unwrap() & flag_select != 0
     }
 
     fn perform_mutable_actions(&mut self) {
@@ -559,19 +611,23 @@ impl CpuState {
             println!("high to low clk");
 
             let opcode_addr = self.get_opcode_addr();
-            println!("opcode_addr: {opcode_addr}");
+            println!("opcode_addr: {opcode_addr:x}");
+
+            diagnostic_from_addr(opcode_addr, &self.istr_set);
 
             self.opcode_latch0
                 .load(self.opcode_rom0.read(opcode_addr).unwrap());
             self.opcode_latch1
                 .load(self.opcode_rom1.read(opcode_addr).unwrap());
 
-            println!("latched opcode stuff");
+            // println!("latched opcode stuff");
 
             let control_actions = self.get_opcode_output();
-            println!("control actions {:?}", control_actions.get_printable_data());
+            // println!("control actions {:?}", control_actions.get_printable_data());
 
             // increment pc cnt here
+            // NOTE: must happen before addr, in hardware it gets done on transition and read only
+            // matters on low to high transition
             if control_actions.get_pc_cnt() {
                 self.pc.increment();
             }
@@ -584,9 +640,9 @@ impl CpuState {
             self.alu.update(
                 opcode_addr,
                 control_actions.get_flag_select(),
-                self.flags.bout(),
-                self.a.bout(),
-                self.b.bout(),
+                self.flags.state(),
+                self.a.state(),
+                self.b.state(),
             );
         }
     }
@@ -655,6 +711,7 @@ fn main() {
 
     let mut i = 1;
     loop {
+        println!();
         println!("doing step {i}");
         state.step_half_clk();
         if state.is_halt() {
@@ -663,10 +720,17 @@ fn main() {
         i += 1;
     }
 
+    println!();
+    println!("halted!");
+
     // print state of cpu
-    println!("a: {:?}", state.a.bout());
-    println!("b: {:?}", state.b.bout());
-    println!("x: {:?}", state.x.bout());
-    println!("y: {:?}", state.y.bout());
-    println!("z: {:?}", state.z.bout());
+    println!("a: {:?}", state.a.state());
+    println!("b: {:?}", state.b.state());
+    println!("x: {:?}", state.x.state());
+    println!("y: {:?}", state.y.state());
+    println!("z: {:?}", state.z.state());
+
+    println!("pc: 0x{:x?}", state.pc.aout().unwrap());
+    println!("mar: 0x{:x?}", state.mar.aout().unwrap());
+    println!("sp: 0x{:x?}", state.sp.aout().unwrap());
 }
