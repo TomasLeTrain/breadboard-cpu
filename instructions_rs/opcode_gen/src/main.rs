@@ -5,7 +5,7 @@ use std::{
 
 use opcode_gen::{
     instructions::{self, OpcodeToInstruction, OpcodeToOutput},
-    opcode::{Opcode, addr_to_opcode},
+    opcode::{self, Opcode},
     output::Output,
 };
 
@@ -93,7 +93,7 @@ fn interactive_mode() -> io::Result<()> {
 
         let addr = addr.unwrap();
 
-        let opcode = addr_to_opcode(addr);
+        let opcode = Opcode::from_addr(addr);
 
         let istr = istr_set.opcode_to_instruction(opcode);
         let output = istr_set.opcode_to_output(opcode);
@@ -165,7 +165,7 @@ fn main() -> std::io::Result<()> {
     let rom_data: (Vec<_>, Vec<_>) = (0..(1 << 17))
         .into_iter()
         .map(|i| {
-            let opcode = addr_to_opcode(i);
+            let opcode = Opcode::from_addr(i);
             let data = istr_set.opcode_to_output(opcode).get_output_data();
             (data as u8, (data >> 8) as u8)
         })
