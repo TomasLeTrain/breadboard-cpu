@@ -755,20 +755,24 @@ fn main() {
     let mut i = 1;
     loop {
         println!();
-        println!("doing step {i}");
+        println!("doing cycle {i}");
+
+        // perform full clock cycle
         state.step_half_clk();
+        state.step_half_clk();
+
         if state.is_halt() {
             break;
         }
         i += 1;
     }
     eprintln!(
-        "ended with {i} half cycles in {:.2?} nanoseconds",
+        "ended with {i} cycles in {:.2?} nanoseconds",
         start.elapsed().as_nanos()
     );
-    let nano_per_clk = (2.0 * start.elapsed().as_nanos() as f32) / (i as f32);
+    let nano_per_clk = (start.elapsed().as_nanos() as f32) / (i as f32);
     eprintln!("nanoseconds per clock cycle {nano_per_clk}");
-    let hz = 1_000.0 * ((i as f32) / (2.0 * start.elapsed().as_nanos() as f32));
+    let hz = 1_000.0 / nano_per_clk;
     eprintln!("MHz: {hz}");
 
     println!();
