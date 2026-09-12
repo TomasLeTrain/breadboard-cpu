@@ -227,14 +227,14 @@ impl Register {
             Register::X => "X",
             Register::Y => "Y",
             Register::Z => "Z",
-            Register::MarLo => "MAR.lo",
-            Register::MarHi => "MAR.hi",
-            Register::PcLo => "PC.lo",
-            Register::PcHi => "PC.hi",
-            Register::SpLo => "SP.lo",
-            Register::SpHi => "SP.hi",
-            Register::Flags => "FLAGS",
-            Register::Keyb => "KEYB",
+            Register::MarLo => "MarLo",
+            Register::MarHi => "MarHi",
+            Register::PcLo => "PcLo",
+            Register::PcHi => "PcHi",
+            Register::SpLo => "SpLo",
+            Register::SpHi => "SpHi",
+            Register::Flags => "Flags",
+            Register::Keyb => "Keyb",
         }
     }
 
