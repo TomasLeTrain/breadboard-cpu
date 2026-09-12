@@ -79,37 +79,68 @@ impl Alu {
         let using_carry = flag_select != 0;
         let carry_on = flags.unwrap() & (1 << flag_select) != 0;
 
+        let mut carry_flag = false;
+
         if let Some(a) = self.a
             && let Some(b) = self.b
         {
             self.result = Some(match op {
                 AluOp::Addition => {
-                    if using_carry {
-                        a.wrapping_add(b).wrapping_add(if carry_on { 1 } else { 0 })
+                    let added_b = if using_carry {
+                        b.wrapping_add(if carry_on { 1 } else { 0 })
                     } else {
-                        a.wrapping_add(b)
-                    }
+                        b
+                    };
+                    let res = a.overflowing_add(added_b);
+                    carry_flag = res.1;
+                    res.0
                 }
                 AluOp::Subtract => {
-                    if using_carry {
-                        // TODO: math might be wrong?
+                    let added_b = if using_carry {
                         // carry is inverted for subtraction
-                        a.wrapping_add(!b)
-                            .wrapping_add(if carry_on { 0 } else { 1 })
+                        (!b).wrapping_add(if carry_on { 0 } else { 1 })
                     } else {
-                        a.wrapping_add(!b).wrapping_add(1)
-                    }
+                        (!b).wrapping_add(1)
+                    };
+                    // overflow only matters for final result
+                    let res = a.overflowing_add(added_b);
+                    carry_flag = res.1;
+                    res.0
                 }
                 AluOp::And => a & b,
                 AluOp::Or => a | b,
                 AluOp::Xor => a ^ b,
                 AluOp::Not => !a,
                 // sub mode, no carry
-                AluOp::Compare => a.wrapping_add(!b),
+                AluOp::Compare => {
+                    let res = a.overflowing_add(!b);
+                    carry_flag = res.1;
+                    res.0
+                }
             });
 
-            // TODO: impl
-            self.flags = Some(0);
+            let mut flags = 0;
+
+            // flag carry
+            if carry_flag {
+                flags |= 1 << 1;
+            }
+
+            // flag eq
+            if let Some(result) = self.result
+                && result == 0xff
+            {
+                flags |= 1 << 2;
+            }
+
+            // flag not zero
+            if let Some(result) = self.result
+                && result != 0
+            {
+                flags |= 1 << 3;
+            }
+
+            self.flags = Some(flags);
         } else {
             self.result = None;
             self.flags = None;
