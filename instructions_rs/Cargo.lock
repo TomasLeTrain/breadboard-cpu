@@ -245,6 +245,7 @@ dependencies = [
 name = "sim"
 version = "0.1.0"
 dependencies = [
+ "assembler",
  "opcode_gen",
 ]
 

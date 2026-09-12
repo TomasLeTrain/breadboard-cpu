@@ -44,7 +44,7 @@ FunctionReturnType = { "->" ~ Type }
 LabelStatement = { LabelIdentifier ~ ":" ~ Newline+ }
 
 /// label { /* body (statements) */ }
-BlockLabel = { LabelIdentifier ~ Newline* ~ Block }
+BlockLabel = { LabelIdentifier ~ Newline* ~ Block ~ Newline+ }
 
 // atomic to avoid having to dig into identifier
 LabelIdentifier = { Identifier }
