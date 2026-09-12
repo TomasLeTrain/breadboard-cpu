@@ -58,9 +58,9 @@ pub fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
         })?;
     }
 
-    println!("initial: {:#?}", program);
+    // println!("initial: {:#?}", program);
     types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
-    println!("after typecheck: {:#?}", program);
+    // println!("after typecheck: {:#?}", program);
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)
@@ -68,11 +68,11 @@ pub fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
 
     istr_resolver::resolve_instructions(&mut program, &istr_lookup)
         .wrap_err("Failed to resolve instructions")?;
-    println!("after instructions: {:#?}", program);
+    // println!("after instructions: {:#?}", program);
 
     address_alloc::allocate_adresses(&mut program, &mut AllocationContext::new())
         .wrap_err("Failed to allocate addresses")?;
-    println!("after addresses: {:#?}", program);
+    // println!("after addresses: {:#?}", program);
 
     let mut valued_symbols = EvalContext::new();
 
@@ -96,7 +96,7 @@ pub fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
     // println!("{:#?}", program);
 
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
-    println!("after eval: {:#?}", program);
+    // println!("after eval: {:#?}", program);
 
     // println!("{:#?}", program);
 

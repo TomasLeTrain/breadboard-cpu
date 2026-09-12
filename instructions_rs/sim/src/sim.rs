@@ -42,7 +42,7 @@ impl AluOp {
     }
 }
 
-struct Alu {
+pub struct Alu {
     a: Option<u8>,
     b: Option<u8>,
     result: Option<u8>,
@@ -72,9 +72,11 @@ impl Alu {
         let op = AluOp::from_opcode_addr(opcode_addr);
 
         let using_carry = flag_select != 0;
-        let carry_on = flags.unwrap() & (1 << flag_select) != 0;
 
-        let mut carry_flag = false;
+        // NOTE: on when 0
+        let carry_on = flags.unwrap() & (1 << flag_select) == 0;
+
+        let mut result_carried = false;
 
         if let Some(a) = self.a
             && let Some(b) = self.b
@@ -87,7 +89,7 @@ impl Alu {
                         b
                     };
                     let res = a.overflowing_add(added_b);
-                    carry_flag = res.1;
+                    result_carried = res.1;
                     res.0
                 }
                 AluOp::Subtract => {
@@ -99,7 +101,7 @@ impl Alu {
                     };
                     // overflow only matters for final result
                     let res = a.overflowing_add(added_b);
-                    carry_flag = res.1;
+                    result_carried = res.1;
                     res.0
                 }
                 AluOp::And => a & b,
@@ -109,7 +111,7 @@ impl Alu {
                 // sub mode, no carry
                 AluOp::Compare => {
                     let res = a.overflowing_add(!b);
-                    carry_flag = res.1;
+                    result_carried = res.1;
                     res.0
                 }
             });
@@ -117,7 +119,7 @@ impl Alu {
             let mut flags = 0;
 
             // flag carry
-            if carry_flag {
+            if !result_carried {
                 flags |= 1 << 1;
             }
 
@@ -128,9 +130,9 @@ impl Alu {
                 flags |= 1 << 2;
             }
 
-            // flag not zero
-            if let Some(result) = self.result
-                && result != 0
+            // flag A not zero
+            if let Some(inner) = self.a
+                && inner != 0
             {
                 flags |= 1 << 3;
             }
@@ -293,7 +295,7 @@ impl ShiftRegister {
     }
 }
 
-struct CountRegister {
+pub struct CountRegister {
     state: Option<u8>,
     name: String,
 }
@@ -327,7 +329,7 @@ impl CountRegister {
     }
 }
 
-struct Ram {
+pub struct Ram {
     state: Vec<Option<u8>>,
 }
 
@@ -346,9 +348,13 @@ impl Ram {
         println!("writing {val:x} at {addr:x} to ram");
         self.state[addr as usize] = Some(val);
     }
+
+    pub fn state(&self) -> &[Option<u8>] {
+        &self.state
+    }
 }
 
-struct Rom {
+pub struct Rom {
     state: Vec<Option<u8>>,
 }
 impl Rom {
@@ -489,6 +495,18 @@ impl CpuState {
             // nop
             // TODO: alert of nop
             panic!("writing to rom!")
+        }
+    }
+
+    // used for examining state, not part of sim directly
+    pub fn mem_read_state(&self, addr: u16) -> Option<u8> {
+        let masked_addr = addr & !(1 << 15);
+        if addr & 1 << 15 != 0 {
+            // ram
+            self.data_ram.read(masked_addr)
+        } else {
+            // rom
+            self.data_rom.read(masked_addr as u32)
         }
     }
 
