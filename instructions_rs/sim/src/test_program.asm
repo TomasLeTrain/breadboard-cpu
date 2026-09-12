@@ -73,6 +73,9 @@ sum {
 	; for r
 	pusha 0x8080 + 4
 
+	; save current location of Sp
+	sw SpLo, 0xfff0, MAR
+	sw SpHi, 0xfff1, MAR
 
 	; now perform byte by byte ops
 	loop_2 {
@@ -80,7 +83,7 @@ sum {
 
 		; get current MAR
 		pop MAR 
-		sw X, MAR
+		lw X, MAR
 		inc MAR
 		; push again
 		push MAR
@@ -89,7 +92,7 @@ sum {
 
 		; get current MAR
 		pop MAR 
-		sw Y, MAR
+		lw Y, MAR
 		inc MAR
 		; push again
 		push MAR
@@ -105,6 +108,10 @@ sum {
 		lda MAR, loop_2
 		jnz Z, MAR
 	}
+
+
+	lw SpLo, 0xfff0, MAR
+	lw SpHi, 0xfff1, MAR
 
 	; return routine
 	pop MAR

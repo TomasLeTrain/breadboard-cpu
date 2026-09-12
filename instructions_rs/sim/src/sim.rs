@@ -364,9 +364,17 @@ impl Rom {
 
     fn load_image(&mut self, image: Vec<u8>) {
         if self.state.len() < image.len() {
-            panic!("image larger than state! - image: {}, state: {}",image.len(),self.state.len())
+            panic!(
+                "image larger than state! - image: {}, state: {}",
+                image.len(),
+                self.state.len()
+            )
         } else if self.state.len() > image.len() {
-            panic!("image smaller than state! - image: {}, state: {}",image.len(),self.state.len())
+            panic!(
+                "image smaller than state! - image: {}, state: {}",
+                image.len(),
+                self.state.len()
+            )
         }
 
         self.state = image.into_iter().map(Some).collect()
@@ -655,7 +663,7 @@ impl CpuState {
             let opcode_addr = self.get_opcode_addr();
             println!("opcode_addr: {opcode_addr:x}");
 
-            // diagnostic_from_addr(opcode_addr, &self.istr_set);
+            diagnostic_from_addr(opcode_addr, &self.istr_set);
 
             self.opcode_latch0
                 .load(self.opcode_rom0.read(opcode_addr).unwrap());

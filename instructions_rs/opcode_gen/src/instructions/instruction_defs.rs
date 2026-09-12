@@ -79,7 +79,7 @@ pub enum InstructionType {
 
     StoreWordRegImmAddr {
         origin: Register,
-        scrath_addr_reg: AddressRegister,
+        scratch_addr_reg: AddressRegister,
     },
 
     JnzReg {
@@ -278,20 +278,14 @@ impl InstructionType {
                 addr: addr_reg,
             } => vec![ArgumentType::Reg(*reg), ArgumentType::AddrReg(*addr_reg)],
 
-            // istr reg, imm8, addr_reg
-            InstructionType::LoadWordRegImmAddr {
-                dest,
-                scratch_addr_reg,
-            } => vec![
-                ArgumentType::Reg(*dest),
-                ArgumentType::Byte,
-                ArgumentType::AddrReg(*scratch_addr_reg),
-            ],
-
             // istr reg, imm_addr, addr_reg
-            InstructionType::StoreWordRegImmAddr {
+            InstructionType::LoadWordRegImmAddr {
+                dest: reg,
+                scratch_addr_reg: addr_reg,
+            }
+            | InstructionType::StoreWordRegImmAddr {
                 origin: reg,
-                scrath_addr_reg: addr_reg,
+                scratch_addr_reg: addr_reg,
             } => vec![
                 ArgumentType::Reg(*reg),
                 ArgumentType::Addr,
@@ -633,7 +627,7 @@ pub fn sw_instructions() -> Vec<(Instruction, AddressRegister)> {
                         Instruction::new(
                             InstructionType::StoreWordRegImmAddr {
                                 origin: *reg,
-                                scrath_addr_reg: *addr_reg,
+                                scratch_addr_reg: *addr_reg,
                             },
                             format!("sw {}, imm16, {}", reg.name(), addr_reg.name()),
                             InstructionImpl::Simple(InstructionTemplate(current)),
