@@ -2,22 +2,27 @@ start:
 	; initialize stack
 	lda SP, 0xffe0 ; lda sp, sp_start_addr
 
+	; guarantee a clear of carry flag
+	mv A, 0
+	add A, 0
+
+	; push return addr fib before data
+	pusha push_return
+
 	; push the left and right nums
 	; right first
 	push 0
 	push 0
 	push 0
-	push 50
+	push 0x32
 
 	; push the left and right nums
 	; left second
 	push 0
 	push 0
 	push 0
-	push 20
+	push 0x14
 
-	; call fib
-	pusha push_return
 	; jmp fib, MAR     ; jump to func
 	jmp sum, MAR     ; jump to func
 	push_return:
@@ -60,6 +65,7 @@ sum {
 
 	; pop current value since its not used anymore
 	pop MAR
+	halt
 
 	; num iterations (4 bytes)
 	mv Z, 4
@@ -69,33 +75,31 @@ sum {
 	add A, 0
 
 	; for l
-	pusha 0x8080
-	; for r
-	pusha 0x8080 + 4
+	; pusha 0x8080
+	; ; for r
+	; pusha 0x8080 + 4
 
 	; save current location of Sp
-	sw SpLo, 0xfff0, MAR
-	sw SpHi, 0xfff1, MAR
+	; sw SpLo, 0xfff0, MAR
+	; sw SpHi, 0xfff1, MAR
+
+	; lda MAR, 0x8080
+	; lda SP, 0x8084
 
 	; now perform byte by byte ops
 	loop_2 {
 		; x = left num
-
-		; get current MAR
-		pop MAR 
+		lda MAR, 0x8084
+		; subtract current offset
+		sub MarLo, Z
 		lw X, MAR
-		inc MAR
-		; push again
-		push MAR
 
 		; y = right num
-
-		; get current MAR
-		pop MAR 
+		lda MAR, 0x8088
+		; subtract current offset
+		sub MarLo, Z
 		lw Y, MAR
-		inc MAR
-		; push again
-		push MAR
+
 
 		; add with carry both
 		adc X, Y
@@ -109,9 +113,8 @@ sum {
 		jnz Z, MAR
 	}
 
-
-	lw SpLo, 0xfff0, MAR
-	lw SpHi, 0xfff1, MAR
+	; lw SpLo, 0xfff0, MAR
+	; lw SpHi, 0xfff1, MAR
 
 	; return routine
 	pop MAR
