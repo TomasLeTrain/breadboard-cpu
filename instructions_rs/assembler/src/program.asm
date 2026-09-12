@@ -27,7 +27,7 @@ fib {
 	mv X, 0
 	mv Y, 1
 
-	mv Z, 5
+	mv Z, 255
 
 	lda MAR, loop
 
