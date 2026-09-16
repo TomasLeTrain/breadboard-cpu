@@ -99,6 +99,8 @@ pub fn resolve_instructions(
                     .istr_type()
                     .arguments();
 
+                // println!("{:?}", arguments);
+
                 // set argument types based on the actual signature, to ensure at the eval stage
                 // that casting to the correct types is possible
                 for (arg, expr) in arguments.iter().zip(instruction.params.iter_mut()) {

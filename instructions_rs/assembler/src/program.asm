@@ -8,7 +8,7 @@ start:
 	; these are next to each other
 	
 	; TODO: this only works since we know the push_return will be smaller than 256 - need to implement addr placeholder 
-	push push_return
+	pusha push_return
 
 	jmp fib, MAR     ; jump to func
 
@@ -27,7 +27,7 @@ fib {
 	mv X, 0
 	mv Y, 1
 
-	mv Z, 5
+	mv Z, 255
 
 	lda MAR, loop
 
