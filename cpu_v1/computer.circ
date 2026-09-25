@@ -212,18 +212,6 @@
     <comp lib="0" loc="(1640,540)" name="Tunnel">
       <a name="label" val="AUTO_CLK"/>
     </comp>
-    <comp lib="0" loc="(1680,1850)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nABUS_TO_BUS_HIGH"/>
-    </comp>
-    <comp lib="0" loc="(1680,1880)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nABUS_TO_BUS_LOW"/>
-    </comp>
-    <comp lib="0" loc="(1680,1910)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nMEM_READ"/>
-    </comp>
     <comp lib="0" loc="(1690,510)" name="Tunnel">
       <a name="label" val="CLK4"/>
     </comp>
@@ -248,6 +236,18 @@
     <comp lib="0" loc="(1730,1820)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="nMAR_CNT"/>
+    </comp>
+    <comp lib="0" loc="(1730,1850)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nMEM_READ"/>
+    </comp>
+    <comp lib="0" loc="(1730,1880)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nABUS_TO_BUS_LOW"/>
+    </comp>
+    <comp lib="0" loc="(1730,1910)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nABUS_TO_BUS_HIGH"/>
     </comp>
     <comp lib="0" loc="(1760,1100)" name="Tunnel">
       <a name="facing" val="east"/>
@@ -330,17 +330,13 @@
       <a name="facing" val="north"/>
       <a name="value" val="0x0"/>
     </comp>
-    <comp lib="0" loc="(2110,1940)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nMAR_LOAD_LOW"/>
-    </comp>
     <comp lib="0" loc="(2130,1030)" name="Tunnel">
       <a name="facing" val="north"/>
       <a name="label" val="nHALT"/>
     </comp>
-    <comp lib="0" loc="(2130,1970)" name="Tunnel">
+    <comp lib="0" loc="(2130,1890)" name="Tunnel">
       <a name="facing" val="east"/>
-      <a name="label" val="nMAR_LOAD_HIGH"/>
+      <a name="label" val="nSP_LOAD_LOW"/>
     </comp>
     <comp lib="0" loc="(2130,950)" name="Constant">
       <a name="facing" val="south"/>
@@ -352,17 +348,21 @@
     <comp lib="0" loc="(2150,1570)" name="Constant">
       <a name="facing" val="south"/>
     </comp>
-    <comp lib="0" loc="(2150,2000)" name="Tunnel">
+    <comp lib="0" loc="(2150,1920)" name="Tunnel">
       <a name="facing" val="east"/>
-      <a name="label" val="nSP_LOAD_LOW"/>
+      <a name="label" val="nSP_LOAD_HIGH"/>
     </comp>
     <comp lib="0" loc="(2170,1570)" name="Constant">
       <a name="facing" val="south"/>
       <a name="value" val="0x0"/>
     </comp>
-    <comp lib="0" loc="(2170,2030)" name="Tunnel">
+    <comp lib="0" loc="(2170,1950)" name="Tunnel">
       <a name="facing" val="east"/>
-      <a name="label" val="nSP_LOAD_HIGH"/>
+      <a name="label" val="nMAR_LOAD_LOW"/>
+    </comp>
+    <comp lib="0" loc="(2190,1980)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nMAR_LOAD_HIGH"/>
     </comp>
     <comp lib="0" loc="(2220,1540)" name="Tunnel">
       <a name="facing" val="east"/>
@@ -4120,16 +4120,15 @@
     <wire from="(2110,1090)" to="(2110,1110)"/>
     <wire from="(2110,1090)" to="(2230,1090)"/>
     <wire from="(2110,1630)" to="(2110,1830)"/>
-    <wire from="(2110,1940)" to="(2130,1940)"/>
     <wire from="(2110,890)" to="(2110,950)"/>
     <wire from="(2110,890)" to="(2200,890)"/>
     <wire from="(2130,1010)" to="(2130,1030)"/>
     <wire from="(2130,1560)" to="(2130,1570)"/>
     <wire from="(2130,1630)" to="(2130,1860)"/>
-    <wire from="(2130,1970)" to="(2150,1970)"/>
+    <wire from="(2130,1890)" to="(2150,1890)"/>
     <wire from="(2140,330)" to="(2140,370)"/>
     <wire from="(2150,1630)" to="(2150,1890)"/>
-    <wire from="(2150,2000)" to="(2170,2000)"/>
+    <wire from="(2150,1920)" to="(2170,1920)"/>
     <wire from="(2150,880)" to="(2150,950)"/>
     <wire from="(2160,170)" to="(2290,170)"/>
     <wire from="(2160,180)" to="(2330,180)"/>
@@ -4146,7 +4145,7 @@
     <wire from="(2170,1100)" to="(2170,1110)"/>
     <wire from="(2170,1100)" to="(2250,1100)"/>
     <wire from="(2170,1630)" to="(2170,1920)"/>
-    <wire from="(2170,2030)" to="(2190,2030)"/>
+    <wire from="(2170,1950)" to="(2190,1950)"/>
     <wire from="(2190,1630)" to="(2190,1950)"/>
     <wire from="(2190,1980)" to="(2210,1980)"/>
     <wire from="(2200,880)" to="(2200,890)"/>
