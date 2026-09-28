@@ -118,11 +118,11 @@
       <a name="fanout" val="3"/>
       <a name="incoming" val="3"/>
     </comp>
-    <comp lib="0" loc="(1130,1800)" name="Tunnel">
+    <comp lib="0" loc="(1140,1820)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="nVRAM_READ"/>
     </comp>
-    <comp lib="0" loc="(1130,1830)" name="Tunnel">
+    <comp lib="0" loc="(1140,1850)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="nVRAM_WRITE"/>
     </comp>
@@ -780,10 +780,6 @@
       <a name="width" val="8"/>
     </comp>
     <comp lib="0" loc="(3090,950)" name="NoConnect"/>
-    <comp lib="0" loc="(3110,2050)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nFLAG_WRITE_BUS"/>
-    </comp>
     <comp lib="0" loc="(3110,950)" name="NoConnect"/>
     <comp lib="0" loc="(3130,1300)" name="Tunnel">
       <a name="label" val="nIR2_WRITE"/>
@@ -816,26 +812,30 @@
       <a name="facing" val="south"/>
       <a name="label" val="CLK"/>
     </comp>
-    <comp lib="0" loc="(3290,2080)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nPC_LOAD_LOW_ROM"/>
-    </comp>
-    <comp lib="0" loc="(3290,2110)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nPC_LOAD_HIGH_ROM"/>
-    </comp>
-    <comp lib="0" loc="(3290,2140)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nB_WRITE"/>
-    </comp>
-    <comp lib="0" loc="(3290,2170)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nA_WRITE"/>
-    </comp>
     <comp lib="0" loc="(3290,780)" name="Splitter">
       <a name="facing" val="south"/>
       <a name="fanout" val="8"/>
       <a name="incoming" val="8"/>
+    </comp>
+    <comp lib="0" loc="(3300,2020)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nFLAG_WRITE_BUS"/>
+    </comp>
+    <comp lib="0" loc="(3300,2050)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nPC_LOAD_LOW_ROM"/>
+    </comp>
+    <comp lib="0" loc="(3300,2080)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nPC_LOAD_HIGH_ROM"/>
+    </comp>
+    <comp lib="0" loc="(3300,2110)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nB_WRITE"/>
+    </comp>
+    <comp lib="0" loc="(3300,2140)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nA_WRITE"/>
     </comp>
     <comp lib="0" loc="(3310,770)" name="Tunnel">
       <a name="label" val="BBUS"/>
@@ -905,29 +905,29 @@
       <a name="facing" val="north"/>
       <a name="label" val="Y_S0"/>
     </comp>
-    <comp lib="0" loc="(3680,2140)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nFLAG_BOUT"/>
-    </comp>
-    <comp lib="0" loc="(3680,2170)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nF_BOUT_EN"/>
-    </comp>
-    <comp lib="0" loc="(3680,2200)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nKEYB_BOUT"/>
-    </comp>
-    <comp lib="0" loc="(3680,2230)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nB_BOUT_EN"/>
-    </comp>
-    <comp lib="0" loc="(3680,2260)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="nA_BOUT_EN"/>
-    </comp>
     <comp lib="0" loc="(3680,960)" name="Constant">
       <a name="facing" val="south"/>
       <a name="value" val="0x0"/>
+    </comp>
+    <comp lib="0" loc="(3690,2090)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nFLAG_BOUT"/>
+    </comp>
+    <comp lib="0" loc="(3690,2120)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nF_BOUT_EN"/>
+    </comp>
+    <comp lib="0" loc="(3690,2150)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nKEYB_BOUT"/>
+    </comp>
+    <comp lib="0" loc="(3690,2180)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nB_BOUT_EN"/>
+    </comp>
+    <comp lib="0" loc="(3690,2210)" name="Tunnel">
+      <a name="facing" val="east"/>
+      <a name="label" val="nA_BOUT_EN"/>
     </comp>
     <comp lib="0" loc="(3710,1860)" name="Tunnel">
       <a name="facing" val="east"/>
@@ -3879,13 +3879,13 @@
     <comp lib="9" loc="(1425,1245)" name="Text">
       <a name="text" val="(only usable when not jumping)"/>
     </comp>
-    <comp lib="9" loc="(1662,1636)" name="Text">
+    <comp lib="9" loc="(1660,1635)" name="Text">
       <a name="text" val="two free on bout"/>
     </comp>
     <comp lib="9" loc="(1770,1510)" name="Text">
       <a name="text" val="BOUT 0"/>
     </comp>
-    <comp lib="9" loc="(2088,1502)" name="Text">
+    <comp lib="9" loc="(2085,1500)" name="Text">
       <a name="text" val="WRITE 0"/>
     </comp>
     <comp lib="9" loc="(2170,470)" name="Text">
@@ -3933,22 +3933,22 @@
     <comp lib="9" loc="(3545,335)" name="Text">
       <a name="text" val="can switch ir2 for 4 bit reg instead for smaller profile"/>
     </comp>
-    <comp lib="9" loc="(3731,1565)" name="Text">
+    <comp lib="9" loc="(3730,1565)" name="Text">
       <a name="text" val="BOUT 1"/>
     </comp>
     <comp lib="9" loc="(5500,3180)" name="Text">
       <a name="text" val="n4 of misc"/>
     </comp>
-    <comp lib="9" loc="(5513,3130)" name="Text">
+    <comp lib="9" loc="(5510,3130)" name="Text">
       <a name="text" val="n5 of misc"/>
     </comp>
     <comp lib="9" loc="(5540,1985)" name="Text">
       <a name="text" val="low when clk high, clk_shifted low"/>
     </comp>
-    <comp lib="9" loc="(5633,3312)" name="Text">
+    <comp lib="9" loc="(5630,3310)" name="Text">
       <a name="text" val="n7 of misc"/>
     </comp>
-    <comp lib="9" loc="(5635,3418)" name="Text">
+    <comp lib="9" loc="(5635,3415)" name="Text">
       <a name="text" val="n6 of misc"/>
     </comp>
     <comp lib="9" loc="(6920,585)" name="Text">
@@ -4476,6 +4476,7 @@
     <wire from="(3380,1860)" to="(3390,1860)"/>
     <wire from="(3380,1890)" to="(3410,1890)"/>
     <wire from="(3380,1920)" to="(3430,1920)"/>
+    <wire from="(3380,1950)" to="(3450,1950)"/>
     <wire from="(3380,1980)" to="(3470,1980)"/>
     <wire from="(3380,2010)" to="(3490,2010)"/>
     <wire from="(3380,2040)" to="(3510,2040)"/>
@@ -9103,11 +9104,11 @@
       <a name="width" val="16"/>
     </comp>
     <comp lib="0" loc="(2670,790)" name="Tunnel">
-      <a name="label" val="FLAG_WRITE"/>
-    </comp>
-    <comp lib="0" loc="(2670,790)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="FLAG_BIN_EN"/>
+    </comp>
+    <comp lib="0" loc="(2670,790)" name="Tunnel">
+      <a name="label" val="FLAG_WRITE"/>
     </comp>
     <comp lib="0" loc="(2740,670)" name="Constant">
       <a name="facing" val="north"/>
@@ -13230,12 +13231,12 @@ e8 400 5*f 358 128 400 5*f 358
     </appear>
     <comp lib="0" loc="(1010,590)" name="NoConnect"/>
     <comp lib="0" loc="(300,420)" name="Tunnel">
-      <a name="label" val="D"/>
+      <a name="facing" val="east"/>
+      <a name="label" val="BIN"/>
       <a name="width" val="8"/>
     </comp>
     <comp lib="0" loc="(300,420)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="BIN"/>
+      <a name="label" val="D"/>
       <a name="width" val="8"/>
     </comp>
     <comp lib="0" loc="(310,310)" name="Pin">
@@ -13688,12 +13689,12 @@ e8 400 5*f 358 128 400 5*f 358
     </comp>
     <comp lib="0" loc="(1700,670)" name="NoConnect"/>
     <comp lib="0" loc="(200,610)" name="Tunnel">
-      <a name="facing" val="east"/>
-      <a name="label" val="AIN"/>
+      <a name="label" val="D"/>
       <a name="width" val="16"/>
     </comp>
     <comp lib="0" loc="(200,610)" name="Tunnel">
-      <a name="label" val="D"/>
+      <a name="facing" val="east"/>
+      <a name="label" val="AIN"/>
       <a name="width" val="16"/>
     </comp>
     <comp lib="0" loc="(210,650)" name="Pin">
@@ -18308,6 +18309,12 @@ d 29 9 29 29 2e 36 52
       <a name="label" val="Y1"/>
     </comp>
     <comp lib="0" loc="(1480,800)" name="Splitter">
+      <a name="appear" val="center"/>
+      <a name="facing" val="west"/>
+      <a name="fanout" val="7"/>
+      <a name="incoming" val="7"/>
+    </comp>
+    <comp lib="0" loc="(1480,800)" name="Splitter">
       <a name="appear" val="right"/>
       <a name="bit1" val="0"/>
       <a name="bit2" val="1"/>
@@ -18318,12 +18325,6 @@ d 29 9 29 29 2e 36 52
       <a name="fanout" val="3"/>
       <a name="incoming" val="7"/>
       <a name="spacing" val="3"/>
-    </comp>
-    <comp lib="0" loc="(1480,800)" name="Splitter">
-      <a name="appear" val="center"/>
-      <a name="facing" val="west"/>
-      <a name="fanout" val="7"/>
-      <a name="incoming" val="7"/>
     </comp>
     <comp lib="0" loc="(1490,2020)" name="Splitter">
       <a name="appear" val="right"/>
