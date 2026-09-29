@@ -585,7 +585,7 @@ impl CpuState {
         }
 
         // otherwise its conditional jump
-        self.flags.state().unwrap() & flag_select != 0
+        self.flags.state().unwrap() & (1 << flag_select) != 0
     }
 
     fn perform_mutable_actions(&mut self) {
