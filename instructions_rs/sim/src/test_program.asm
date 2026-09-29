@@ -63,9 +63,10 @@ sum {
 		jnz Z, MAR
 	}
 
+	; halt
+
 	; pop current value since its not used anymore
 	pop MAR
-	halt
 
 	; num iterations (4 bytes)
 	mv Z, 4
@@ -74,14 +75,11 @@ sum {
 	mv A, 0
 	add A, 0
 
-	; for l
-	; pusha 0x8080
-	; ; for r
-	; pusha 0x8080 + 4
-
-	; save current location of Sp
-	; sw SpLo, 0xfff0, MAR
-	; sw SpHi, 0xfff1, MAR
+	; get return address and save it to memory, next step changes stack
+	pop	A
+	sw A, 0xfff0, MAR
+	pop	A
+	sw A, 0xfff1, MAR
 
 	; lda MAR, 0x8080
 	; lda SP, 0x8084
@@ -103,6 +101,7 @@ sum {
 
 		; add with carry both
 		adc X, Y
+		; TODO: cannot write to flag reg, impossible to do adc here!
 
 		; push result to stack
 		push X
@@ -113,11 +112,15 @@ sum {
 		jnz Z, MAR
 	}
 
-	; lw SpLo, 0xfff0, MAR
-	; lw SpHi, 0xfff1, MAR
+	; get return address back
+	lw A, 0xfff0, MAR
+	lw B, 0xfff1, MAR
 
-	; return routine
-	pop MAR
+	; load into mar
+	mv MarLo, A
+	mv MarHi, B
+
+	; return
 	jmp MAR
 }
 
