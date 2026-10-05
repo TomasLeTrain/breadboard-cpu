@@ -129,7 +129,10 @@ pub static Z: LazyLock<BoutWriteRegister> = LazyLock::new(|| BoutWriteRegister {
 pub static IR2: LazyLock<WriteRegister> = LazyLock::new(|| WriteRegister { write: Ir2Write });
 
 pub static KEYB: LazyLock<BoutRegister> = LazyLock::new(|| BoutRegister { bout: KeybBout });
-pub static FLAGS: LazyLock<BoutRegister> = LazyLock::new(|| BoutRegister { bout: FlagsBout });
+pub static FLAGS: LazyLock<BoutWriteRegister> = LazyLock::new(|| BoutWriteRegister {
+    bout: FlagsBout,
+    write: FlagsWrite,
+});
 
 pub trait Bout {
     fn bout(&self) -> Action;

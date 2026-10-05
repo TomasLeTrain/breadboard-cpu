@@ -4,6 +4,7 @@ use std::{
 };
 
 use opcode_gen::{
+    diagnostic_from_addr,
     instructions::{self, IstrSet, OpcodeToInstruction, OpcodeToOutput},
     opcode::{self, Opcode},
     output::Output,
