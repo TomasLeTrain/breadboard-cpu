@@ -617,7 +617,7 @@ impl CpuState {
                     self.pc.load_low(self.bus_val.unwrap())
                 }
             }
-            12 => unreachable!(),
+            12 => self.flags.load(self.bus_val.unwrap()),
             13 => self.x.load(self.bus_val.unwrap()),
             14 => self.y.load(self.bus_val.unwrap()),
             15 => self.ir.load(self.bus_val.unwrap()),
@@ -681,7 +681,7 @@ impl CpuState {
             let opcode_addr = self.get_opcode_addr();
             println!("opcode_addr: {opcode_addr:x}");
 
-            diagnostic_from_addr(opcode_addr, &self.istr_set);
+            // diagnostic_from_addr(opcode_addr, &self.istr_set);
 
             self.opcode_latch0
                 .load(self.opcode_rom0.read(opcode_addr).unwrap());
