@@ -681,7 +681,7 @@ impl CpuState {
             let opcode_addr = self.get_opcode_addr();
             println!("opcode_addr: {opcode_addr:x}");
 
-            // diagnostic_from_addr(opcode_addr, &self.istr_set);
+            diagnostic_from_addr(opcode_addr, &self.istr_set);
 
             self.opcode_latch0
                 .load(self.opcode_rom0.read(opcode_addr).unwrap());
