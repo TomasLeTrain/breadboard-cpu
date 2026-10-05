@@ -27,22 +27,22 @@ fn main() {
 
     let mut i = 1;
     loop {
-        println!();
-        println!("doing cycle {i}");
+        // println!();
+        // println!("doing cycle {i}");
 
         // perform full clock cycle
         state.step_half_clk();
         state.step_half_clk();
 
-        println!(
-            "0x8070..0x8090: {:#x?}",
-            &state.data_ram.state()[0x0070..0x0090]
-        );
-
-        let mut stack = Vec::new();
-        state.data_ram.state()[(0xffa0 - 0x8000)..(0xffe0 - 0x8000)].clone_into(&mut stack);
-
-        println!("stack - 0xffe0..0xffa0: {:#x?}", stack);
+        // println!(
+        //     "0x8070..0x8090: {:#x?}",
+        //     &state.data_ram.state()[0x0070..0x0090]
+        // );
+        //
+        // let mut stack = Vec::new();
+        // state.data_ram.state()[(0xffa0 - 0x8000)..(0xffe0 - 0x8000)].clone_into(&mut stack);
+        //
+        // println!("stack - 0xffe0..0xffa0: {:#x?}", stack);
 
         if state.is_halt() {
             break;

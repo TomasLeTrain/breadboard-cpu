@@ -28,10 +28,11 @@ start:
 	push_return:
 
 	; retrieve result from stack into registers
-	pop X
-	pop Y
-	pop Z
-	pop A
+	; expected result is 
+	pop X ; 00
+	pop Y ; 00
+	pop Z ; 00
+	pop A ; 70
 
 	halt
 
@@ -71,9 +72,10 @@ sum {
 	; num iterations (4 bytes)
 	mv Z, 4
 
-	; guarantee a clear of carry flag
+	; guarantee a clear of carry flag and push said flags
 	mv A, 0
 	add A, 0
+	sw Flags, 0x9000, MAR
 
 	; get return address and save it to memory, next step changes stack
 	pop	A
@@ -99,9 +101,10 @@ sum {
 		lw Y, MAR
 
 
-		; add with carry both
+		; get previous flags, add with carry, and save flags
+		lw Flags, 0x9000, MAR
 		adc X, Y
-		; TODO: cannot write to flag reg, impossible to do adc here!
+		sw Flags, 0x9000, MAR
 
 		; push result to stack
 		push X
