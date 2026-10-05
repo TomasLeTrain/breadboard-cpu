@@ -1330,6 +1330,13 @@ pub fn math_imm_instructions() -> Vec<(Instruction, MathIstrTypes)> {
                     // on cmp, replace writing actions to nothing
                     replace_action(&mut current, Reg0Write, Nop);
                     replace_action(&mut current, FAluBout, Nop);
+
+                    // special edge cases perform writes manually
+                    if matches!(reg, Register::A) && !imm_lhs {
+                        replace_action(&mut current, A.write, Nop);
+                    } else if matches!(reg, Register::B) && imm_lhs {
+                        replace_action(&mut current, B.write, Nop);
+                    }
                 }
 
                 reg.fill_reg0(&mut current);
