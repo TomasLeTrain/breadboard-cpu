@@ -64,6 +64,8 @@ static ACTION_TO_OUTPUT_MAP: LazyLock<HashMap<Action, Output>> = LazyLock::new(|
         (MarHiWrite, Output::from_write(4)),
         (SpLoWrite, Output::from_write(3)),
         (SpHiWrite, Output::from_write(2)),
+        (FlagsWrite, Output::from_write(0b1000 | 4)),
+
         // ir regs
         (IrWrite, Output::from_write(0b1000 | 7)),
         (Ir2Write, Output::from_write(1)),

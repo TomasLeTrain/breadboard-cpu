@@ -45,6 +45,7 @@ pub enum Action {
     MarHiWrite,
     SpLoWrite,
     SpHiWrite,
+    FlagsWrite,
 
     // ir regs
     IrWrite,

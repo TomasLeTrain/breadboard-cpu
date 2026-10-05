@@ -251,7 +251,7 @@ impl Register {
             Register::PcHi => RegisterImpl::BoutWrite(&PC.hi),
             Register::SpLo => RegisterImpl::BoutWrite(&SP.lo),
             Register::SpHi => RegisterImpl::BoutWrite(&SP.hi),
-            Register::Flags => RegisterImpl::Bout(&FLAGS),
+            Register::Flags => RegisterImpl::BoutWrite(&FLAGS),
             Register::Keyb => RegisterImpl::Bout(&KEYB),
         }
     }

@@ -65,7 +65,11 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
     }
 
     // has approx 120-ish instructions, need to make extended
-    for istr in move_word_reg_instructions().into_iter() {
+    // TODO: for now added vram read is extended, might make simple if some other placements get adjusted
+    for istr in move_word_reg_instructions()
+        .into_iter()
+        .chain(vram_read_instructions())
+    {
         let istr = Rc::new(RefCell::new(istr));
 
         all_istrs.push(Rc::clone(&istr));
@@ -107,15 +111,20 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
         .chain(lda_imm16_instructions())
         .chain(mv_addr_reg_instructions())
         .chain(misc_instructions())
-        .chain(vram_read_instructions())
         .chain(vram_write_instructions())
         .chain(shift_instructions());
 
     for istr in simple_istrs {
         let istr = Rc::new(RefCell::new(istr));
         all_istrs.push(Rc::clone(&istr));
-        let istr_opcode = istr_set.place_simple(Rc::clone(&istr)).unwrap();
-        istr.borrow_mut().set_opcode(Some(istr_opcode));
+        if let Ok(istr_opcode) = istr_set.place_simple(Rc::clone(&istr)) {
+            istr.borrow_mut().set_opcode(Some(istr_opcode));
+        } else {
+            std::panic!(
+                "{istr_set}\nfailed to place simple instruction: \"{}\"",
+                istr.borrow().name()
+            );
+        }
     }
 
     (all_istrs, istr_set)
