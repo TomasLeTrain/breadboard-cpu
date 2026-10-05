@@ -30,11 +30,11 @@ start:
 	; jmp sum, MAR     
 
 	; 455 cycles - 163 clock cycles faster than sum
-	; 0x6A = 106 bytes total program - same as sum
+	; 0x67 = 106 bytes total program - 3 bytes smaller than sum
 	; jmp sum_unrolled, MAR     
 
 	; 225 cycles - 393 clock cycles faster than sum
-	; 0x70 = 112 bytes total program - 6 bytes more than sum
+	; 0x6D = 109 bytes total program - 3 bytes more than sum
 	jmp sum_unrolled_twice, MAR     
 	push_return:
 
@@ -47,7 +47,6 @@ start:
 	pop A ; 70
 
 	halt
-
 
 
 ; 32 bit sum of 32 bit nums in stack
@@ -103,15 +102,17 @@ sum_unrolled_twice {
 	push X
 
 	; get nums
+	inc MAR
+	lw Y, MAR
 	lw X, 0x8081, MAR
-	lw Y, 0x8085, MAR
 	; add nums
 	adc X, Y
 	; push result to stack
 	push X
 
 	; get nums
-	lw X, 0x8082, MAR
+	inc MAR
+	lw X, MAR
 	lw Y, 0x8086, MAR
 	; add nums
 	adc X, Y
@@ -119,8 +120,9 @@ sum_unrolled_twice {
 	push X
 
 	; get nums
+	inc MAR
+	lw Y, MAR
 	lw X, 0x8083, MAR
-	lw Y, 0x8087, MAR
 	; add nums
 	adc X, Y
 	; push result to stack
@@ -195,15 +197,17 @@ sum_unrolled_twice {
 ; 	push X
 ;
 ; 	; get nums
+; 	inc MAR
+; 	lw Y, MAR
 ; 	lw X, 0x8081, MAR
-; 	lw Y, 0x8085, MAR
 ; 	; add nums
 ; 	adc X, Y
 ; 	; push result to stack
 ; 	push X
 ;
 ; 	; get nums
-; 	lw X, 0x8082, MAR
+; 	inc MAR
+; 	lw X, MAR
 ; 	lw Y, 0x8086, MAR
 ; 	; add nums
 ; 	adc X, Y
@@ -211,8 +215,9 @@ sum_unrolled_twice {
 ; 	push X
 ;
 ; 	; get nums
+; 	inc MAR
+; 	lw Y, MAR
 ; 	lw X, 0x8083, MAR
-; 	lw Y, 0x8087, MAR
 ; 	; add nums
 ; 	adc X, Y
 ; 	; push result to stack
