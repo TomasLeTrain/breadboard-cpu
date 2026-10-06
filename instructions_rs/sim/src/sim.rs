@@ -49,6 +49,32 @@ pub struct Alu {
     flags: Option<u8>,
 }
 
+pub enum Flags {
+    InvCarry,
+    Eq, // TODO: is it inverse???
+    InvZero,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+}
+
+impl Flags {
+    fn into_bit(self) -> u8 {
+        match self {
+            Flags::InvCarry => 1,
+            Flags::Eq => 2,
+            Flags::InvZero => 3,
+            Flags::F3 => todo!(),
+            Flags::F4 => todo!(),
+            Flags::F5 => todo!(),
+            Flags::F6 => todo!(),
+            Flags::F7 => todo!(),
+        }
+    }
+}
+
 impl Alu {
     fn new() -> Self {
         Self {
@@ -120,21 +146,21 @@ impl Alu {
 
             // flag carry
             if !result_carried {
-                flags |= 1 << 1;
+                flags |= 1 << Flags::InvCarry.into_bit();
             }
 
             // flag eq
             if let Some(result) = self.result
                 && result == 0xff
             {
-                flags |= 1 << 2;
+                flags |= 1 << Flags::Eq.into_bit();
             }
 
             // flag A not zero
             if let Some(inner) = self.a
                 && inner != 0
             {
-                flags |= 1 << 3;
+                flags |= 1 << Flags::InvZero.into_bit();
             }
 
             self.flags = Some(flags);
@@ -466,6 +492,10 @@ impl CpuState {
         }
     }
 
+    pub fn get_flag(&self, flag: Flags) -> Option<bool> {
+        self.flags.state().map(|e| e & (1 << flag.into_bit()) != 0)
+    }
+
     fn mem_read(&self) -> Option<u8> {
         let addr = self.addr_val.unwrap();
 
@@ -770,5 +800,11 @@ impl CpuState {
 
     pub fn load_program(&mut self, program: Vec<u8>) {
         self.data_rom.load_image(program);
+    }
+}
+
+impl Default for CpuState {
+    fn default() -> Self {
+        Self::new()
     }
 }

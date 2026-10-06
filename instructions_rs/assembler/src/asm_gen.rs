@@ -121,8 +121,8 @@ impl AsmGenContext {
         Ok(())
     }
 
-    pub fn into_assembly(self) -> Vec<u8> {
-        self.assembly
+    pub fn assembly(&self) -> &Vec<u8> {
+        &self.assembly
     }
 
     fn get_sorted_spans(&self) -> Vec<AsmSpan> {
