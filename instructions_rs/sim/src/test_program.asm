@@ -11,17 +11,22 @@ start:
 
 	; push the left and right nums
 	; right first
-	push 0
-	push 0
-	push 0
-	push 0x32
+	; push 0
+	; push 0
+	; push 0
+	; push 0x32
+
+	push 255
+	push 255
+	push 255
+	push 255
 
 	; push the left and right nums
 	; left second
 	push 0
 	push 0
 	push 0
-	push 0x14
+	push 1
 
 	; jmp fib, MAR     ; jump to func
 

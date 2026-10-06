@@ -26,8 +26,8 @@ fn main() {
 
     let mut i = 1;
     loop {
-        // println!();
-        // println!("doing cycle {i}");
+        println!();
+        println!("doing cycle {i}");
 
         // perform full clock cycle
         state.step_half_clk();
