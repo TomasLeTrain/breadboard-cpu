@@ -22,9 +22,9 @@ impl AllocationContext {
         self.current_addr += n;
     }
 
-    pub fn set_address(&mut self, n: u16) {
-        self.current_addr = n;
-    }
+    // pub fn set_address(&mut self, n: u16) {
+    //     self.current_addr = n;
+    // }
 }
 
 pub fn allocate_adresses(

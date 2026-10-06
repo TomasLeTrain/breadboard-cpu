@@ -19,7 +19,6 @@ use opcode_gen::{
 use crate::{
     address_alloc::AllocationContext,
     asm_gen::AsmGenContext,
-    asm_output::{AsmOutput, BinaryOutput, LogisimOutput},
     ast::NamedSourceFile,
     eval::{EvalContext, EvalSymbol, ExprValue},
     istr_resolver::gen_instruction_lookup_table,
