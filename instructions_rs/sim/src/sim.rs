@@ -97,10 +97,12 @@ impl Alu {
         self.b = b;
         let op = AluOp::from_opcode_addr(opcode_addr);
 
+        // on if not direct
         let using_carry = flag_select != 0;
 
         // NOTE: on when 0
-        let carry_on = flags.unwrap() & (1 << flag_select) == 0;
+        let carry_flag_set = flags.unwrap() & (1 << flag_select) == 0;
+        let carry_on = if using_carry { carry_flag_set } else { false };
 
         let mut result_carried = false;
 
@@ -109,24 +111,13 @@ impl Alu {
         {
             self.result = Some(match op {
                 AluOp::Addition => {
-                    let added_b = if using_carry {
-                        b.wrapping_add(if carry_on { 1 } else { 0 })
-                    } else {
-                        b
-                    };
-                    let res = a.overflowing_add(added_b);
+                    let res = a.carrying_add(b, carry_on);
                     result_carried = res.1;
                     res.0
                 }
                 AluOp::Subtract => {
-                    let added_b = if using_carry {
-                        // carry is inverted for subtraction
-                        (!b).wrapping_add(if carry_on { 0 } else { 1 })
-                    } else {
-                        (!b).wrapping_add(1)
-                    };
                     // overflow only matters for final result
-                    let res = a.overflowing_add(added_b);
+                    let res = a.carrying_add(!b, !carry_on);
                     result_carried = res.1;
                     res.0
                 }
@@ -136,7 +127,7 @@ impl Alu {
                 AluOp::Not => !a,
                 // sub mode, no carry
                 AluOp::Compare => {
-                    let res = a.overflowing_add(!b);
+                    let res = a.carrying_add(!b, false);
                     result_carried = res.1;
                     res.0
                 }
