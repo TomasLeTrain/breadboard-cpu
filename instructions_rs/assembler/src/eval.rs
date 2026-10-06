@@ -435,23 +435,12 @@ impl Display for EmptyStackError {
 
 #[derive(Debug)]
 pub enum EvalExprErrorKind {
-    IdentityAlreadyTyped((AstSpan, Type)),
     SymbolNotFound(EvalSymbol),
-    InvalidBinaryOpTypes((AstSpan, Type), (AstSpan, Type), BinaryOp),
-    InvalidComparisonTypes((AstSpan, Type), (AstSpan, Type)),
-    InvalidEqualityTypes((AstSpan, Type), (AstSpan, Type)),
-    InvalidUnaryOpType((AstSpan, Type), UnaryOp),
 }
 
 impl EvalExprErrorKind {
     fn get_spans(&self) -> Vec<LabeledSpan> {
         match self {
-            EvalExprErrorKind::IdentityAlreadyTyped((span, ty)) => {
-                vec![LabeledSpan::new_with_span(
-                    Some(format!("Identity of type \"{:?}\" defined here", ty)),
-                    span,
-                )]
-            }
             EvalExprErrorKind::SymbolNotFound(symbol) => {
                 if let Some(span) = &symbol.span {
                     vec![LabeledSpan::new_with_span(
@@ -462,38 +451,11 @@ impl EvalExprErrorKind {
                     vec![]
                 }
             }
-            EvalExprErrorKind::InvalidBinaryOpTypes((span1, ty1), (span2, ty2), _)
-            | EvalExprErrorKind::InvalidEqualityTypes((span1, ty1), (span2, ty2))
-            | EvalExprErrorKind::InvalidComparisonTypes((span1, ty1), (span2, ty2)) => {
-                vec![
-                    LabeledSpan::new_with_span(
-                        Some(format!("Defined with type \"{:?}\" here", ty1)),
-                        span1,
-                    ),
-                    LabeledSpan::new_with_span(
-                        Some(format!("Defined with type \"{:?}\" here", ty2)),
-                        span2,
-                    ),
-                ]
-            }
-            EvalExprErrorKind::InvalidUnaryOpType((span, ty), _) => {
-                vec![LabeledSpan::new_with_span(
-                    Some(format!("Defined with type \"{:?}\" here", ty)),
-                    span,
-                )]
-            }
         }
     }
 
     fn get_source(&self) -> Option<NamedSource<Arc<str>>> {
         match self {
-            EvalExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
-            | EvalExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
-            | EvalExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
-            | EvalExprErrorKind::InvalidUnaryOpType((ast_span, _), _)
-            | EvalExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => {
-                Some(ast_span.to_miette_source_code())
-            }
             EvalExprErrorKind::SymbolNotFound(symbol) => {
                 symbol.span.as_ref().map(AstSpan::to_miette_source_code)
             }
@@ -504,35 +466,8 @@ impl EvalExprErrorKind {
 impl Display for EvalExprErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EvalExprErrorKind::IdentityAlreadyTyped((_, ty)) => {
-                write!(f, "Identity already has type \"{:?}\"", ty)
-            }
             EvalExprErrorKind::SymbolNotFound(symbol) => {
                 write!(f, "Symbol \"{}\" not found", symbol.name)
-            }
-            EvalExprErrorKind::InvalidBinaryOpTypes((_, ty1), (_, ty2), op) => {
-                write!(
-                    f,
-                    "Cannot perform operation \"{:?}\" on types \"{:?}\" and \"{:?}\"",
-                    op, ty1, ty2
-                )
-            }
-            EvalExprErrorKind::InvalidComparisonTypes((_, ty1), (_, ty2)) => {
-                write!(f, "Cannot compare types \"{:?}\" and \"{:?}\"", ty1, ty2)
-            }
-            EvalExprErrorKind::InvalidEqualityTypes((_, ty1), (_, ty2)) => {
-                write!(
-                    f,
-                    "Cannot check types for equality \"{:?}\" and \"{:?}\"",
-                    ty1, ty2
-                )
-            }
-            EvalExprErrorKind::InvalidUnaryOpType((_, ty), op) => {
-                write!(
-                    f,
-                    "Cannot perform operation \"{:?}\" on type \"{:?}\"",
-                    op, ty
-                )
             }
         }
     }

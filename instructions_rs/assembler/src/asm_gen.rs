@@ -1,6 +1,6 @@
 use owo_colors::{
-    AnsiColors, OwoColorize, Style,
-    colors::{self, xterm::CodGray},
+    OwoColorize,
+    colors::{self},
 };
 
 use crate::{
@@ -80,12 +80,12 @@ impl AsmGenContext {
         }
     }
 
-    fn get_byte(&self, addr: Address) -> Result<u8> {
-        Ok(*self
-            .assembly
-            .get(addr as usize)
-            .ok_or(miette!("couldn't get byte"))?)
-    }
+    // fn get_byte(&self, addr: Address) -> Result<u8> {
+    //     Ok(*self
+    //         .assembly
+    //         .get(addr as usize)
+    //         .ok_or(miette!("couldn't get byte"))?)
+    // }
 
     fn place_byte(&mut self, addr: Address, byte: u8) -> Result<()> {
         let asm_byte = self

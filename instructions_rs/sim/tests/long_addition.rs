@@ -35,7 +35,7 @@ fn run_program(source: String) -> Result<CpuState, String> {
     Ok(state)
 }
 
-fn test_addition_source(lhs: u32, rhs: u32, func: &String) {
+fn test_addition_source(lhs: u32, rhs: u32, func: &str) {
     let lhs0 = lhs & 0xff;
     let lhs1 = (lhs >> 8) & 0xff;
     let lhs2 = (lhs >> 16) & 0xff;
@@ -91,7 +91,7 @@ start:
     let expected2 = (expected_result >> 16) & 0xff;
     let expected3 = (expected_result >> 24) & 0xff;
 
-    source.push_str(func.as_str());
+    source.push_str(func);
 
     let final_state = run_program(source).unwrap();
     assert_eq!(final_state.x.state(), Some(expected3 as u8));
@@ -100,7 +100,7 @@ start:
     assert_eq!(final_state.a.state(), Some(expected0 as u8));
 }
 
-fn test_long_addtion_func(func: &String) {
+fn test_long_addtion_func(func: &str) {
     // some edge cases
     test_addition_source(0, 0, func);
 
@@ -213,7 +213,7 @@ func {
 	jmp MAR
 }\n";
 
-    test_long_addtion_func(&func.to_string());
+    test_long_addtion_func(func);
 }
 
 #[test]
@@ -313,7 +313,7 @@ func {
 	jmp MAR
 }\n";
 
-    test_long_addtion_func(&func.to_string());
+    test_long_addtion_func(func);
 }
 
 #[test]
@@ -422,5 +422,5 @@ func {
 	jmp MAR
 }\n";
 
-    test_long_addtion_func(&func.to_string());
+    test_long_addtion_func(func);
 }

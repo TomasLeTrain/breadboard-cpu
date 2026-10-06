@@ -152,9 +152,9 @@ impl<T> AstNode<T> {
         &self.inner
     }
 
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
+    // pub fn into_inner(self) -> T {
+    //     self.inner
+    // }
 
     pub fn inner_mut(&mut self) -> &mut T {
         &mut self.inner
@@ -191,9 +191,9 @@ impl Statement {
         &self.statement
     }
 
-    pub fn into_inner(self) -> StatementKind {
-        self.statement
-    }
+    // pub fn into_inner(self) -> StatementKind {
+    //     self.statement
+    // }
 
     pub fn inner_mut(&mut self) -> &mut StatementKind {
         &mut self.statement
