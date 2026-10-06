@@ -26,14 +26,23 @@ use crate::{
     types::{Symbol, Type},
 };
 
-pub fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
+pub fn parse_string(source: String) -> Result<AsmGenContext> {
+    let file_path = "string".to_string();
+    let source = Arc::new(NamedSourceFile::new(source, file_path));
+    parse_source(source)
+}
+
+pub fn parse_file(file_path_str: &str) -> Result<AsmGenContext> {
     let file_path = file_path_str.to_string();
     let file = fs::read_to_string(file_path.clone())
         .into_diagnostic()
         .wrap_err("Failed reading file to parse")?;
 
     let source = Arc::new(NamedSourceFile::new(file, file_path));
+    parse_source(source)
+}
 
+fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
     let mut program = parser::parse_file(source).wrap_err("Parsing file failed.")?;
 
     // println!("initial: {:#?}", program);
@@ -108,10 +117,8 @@ pub fn parse_file(file_path_str: &str) -> Result<Vec<u8>> {
 
     // println!("{:#?}", asm_context);
 
-    println!("Annotated rogram:");
-    println!("{}", asm_context.format_pretty());
+    // println!("Annotated rogram:");
+    // println!("{}", asm_context.format_pretty());
 
-    let asm = asm_context.into_assembly();
-
-    Ok(asm)
+    Ok(asm_context)
 }

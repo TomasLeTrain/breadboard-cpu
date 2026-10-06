@@ -1,20 +1,19 @@
-use crate::sim::{CpuState, DataRegister};
+use sim::{CpuState, DataRegister};
 use assembler::parse_file;
-
-mod sim;
 
 fn main() {
     let mut state = CpuState::new();
 
     state.load_opcode_roms("../opcode_gen/rom0.bin", "../opcode_gen/rom1.bin");
 
-    let asm = parse_file("src/test_program.asm");
+    let asm_context = parse_file("src/test_program.asm");
 
-    if let Ok(asm) = asm {
-        state.load_program(asm);
+    if let Ok(asm_context) = asm_context {
+        println!("{}", asm_context.format_pretty());
+        state.load_program(asm_context.assembly().clone());
     } else {
         eprintln!("Error parsing file:");
-        eprintln!("{:?}", asm.unwrap_err());
+        eprintln!("{:?}", asm_context.unwrap_err());
         return;
     }
 
