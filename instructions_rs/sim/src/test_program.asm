@@ -28,19 +28,7 @@ start:
 	push 0
 	push 1
 
-	; jmp fib, MAR     ; jump to func
-
-	; 618 cycles (total program)
-	; 0x6A = 106 bytes total program
-	; jmp sum, MAR     
-
-	; 455 cycles - 163 clock cycles faster than sum
-	; 0x67 = 106 bytes total program - 3 bytes smaller than sum
-	; jmp sum_unrolled, MAR     
-
-	; 225 cycles - 393 clock cycles faster than sum
-	; 0x6D = 109 bytes total program - 3 bytes more than sum
-	jmp sum_unrolled_twice, MAR     
+	jmp fib_32, MAR     
 	push_return:
 
 
@@ -54,9 +42,137 @@ start:
 	halt
 
 
+fib_32 {
+	; 0x8040 - a
+	; 0x8044 - b
+	; 0x8048 - z - counter
+	; lsb - msb
+
+	; set initial condition for a
+	mv A, 1 
+	sw A, 0x8040, MAR
+
+	; load 0 into all other numbers
+	mv A, 0 
+	; a
+	sw A, 0x8041, MAR
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+	; b
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+	; z
+	inc MAR
+	sw A, MAR 
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+
+	; set counter
+	mv A, 10 
+	sw A, 0x8048, MAR
+
+	loop {
+		call1{
+			pusha sum_return
+			; function parameters
+			; push 
+			lw A, 0x8044 + 3, MAR
+			push A
+			lw A, 0x8044 + 2, MAR
+			push A
+			lw A, 0x8044 + 1, MAR
+			push A
+			lw A, 0x8044, MAR
+			push A
+
+			lw A, 0x8040 + 3, MAR
+			push A
+			lw A, 0x8040 + 2, MAR
+			push A
+			lw A, 0x8040 + 1, MAR
+			push A
+			lw A, 0x8040, MAR
+			push A
+
+			jmp sum_u32, MAR
+			sum_return:
+		}
+
+		call2{
+			pusha sum_return
+			; function parameters
+			lw A, 0x8048 + 3, MAR
+			push A
+			lw A, 0x8048 + 2, MAR
+			push A
+			lw A, 0x8048 + 1, MAR
+			push A
+			lw A, 0x8048, MAR
+			push A
+
+			; push -1
+			push 0xff
+			push 0xff
+			push 0xff
+			push 0xff
+
+			jmp sum_u32, MAR
+			sum_return:
+
+			; now store result back 
+			pop A
+			sw A, 0x8048, MAR
+			pop A
+			inc MAR
+			sw A, MAR
+			pop A
+			inc MAR
+			sw A, MAR
+			pop A
+			inc MAR
+			sw A, MAR
+		}
+
+		; at this point must check if counter is zero to see if we are finished
+		; check if its zero
+		mv X, 0
+		lw B, 0x8048 + 3, MAR
+		or X, B
+		lw B, 0x8048 + 2, MAR
+		or X, B
+		lw B, 0x8048 + 1, MAR
+		or X, B
+		lw B, 0x8048, MAR
+		or X, B
+
+		lda MAR, loop
+		jnz X, MAR
+	}
+
+	; return routine
+	pop MAR
+	jmp MAR
+}
+
 ; 32 bit sum of 32 bit nums in stack
-; manually unrolled loop version (only for sum operation)
-sum_unrolled_twice {
+; input is 2, 32bit numbers in the stack in the format:
+; [return addr][B[3]][B[2]][B[1]][B[0]][A[3]][A[2]][A[1]][A[0]]
+; stack after operation looks like:
+; [C[0]][C[1]][C[2]][C[3]]
+
+sum_u32 {
 	; 0
 	pop A
 	sw A, 0x8080, MAR ; loads 0x8080 into MAR once 
@@ -147,225 +263,3 @@ sum_unrolled_twice {
 	; return
 	jmp MAR
 }
-
-
-; 32 bit sum of 32 bit nums in stack
-; manually unrolled loop version (only for sum operation)
-; sum_unrolled {
-; 	; where numbers get stored
-; 	pusha 0x8080
-;
-; 	; read 8 bytes from the stack directly into 0x8080 (reads both 4 byte nums)
-; 	mv Z, 8
-;
-; 	loop_1 {
-; 		; get MAR value
-; 		pop MAR
-;
-; 		; retrieve current byte
-; 		pop A
-; 		sw A, MAR 
-; 		inc MAR
-;
-; 		; save MAR again
-; 		push MAR
-;
-; 		; loop logic
-; 		sub Z, 1
-; 		lda MAR, loop_1
-; 		jnz Z, MAR
-; 	}
-;
-; 	; halt
-;
-; 	; want to pop the mar addr stored in the stack
-; 	; can increment SP twice instead of popping useless value
-; 	; pop MAR
-; 	inc SP
-; 	inc SP
-;
-; 	; want to store result to stack, so must save return addr elsewhere
-; 	; get return address and save it to memory, next step changes stack
-; 	pop	A
-; 	sw A, 0xfff0, MAR
-; 	inc MAR
-; 	pop	A
-; 	sw A, MAR ; sw A, 0xfff1, MAR
-;
-; 	; get nums
-; 	lw X, 0x8080, MAR
-; 	lw Y, 0x8084, MAR
-; 	; add nums
-; 	; NOTE: no carry on first add
-; 	add X, Y
-; 	; push result to stack
-; 	push X
-;
-; 	; get nums
-; 	inc MAR
-; 	lw Y, MAR
-; 	lw X, 0x8081, MAR
-; 	; add nums
-; 	adc X, Y
-; 	; push result to stack
-; 	push X
-;
-; 	; get nums
-; 	inc MAR
-; 	lw X, MAR
-; 	lw Y, 0x8086, MAR
-; 	; add nums
-; 	adc X, Y
-; 	; push result to stack
-; 	push X
-;
-; 	; get nums
-; 	inc MAR
-; 	lw Y, MAR
-; 	lw X, 0x8083, MAR
-; 	; add nums
-; 	adc X, Y
-; 	; push result to stack
-; 	push X
-;
-; 	; get return address back
-; 	lw A, 0xfff0, MAR
-; 	; since next addr is right after can just increase MAR and load it into B
-; 	; both approaches take the exact same # of clock cycles, but this approach is one less byte long
-; 	inc MAR
-; 	lw B, MAR ; lw B, 0xfff1, MAR
-;
-; 	; load into mar
-; 	mv MarLo, A
-; 	mv MarHi, B
-;
-; 	; return
-; 	jmp MAR
-; }
-;
-; ; 32 bit sum of 32 bit nums in stack
-; sum {
-; 	; where numbers get stored
-; 	pusha 0x8080
-;
-; 	; read 8 bytes from the stack directly into 0x8080 (reads both 4 byte nums)
-; 	mv Z, 8
-;
-; 	loop_1 {
-; 		; get MAR value
-; 		pop MAR
-;
-; 		; retrieve current byte
-; 		pop A
-; 		sw A, MAR 
-; 		inc MAR
-;
-; 		; save MAR again
-; 		push MAR
-;
-; 		; loop logic
-; 		sub Z, 1
-; 		lda MAR, loop_1
-; 		jnz Z, MAR
-; 	}
-;
-; 	; halt
-;
-; 	; want to pop the mar addr stored in the stack
-; 	; can increment SP twice instead of popping useless value
-; 	; pop MAR
-; 	inc SP
-; 	inc SP
-;
-; 	; num iterations (4 bytes)
-; 	mv Z, 4
-;
-; 	; guarantee a clear of carry flag and push said flags
-; 	mv A, 0
-; 	cmp A, 0
-; 	sw Flags, 0x9000, MAR
-;
-; 	; want to store result to stack, so must save return addr elsewhere
-; 	; get return address and save it to memory, next step changes stack
-; 	pop	A
-; 	sw A, 0xfff0, MAR
-; 	inc MAR
-; 	pop	A
-; 	sw A, MAR ; sw A, 0xfff1, MAR
-;
-; 	; now perform byte by byte ops
-; 	loop_2 {
-; 		; x = left num
-; 		lda MAR, 0x8084
-; 		; subtract current offset
-; 		sub MarLo, Z
-; 		lw X, MAR
-;
-; 		; y = right num
-; 		lda MAR, 0x8088
-; 		; subtract current offset
-; 		sub MarLo, Z
-; 		lw Y, MAR
-;
-;
-; 		; get previous flags, add with carry, and save flags
-; 		lw Flags, 0x9000, MAR
-; 		adc X, Y
-; 		; 0x9000 addr already stored at MAR here, no need to load it again
-; 		sw Flags, MAR
-;
-; 		; push result to stack
-; 		push X
-;
-; 		; loop logic
-; 		sub Z, 1
-; 		lda MAR, loop_2
-; 		jnz Z, MAR
-; 	}
-;
-; 	; get return address back
-; 	lw A, 0xfff0, MAR
-; 	; since next addr is right after can just increase MAR and load it into B
-; 	; both approaches take the exact same # of clock cycles, but this approach is one less byte long
-; 	inc MAR
-; 	lw B, MAR ; lw B, 0xfff1, MAR
-;
-; 	; 63 | 49 FF F0   | lw A, 0xfff0, MAR
-; 	; 66 | 4A FF F1   | lw B, 0xfff1, MAR
-; 	; compared to
-; 	; 63 | 49 FF F0   | lw A, 0xfff0, MAR
-; 	; 66 | D5         | inc MAR
-; 	; 67 | 2D         | lw B, MAR ; lw B, 0xfff1, MAR
-;
-;
-; 	; load into mar
-; 	mv MarLo, A
-; 	mv MarHi, B
-;
-; 	; return
-; 	jmp MAR
-; }
-
-; fib {
-; 	; initial conditions
-; 	mv X, 0
-; 	mv Y, 1
-;
-; 	mv Z, 255
-;
-; 	lda MAR, loop
-;
-; 	loop {
-; 		add X, Y
-; 		add Y, X
-;
-; 		sub Z, 1
-;
-; 		jnz Z, MAR
-; 	}
-;
-;
-; 	; return routine
-; 	pop MAR
-; 	jmp MAR
-; }
