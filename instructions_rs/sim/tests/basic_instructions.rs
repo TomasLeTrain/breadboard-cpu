@@ -2,6 +2,31 @@ use assembler::parse_string;
 
 use sim::*;
 
+// TODO: add  fib test:
+// ; fib {
+// ; 	; initial conditions
+// ; 	mv X, 0
+// ; 	mv Y, 1
+// ;
+// ; 	mv Z, 255
+// ;
+// ; 	lda MAR, loop
+// ;
+// ; 	loop {
+// ; 		add X, Y
+// ; 		add Y, X
+// ;
+// ; 		sub Z, 1
+// ;
+// ; 		jnz Z, MAR
+// ; 	}
+// ;
+// ;
+// ; 	; return routine
+// ; 	pop MAR
+// ; 	jmp MAR
+// ; }
+
 fn run_program(source: String) -> Result<CpuState, String> {
     let mut state = CpuState::new();
 
