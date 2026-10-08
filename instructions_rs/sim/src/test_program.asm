@@ -8,36 +8,14 @@ start:
 
 	; push return addr fib before data
 	pusha push_return
-
-	; push the left and right nums
-	; right first
-	; push 0
-	; push 0
-	; push 0
-	; push 0x32
-
-	push 255
-	push 255
-	push 255
-	push 255
-
-	; push the left and right nums
-	; left second
-	push 0
-	push 0
-	push 0
-	push 1
-
 	jmp fib_32, MAR     
 	push_return:
 
-
 	; retrieve result from stack into registers
-	; expected result is 
-	pop X ; 00
-	pop Y ; 00
-	pop Z ; 00
-	pop A ; 70
+	pop X
+	pop Y
+	pop Z
+	pop A
 
 	halt
 
@@ -49,27 +27,28 @@ fib_32 {
 	; lsb - msb
 
 	; set initial condition for a
-	mv A, 1 
+	mv A, 1
 	sw A, 0x8040, MAR
 
 	; load 0 into all other numbers
 	mv A, 0 
+	inc MAR
 	; a
-	sw A, 0x8041, MAR
-	inc MAR
-	sw A, MAR
-	inc MAR
-	sw A, MAR
-	; b
-	inc MAR
 	sw A, MAR
 	inc MAR
 	sw A, MAR
 	inc MAR
 	sw A, MAR
+	; b - 0x8044
 	inc MAR
 	sw A, MAR
-	; z
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+	inc MAR
+	sw A, MAR
+	; z - 0x8048
 	inc MAR
 	sw A, MAR 
 	inc MAR
@@ -79,12 +58,14 @@ fib_32 {
 	inc MAR
 	sw A, MAR
 
-	; set counter
-	mv A, 10 
+	; set counter - here its for 2^16 - 1th fib number
+	mv A, 255
 	sw A, 0x8048, MAR
+	mv A, 255 
+	sw A, 0x8048+1, MAR
 
 	loop {
-		call1{
+		call1 {
 			pusha sum_return
 			; function parameters
 			; push 
@@ -108,9 +89,55 @@ fib_32 {
 
 			jmp sum_u32, MAR
 			sum_return:
+
+			; now store result into a
+			pop A
+			sw A, 0x8040 + 3, MAR
+			pop A
+			sw A, 0x8040 + 2, MAR
+			pop A
+			sw A, 0x8040 + 1, MAR
+			pop A
+			sw A, 0x8040, MAR
 		}
 
-		call2{
+		call2 {
+			pusha sum_return
+			; function parameters
+			; push 
+			lw A, 0x8044 + 3, MAR
+			push A
+			lw A, 0x8044 + 2, MAR
+			push A
+			lw A, 0x8044 + 1, MAR
+			push A
+			lw A, 0x8044, MAR
+			push A
+
+			lw A, 0x8040 + 3, MAR
+			push A
+			lw A, 0x8040 + 2, MAR
+			push A
+			lw A, 0x8040 + 1, MAR
+			push A
+			lw A, 0x8040, MAR
+			push A
+
+			jmp sum_u32, MAR
+			sum_return:
+
+			; now store result into b
+			pop A
+			sw A, 0x8044 + 3, MAR
+			pop A
+			sw A, 0x8044 + 2, MAR
+			pop A
+			sw A, 0x8044 + 1, MAR
+			pop A
+			sw A, 0x8044, MAR
+		}
+
+		call3 {
 			pusha sum_return
 			; function parameters
 			lw A, 0x8048 + 3, MAR
@@ -131,18 +158,15 @@ fib_32 {
 			jmp sum_u32, MAR
 			sum_return:
 
-			; now store result back 
+			; now store result into counter
+			pop A
+			sw A, 0x8048 + 3, MAR
+			pop A
+			sw A, 0x8048 + 2, MAR
+			pop A
+			sw A, 0x8048 + 1, MAR
 			pop A
 			sw A, 0x8048, MAR
-			pop A
-			inc MAR
-			sw A, MAR
-			pop A
-			inc MAR
-			sw A, MAR
-			pop A
-			inc MAR
-			sw A, MAR
 		}
 
 		; at this point must check if counter is zero to see if we are finished
@@ -158,11 +182,42 @@ fib_32 {
 		or X, B
 
 		lda MAR, loop
-		jnz X, MAR
+		cmp X, 0
+		jnz MAR
 	}
 
+	; want to store result to stack, so must save return addr elsewhere
+	; get return address and save it to memory, next step changes stack
+	pop	A
+	sw A, 0xfff0, MAR
+	inc MAR
+	pop	A
+	sw A, MAR ; sw A, 0xfff1, MAR
+
 	; return routine
-	pop MAR
+	lw A, 0x8040, MAR
+	push A
+	inc MAR
+	lw A, MAR
+	push A
+	inc MAR
+	lw A, MAR
+	push A
+	inc MAR
+	lw A, MAR
+	push A
+
+	; get return address back
+	lw A, 0xfff0, MAR
+	; since next addr is right after can just increase MAR and load it into B
+	; both approaches take the exact same # of clock cycles, but this approach is one less byte long
+	inc MAR
+	lw B, MAR ; lw B, 0xfff1, MAR
+
+	; load into mar
+	mv MarLo, A
+	mv MarHi, B
+
 	jmp MAR
 }
 
