@@ -14,7 +14,7 @@ Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { Newline* ~ ((FunctionCall ~ Newline*) | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | InstructionStatement) }
+Statement  = { Newline* ~ ((FunctionCall ~ Newline*) | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | InstructionStatement) }
 
 
 ExprParameters = { ExprParameter ~ ("," ~ ExprParameter)* }
@@ -26,11 +26,6 @@ InstructionLabel      = { Identifier }
 FunctionCall = { FunctionCallName ~ "(" ~ ExprParameters? ~ ")" }
 FunctionCallName      = { Identifier }
 FunctionCallParameter  = _{ Expr }
-
-
-
-ReturnStatement = { "return" ~ ReturnParameter ~ Newline* }
-ReturnParameter = _{ Block | Expr }
 
 ReturnStatement = { "return" ~ ReturnParameter ~ Newline* }
 ReturnParameter = _{ Block | Expr }

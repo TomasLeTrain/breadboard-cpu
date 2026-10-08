@@ -46,22 +46,22 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
 
     // println!("initial: {:#?}", program);
 
-    let mut global_symbols = types::SymbolTypeContext::new();
+    let mut global_symbols = types::TypecheckContext::new();
 
     // add global symbols reserved for register names and the like
 
     for reg in Register::iterator() {
-        global_symbols.push(Symbol {
+        global_symbols.push_global(Symbol {
             name: reg.name().to_string(),
-            symbol_type: Type::Register,
+            ty: Type::Register,
             span: None,
         })?;
     }
 
     for reg in AddressRegister::iterator() {
-        global_symbols.push(Symbol {
+        global_symbols.push_global(Symbol {
             name: reg.name().to_string(),
-            symbol_type: Type::AddressRegister,
+            ty: Type::AddressRegister,
             span: None,
         })?;
     }
@@ -87,7 +87,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
     for reg in Register::iterator() {
         valued_symbols.push(EvalSymbol {
             name: reg.name().to_string(),
-            symbol_type: Type::Register,
+            ty: Type::Register,
             value: ExprValue::Register(*reg),
             span: None,
         })?;
@@ -96,7 +96,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
     for reg in AddressRegister::iterator() {
         valued_symbols.push(EvalSymbol {
             name: reg.name().to_string(),
-            symbol_type: Type::AddressRegister,
+            ty: Type::AddressRegister,
             value: ExprValue::AddressRegister(*reg),
             span: None,
         })?;

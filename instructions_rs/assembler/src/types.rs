@@ -64,7 +64,7 @@ impl Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Symbol<T> {
+pub struct Symbol {
     pub name: String,
     pub span: Option<AstSpan>,
     pub ty: Type,
@@ -89,14 +89,14 @@ impl SymbolContext {
         self.symbols.insert(symbol.name.clone(), symbol.clone())
     }
 
-    fn pop(&mut self) -> Result<Symbol<T>> {
+    fn pop(&mut self) -> Result<Symbol> {
         let popped_symbol = self
             .symbol_stack
             .pop()
             .ok_or(EmptyStackError {})
             .into_diagnostic()?;
 
-        let map_symbol = self.symbols.remove(popped_symbol.as_key()).unwrap();
+        let map_symbol = self.symbols.remove(&popped_symbol.name).unwrap();
 
         Ok(map_symbol)
     }
@@ -113,7 +113,7 @@ impl SymbolContext {
 // keeps track of symbols by keeping track of their scope as well
 // allows reusing one context struct through all operations
 
-// local and global separated so new context keeping global symbols but no locals is easy
+// local and global separated for constructing new contexts with only global symbols
 // in this context local means local to only the current scope, global means accessible to all
 // scopes below its definition
 pub struct TypecheckContext {
@@ -129,7 +129,7 @@ impl TypecheckContext {
         }
     }
 
-    pub fn clone_global_context(&self) -> Self {
+    pub fn clone_global_context_only(&self) -> Self {
         Self {
             local_context: SymbolContext::new(),
             global_context: self.global_context.clone(),
@@ -190,7 +190,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
     for statement in statements.iter_mut() {
         if let StatementKind::Function(function) = statement.inner_mut().inner_mut() {
             // only copies function context - no access to outer labels
-            let mut function_ctx = ctx.clone_global_context();
+            let mut function_ctx = ctx.clone_global_context_only();
 
             for param in &function.params {
                 // push into local scope
@@ -235,13 +235,13 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
             for param in function.params.iter().rev() {
                 // push into local scope
                 let inner = param.inner();
-                let curr_symbol = LabelSymbol {
+                let curr_symbol = Symbol {
                     name: inner.name.clone(),
-                    symbol_type: inner.ty,
+                    ty: inner.ty,
                     span: Some(param.span().clone()),
                 };
 
-                let poppped = symbols.pop_label()?;
+                let poppped = ctx.pop_local()?;
                 if poppped != curr_symbol {
                     // TODO: make specific type for error with more details
                     return Err(miette!(
@@ -377,7 +377,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                 inner.ty = symbols.get_local(name).unwrap().ty;
             } else {
                 Err(TypecheckExprError::new(
-                    TypecheckExprErrorKind::SymbolNotFound(LabelSymbol {
+                    TypecheckExprErrorKind::SymbolNotFound(Symbol {
                         name: name.to_string(),
                         ty: inner.ty,
                         span: Some(typed_expr.span.clone()),
@@ -547,7 +547,7 @@ impl Display for EmptyStackError {
 #[derive(Debug)]
 pub enum TypecheckExprErrorKind {
     IdentityAlreadyTyped((AstSpan, Type)),
-    SymbolNotFound(LabelSymbol),
+    SymbolNotFound(Symbol),
     InvalidBinaryOpTypes((AstSpan, Type), (AstSpan, Type), BinaryOp),
     InvalidComparisonTypes((AstSpan, Type), (AstSpan, Type)),
     InvalidEqualityTypes((AstSpan, Type), (AstSpan, Type)),

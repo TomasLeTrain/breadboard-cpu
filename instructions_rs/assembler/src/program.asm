@@ -6,7 +6,7 @@ start:
 
 	; this is some more comments
 	; these are next to each other
-	push push_return
+	pusha push_return
 
 	jmp fib, MAR     ; jump to func
 

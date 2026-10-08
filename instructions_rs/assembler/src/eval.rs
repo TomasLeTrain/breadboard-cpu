@@ -185,7 +185,7 @@ impl ExprValue {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EvalSymbol {
     pub name: String,
-    pub symbol_type: Type,
+    pub ty: Type,
     pub value: ExprValue,
     pub span: Option<AstSpan>,
 }
@@ -218,7 +218,7 @@ impl EvalContext {
                 spans.push(LabeledSpan::new_with_span(
                     Some(format!(
                         "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
-                        symbol.symbol_type, symbol.value
+                        symbol.ty, symbol.value
                     )),
                     ast_span.to_miette_span(),
                 ));
@@ -227,7 +227,7 @@ impl EvalContext {
                 spans.push(LabeledSpan::new_with_span(
                     Some(format!(
                         "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
-                        other.symbol_type, other.value
+                        other.ty, other.value
                     )),
                     ast_span.to_miette_span(),
                 ));
@@ -275,7 +275,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             // push into local scope
             let curr_symbol = EvalSymbol {
                 name: name.clone(),
-                symbol_type: Type::Label,
+                ty: Type::Label,
                 value: ExprValue::Addr(statement.inner().address().unwrap()),
                 span: Some(statement.span().clone()),
             };
@@ -333,7 +333,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                 let symbol = ctx.get(name).unwrap();
 
                 // TODO: already valued error
-                if inner.ty != symbol.symbol_type {
+                if inner.ty != symbol.ty {
                     // Err(EvalExprError::new(
                     //     TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
                     // ))?;
@@ -344,7 +344,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                 Err(EvalExprError::new(EvalExprErrorKind::SymbolNotFound(
                     EvalSymbol {
                         name: name.to_string(),
-                        symbol_type: inner.ty,
+                        ty: inner.ty,
                         span: Some(inner_span),
                         value: ExprValue::Unknown,
                     },

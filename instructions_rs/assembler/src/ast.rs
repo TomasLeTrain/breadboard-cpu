@@ -242,48 +242,6 @@ pub enum StatementKind {
     Instruction(AstInstruction),
 }
 
-#[derive(Debug, Clone)]
-pub struct Function {
-    pub name: String,
-    pub params: Vec<AstNode<TypedParameter>>,
-    pub body: Vec<StatementNode>,
-    pub return_type: Type,
-    pub is_macro: bool,
-}
-
-impl Function {
-    pub fn new(
-        name: String,
-        params: Vec<AstNode<TypedParameter>>,
-        body: Vec<StatementNode>,
-    ) -> Self {
-        Function {
-            name,
-            params,
-            body,
-            return_type: Type::Unknown,
-            is_macro: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypedParameter {
-    pub name: String,
-    pub ty: Type,
-    pub value: ExprValue,
-}
-
-impl TypedParameter {
-    pub fn new(name: String, ty: Type) -> Self {
-        Self {
-            name,
-            ty,
-            value: ExprValue::Unknown,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
     pub name: String,
@@ -330,9 +288,9 @@ impl Function {
     }
 
     pub fn as_signature(&self) -> FunctionSignature {
-        FunctionSignature{
+        FunctionSignature {
             name: self.name.clone(),
-            params: self.name,
+            params: self.params.iter().map(|e| e.inner.ty).collect(),
         }
     }
 }
