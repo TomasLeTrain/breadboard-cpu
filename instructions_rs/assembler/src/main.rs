@@ -15,6 +15,10 @@ use miette::Result;
 // istr
 // blocked label
 // everything else is not
+//
+// parser - original ast
+// typecheck - assign all symbols a type
+// function resolver - find functions
 
 fn main() -> Result<()> {
     let file_path_str = "src/program.asm";
@@ -22,6 +26,9 @@ fn main() -> Result<()> {
     let rom_size = 1 << 17;
 
     let asm = parse_file(file_path_str)?;
+
+    println!("assembled!");
+    println!("{}", asm.format_pretty());
 
     LogisimOutput::new("asm_logisim.img")?.generate_output(asm.assembly())?;
     BinaryOutput::new("asm_bin.bin", rom_size)?.generate_output(asm.assembly())?;

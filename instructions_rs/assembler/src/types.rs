@@ -74,13 +74,15 @@ pub struct Symbol {
 pub struct SymbolContext {
     symbol_stack: Vec<Symbol>,
     symbols: HashMap<String, Symbol>,
+    kind: ContextKind,
 }
 
 impl SymbolContext {
-    pub fn new() -> Self {
+    pub fn new(kind: ContextKind) -> Self {
         Self {
             symbol_stack: Vec::new(),
             symbols: HashMap::new(),
+            kind,
         }
     }
 
@@ -93,7 +95,7 @@ impl SymbolContext {
         let popped_symbol = self
             .symbol_stack
             .pop()
-            .ok_or(EmptyStackError {})
+            .ok_or(EmptyStackError { kind: self.kind })
             .into_diagnostic()?;
 
         let map_symbol = self.symbols.remove(&popped_symbol.name).unwrap();
@@ -121,63 +123,111 @@ pub struct TypecheckContext {
     global_context: SymbolContext,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum ContextKind {
+    Local,
+    Global,
+}
+
+impl Display for ContextKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            ContextKind::Local => "local",
+            ContextKind::Global => "global",
+        };
+        write!(f, "{name}")
+    }
+}
+
 impl TypecheckContext {
     pub fn new() -> Self {
         Self {
-            local_context: SymbolContext::new(),
-            global_context: SymbolContext::new(),
+            local_context: SymbolContext::new(ContextKind::Local),
+            global_context: SymbolContext::new(ContextKind::Global),
         }
     }
 
-    pub fn clone_global_context_only(&self) -> Self {
+    pub fn clone_global_ctx_only(&self) -> Self {
         Self {
-            local_context: SymbolContext::new(),
+            local_context: SymbolContext::new(ContextKind::Local),
             global_context: self.global_context.clone(),
         }
     }
 
-    pub fn push_local(&mut self, symbol: Symbol) -> Result<()> {
-        let push_result = self.local_context.push(&symbol);
-
-        if let Some(other) = push_result {
-            DuplicateSymbolError::from_symbols(symbol, other)
-        } else {
-            Ok(())
+    fn kind_to_ctx(&self, kind: ContextKind) -> &SymbolContext {
+        match kind {
+            ContextKind::Local => &self.local_context,
+            ContextKind::Global => &self.global_context,
         }
+    }
+
+    fn kind_to_ctx_mut(&mut self, kind: ContextKind) -> &mut SymbolContext {
+        match kind {
+            ContextKind::Local => &mut self.local_context,
+            ContextKind::Global => &mut self.global_context,
+        }
+    }
+
+    fn ctx_push(&mut self, symbol: Symbol, kind: ContextKind) -> Result<()> {
+        // must check in all context to ensure no conflicts across different context
+        if self.contains(&symbol.name) {
+            let other = self.get(&symbol.name).unwrap().clone();
+            return DuplicateSymbolError::from_symbols(symbol, other);
+        }
+
+        self.kind_to_ctx_mut(kind)
+            .push(&symbol)
+            .map(|other| DuplicateSymbolError::from_symbols(symbol, other))
+            .unwrap_or(Ok(()))
+    }
+
+    fn ctx_pop(&mut self, kind: ContextKind) -> Result<Symbol> {
+        self.kind_to_ctx_mut(kind).pop()
+    }
+
+    fn ctx_get(&self, name: &String, kind: ContextKind) -> Option<&Symbol> {
+        self.kind_to_ctx(kind).get(name)
+    }
+
+    pub fn push_local(&mut self, symbol: Symbol) -> Result<()> {
+        self.ctx_push(symbol, ContextKind::Local)
     }
 
     pub fn push_global(&mut self, symbol: Symbol) -> Result<()> {
-        let push_result = self.global_context.push(&symbol);
-
-        if let Some(other) = push_result {
-            DuplicateSymbolError::from_symbols(symbol, other)
-        } else {
-            Ok(())
-        }
+        self.ctx_push(symbol, ContextKind::Global)
     }
 
     fn pop_local(&mut self) -> Result<Symbol> {
-        self.local_context.pop()
+        self.ctx_pop(ContextKind::Local)
     }
 
     fn pop_global(&mut self) -> Result<Symbol> {
-        self.global_context.pop()
+        self.ctx_pop(ContextKind::Global)
     }
 
     fn get_local(&self, name: &String) -> Option<&Symbol> {
-        self.local_context.get(name)
+        self.ctx_get(name, ContextKind::Local)
     }
 
     fn get_global(&self, name: &String) -> Option<&Symbol> {
-        self.global_context.get(name)
+        self.ctx_get(name, ContextKind::Global)
     }
 
-    fn contains_local(&self, name: &String) -> bool {
-        self.local_context.contains(name)
+    fn get(&self, name: &String) -> Option<&Symbol> {
+        self.get_local(name).or(self.get_global(name))
     }
 
-    fn contains_global(&self, name: &String) -> bool {
-        self.global_context.contains(name)
+    //
+    // fn contains_local(&self, name: &String) -> bool {
+    //     self.local_context.contains(name)
+    // }
+    //
+    // fn contains_global(&self, name: &String) -> bool {
+    //     self.global_context.contains(name)
+    // }
+
+    fn contains(&self, name: &String) -> bool {
+        self.local_context.contains(name) || self.global_context.contains(name)
     }
 }
 
@@ -190,7 +240,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
     for statement in statements.iter_mut() {
         if let StatementKind::Function(function) = statement.inner_mut().inner_mut() {
             // only copies function context - no access to outer labels
-            let mut function_ctx = ctx.clone_global_context_only();
+            let mut function_ctx = ctx.clone_global_ctx_only();
 
             for param in &function.params {
                 // push into local scope
@@ -207,7 +257,10 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                     .wrap_err("Pushing function symbol failed.")?;
             }
 
-            typecheck(&mut function.body, &mut function_ctx)?;
+            typecheck(&mut function.body, &mut function_ctx).context(format!(
+                "Parsing function body of \"{}\" failed.",
+                function.name
+            ))?;
 
             // now pop all the symbols that were just added
             for param in function.params.iter().rev() {
@@ -224,30 +277,9 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 if pop_val != curr_symbol {
                     // TODO: make specific type for error with more details
                     return Err(miette!(
-                        "Popped symbol does not match - original: {:?}, got: {:?}",
+                        "Popped parameter symbol does not match - original: {:?}, got: {:?}",
                         curr_symbol,
                         pop_val,
-                    ));
-                }
-            }
-
-            // now pop all the symbols that were just added
-            for param in function.params.iter().rev() {
-                // push into local scope
-                let inner = param.inner();
-                let curr_symbol = Symbol {
-                    name: inner.name.clone(),
-                    ty: inner.ty,
-                    span: Some(param.span().clone()),
-                };
-
-                let poppped = ctx.pop_local()?;
-                if poppped != curr_symbol {
-                    // TODO: make specific type for error with more details
-                    return Err(miette!(
-                        "Popped symbol does not match - original: {:?}, got: {:?}",
-                        curr_symbol,
-                        poppped,
                     ));
                 }
             }
@@ -367,14 +399,15 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
         // NOTE: assumes unique function names
         ExprKind::FunctionCall(FunctionCall { name, .. }) | ExprKind::Identity(name) => {
             // try and find identity in symbols
-            if symbols.contains_global(name) {
+
+            if symbols.contains(name) {
                 if !matches!(inner.ty, Type::Unknown) {
                     Err(TypecheckExprError::new(
                         TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
                     ))?;
                 }
 
-                inner.ty = symbols.get_local(name).unwrap().ty;
+                inner.ty = symbols.get(name).unwrap().ty;
             } else {
                 Err(TypecheckExprError::new(
                     TypecheckExprErrorKind::SymbolNotFound(Symbol {
@@ -534,13 +567,15 @@ impl DuplicateSymbolError {
 }
 
 #[derive(Debug)]
-pub struct EmptyStackError;
+pub struct EmptyStackError {
+    kind: ContextKind,
+}
 
 impl Error for EmptyStackError {}
 
 impl Display for EmptyStackError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "No symbols in stack.")
+        write!(f, "No symbols in {} stack.", self.kind.to_string())
     }
 }
 

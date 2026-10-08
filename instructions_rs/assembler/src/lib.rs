@@ -68,7 +68,8 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
 
     // println!("initial: {:#?}", program);
     types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
-    // println!("after typecheck: {:#?}", program);
+
+    println!("after typecheck: {:#?}", program);
 
     let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)
