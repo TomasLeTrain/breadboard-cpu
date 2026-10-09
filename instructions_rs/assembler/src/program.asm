@@ -45,7 +45,7 @@ fib {
 
 	function_test(0, 0)
 	; gets catched later
-	non_existant(0, 0)
+	; non_existant(0, 0)
 
 	; jmp int_fn(0,0), MAR
 }

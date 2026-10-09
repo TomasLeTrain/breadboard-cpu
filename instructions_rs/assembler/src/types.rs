@@ -385,6 +385,55 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                     typecheck_expr(param, ctx)?;
                 }
             }
+            StatementKind::FunctionCall(FunctionCall { name, params }) => {
+                println!("whar {name}");
+
+                // typecheck all params first
+                for param in params.iter_mut() {
+                    typecheck_expr(param, ctx)?;
+                }
+
+                // try and find identity in symbols
+                if ctx.contains(name) {
+                    let found_symbol = ctx.get(name).unwrap();
+
+                    // make sure function signature of call and found symbol match
+                    if let Type::Function {
+                        params: found_params,
+                        return_ty,
+                        ..
+                    } = &found_symbol.ty
+                    {
+                        let matching_elements = params
+                            .iter()
+                            .map(|e| e.inner.ty.clone())
+                            .zip(found_params.iter())
+                            .filter(|(a, b)| a.as_simple() == b.as_simple())
+                            .count();
+
+                        if matching_elements != params.len()
+                            || matching_elements != found_params.len()
+                        {
+                            // parameters dont match
+                            // TODO: make detailed error
+                            Err(miette!(
+                                "expected function of signature, found function with different signature"
+                            ))?;
+                        }
+
+                        if !matches!(return_ty.as_ref(), Type::Block) {
+                            // TODO: make detailed error
+                            Err(miette!("expected function to return block, instead ..."))?;
+                        }
+                    } else {
+                        // TODO: make detailed error
+                        Err(miette!("expected function, got different type:"))?;
+                    }
+                } else {
+                    // TODO: make detailed error
+                    Err(miette!("function of name \"{}\" not found", name))?;
+                }
+            }
             _ => (),
         };
     }
@@ -427,8 +476,9 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
     match &mut inner.kind {
         // literals already have their typed filled in
         ExprKind::Literal => (),
-        // NOTE: assumes unique function names
         ExprKind::FunctionCall(FunctionCall { name, params }) => {
+            println!("whar {name}");
+
             // typecheck all params first
             for param in params.iter_mut() {
                 typecheck_expr(param, symbols)?;
@@ -451,7 +501,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                 if let Type::Function {
                     params: found_params,
                     ..
-                } = &inner.ty
+                } = &found_symbol.ty
                 {
                     let matching_elements = params
                         .iter()
