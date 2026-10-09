@@ -326,9 +326,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
         // literals already have their value filled in
         ExprKind::Literal => (),
         // TODO: implement function evaluation
-        ExprKind::FunctionCall(function_call) => {
-            // assert!(function_call.)
-        }
+        ExprKind::FunctionCall(function_call) => (),
         ExprKind::Identity(name) => {
             // try and find identity in symbols
             if ctx.contains(name) {
@@ -358,7 +356,6 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             expr: unary_expr,
         } => {
             eval_expr(unary_expr, ctx)?;
-            // let span = unary_expr.span().clone();
             let unary_expr = unary_expr.inner_mut();
 
             inner.value = match op {
@@ -370,9 +367,6 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
         ExprKind::Binary { op, left, right } => {
             eval_expr(left, ctx)?;
             eval_expr(right, ctx)?;
-
-            // let left_span = left.span().clone();
-            // let right_span = right.span().clone();
 
             let left = left.inner_mut();
             let right = right.inner_mut();

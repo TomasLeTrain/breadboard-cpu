@@ -49,7 +49,7 @@ fib {
 	; gets catched later
 	; non_existant(0, 0)
 
-	jmp int_fn(0), MAR
+	; jmp int_fn(0), MAR
 }
 
 fn int_fn(return_addr: Address) {
