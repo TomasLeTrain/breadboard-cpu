@@ -219,13 +219,14 @@ impl AstInstruction {
 
 #[derive(Debug, Clone)]
 pub struct Variable {
-    name: String,
-    expr: VariableExprKind,
+    pub name: String,
+    pub expr_kind: VariableExprKind,
+    pub ty: Type,
 }
 
 impl Variable {
-    pub fn new(name: String, expr: VariableExprKind) -> Self {
-        Self { name, expr }
+    pub fn new(name: String, expr_kind: VariableExprKind, ty: Type) -> Self {
+        Self { name, expr_kind, ty }
     }
 }
 

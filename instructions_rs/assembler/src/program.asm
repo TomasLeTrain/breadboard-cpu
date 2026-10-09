@@ -25,7 +25,9 @@ fib {
 	mv X, 0
 	mv Y, 1
 
-	mv Z, 255
+	let num_iters = 128
+
+	mv Z, num_iters
 
 	lda MAR, loop
 
@@ -53,11 +55,13 @@ fib {
 }
 
 fn int_fn(return_addr: Address) {
-	let variable = 0
-	let variable = {
+	let variable: u16 = return_addr
+	; let variable_u16: u16 = 0
+	let variable_2 = {
 		jmp MAR
 	}
-	return return_addr
+
+	return variable_2
 }
 
 fn function_test(what: u8, addr: u16) {

@@ -4,7 +4,10 @@ use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Resu
 use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
-    ast::{AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp},
+    ast::{
+        AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp,
+        Variable, VariableExprKind,
+    },
     types::{Address, Type},
 };
 
@@ -265,7 +268,7 @@ impl EvalContext {
 }
 
 pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> Result<()> {
-    let mut labels = Vec::new();
+    let mut local_symbols = Vec::new();
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
@@ -283,12 +286,37 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             ctx.push(curr_symbol.clone())
                 .wrap_err("Pushing local label symbol failed.")?;
 
-            labels.push(curr_symbol);
+            local_symbols.push(curr_symbol);
         }
     }
 
     for statement in statements.iter_mut() {
         match statement.inner_mut().inner_mut() {
+            StatementKind::Variable(Variable {
+                name,
+                expr_kind,
+                ty,
+            }) => {
+                let value = match expr_kind {
+                    VariableExprKind::Expr(expr) => {
+                        eval_expr(expr, ctx)?;
+                        &expr.inner.value
+                    }
+                    VariableExprKind::Block(block) => todo!(),
+                };
+
+                // push into local scope
+                let curr_symbol = EvalSymbol {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    value: value.clone(),
+                    span: Some(statement.span().clone()),
+                };
+
+                ctx.push(curr_symbol.clone())
+                    .wrap_err("Pushing local variable symbol failed.")?;
+                local_symbols.push(curr_symbol);
+            }
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 eval_program(body, ctx)?;
             }
@@ -303,7 +331,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
     // checks that all returned symbols match what was pushed in
     // goes in reverse since pop starts from the last added element
-    for label in labels.into_iter().rev() {
+    for label in local_symbols.into_iter().rev() {
         let curr = ctx.pop()?;
         if label != curr {
             return Err(miette!(

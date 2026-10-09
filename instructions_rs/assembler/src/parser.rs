@@ -101,11 +101,16 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &Source) -> Result<Stateme
     )
     .into());
 
+    let mut ty = Type::Unknown;
+
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::Identifier => {
                 // merge span covering label in case no params
                 name = Ok(item.to_string());
+            }
+            Rule::Type => {
+                ty = parse_type(item, source)?;
             }
             Rule::Expr => {
                 expr = Ok(VariableExprKind::Expr(parse_expr(
@@ -127,7 +132,7 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &Source) -> Result<Stateme
     }
 
     Ok(StatementNode::new(
-        Statement::new(StatementKind::Variable(Variable::new(name?, expr?))),
+        Statement::new(StatementKind::Variable(Variable::new(name?, expr?, ty))),
         span,
     ))
 }

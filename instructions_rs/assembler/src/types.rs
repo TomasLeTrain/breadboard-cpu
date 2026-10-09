@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash, sync::Ar
 
 use crate::ast::{
     AstNode, AstSpan, BinaryOp, Expr, ExprKind, FunctionCall, ReturnKind, StatementKind,
-    StatementNode, UnaryOp,
+    StatementNode, UnaryOp, Variable, VariableExprKind,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
@@ -236,15 +236,6 @@ impl TypecheckContext {
         self.get_local(name).or(self.get_global(name))
     }
 
-    //
-    // fn contains_local(&self, name: &String) -> bool {
-    //     self.local_context.contains(name)
-    // }
-    //
-    // fn contains_global(&self, name: &String) -> bool {
-    //     self.global_context.contains(name)
-    // }
-
     fn contains(&self, name: &String) -> bool {
         self.local_context.contains(name) || self.global_context.contains(name)
     }
@@ -365,6 +356,42 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
     for statement in statements.iter_mut() {
         // NOTE: functions were already typechecked
         match statement.inner_mut().inner_mut() {
+            StatementKind::Variable(Variable {
+                name,
+                expr_kind,
+                ty,
+            }) => {
+                // typecheck inner expr
+                match expr_kind {
+                    VariableExprKind::Expr(expr) => typecheck_expr(expr, ctx)?,
+                    VariableExprKind::Block(block) => typecheck(block, ctx)?,
+                };
+                let expr_ty = match expr_kind {
+                    VariableExprKind::Expr(expr) => expr.inner.ty.clone(),
+                    VariableExprKind::Block(_) => Type::Block,
+                };
+
+                // check it matches current ty, if its set
+                if matches!(ty, Type::Unknown) {
+                    *ty = expr_ty;
+                } else {
+                    if ty.unify(&expr_ty).is_none() {
+                        // TODO: detailed error
+                        Err(miette!("derived type is incompatible with typed type!"))?;
+                    }
+                }
+
+                // push symbol to context
+                let curr_symbol = Symbol {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    span: Some(statement.span().clone()),
+                };
+
+                ctx.push_local(curr_symbol.clone())
+                    .wrap_err("Pushing variable symbol failed.")?;
+                pushed_locals.push(curr_symbol);
+            }
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 typecheck(body, ctx)?;
             }
@@ -507,10 +534,6 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                         // signature matches, function is valid
                         inner.ty = found_symbol.ty.clone();
                     } else {
-                        // TODO: make detailed error
-                        // Err(miette!(
-                        //     "expected function of signature, found function with different signature"
-                        // ))?;
                         Err(TypecheckExprError::new(
                             TypecheckExprErrorKind::FunctionSignatureMismatch(
                                 (inner_span, expected_params),
