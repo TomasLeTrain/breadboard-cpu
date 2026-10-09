@@ -218,6 +218,24 @@ impl AstInstruction {
 }
 
 #[derive(Debug, Clone)]
+pub struct Variable {
+    name: String,
+    expr: VariableExprKind,
+}
+
+impl Variable {
+    pub fn new(name: String, expr: VariableExprKind) -> Self {
+        Self { name, expr }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum VariableExprKind {
+    Expr(AstNode<Expr>),
+    Block(Vec<StatementNode>),
+}
+
+#[derive(Debug, Clone)]
 pub enum ReturnKind {
     Expr(AstNode<Expr>),
     Block(Vec<StatementNode>),
@@ -240,6 +258,7 @@ pub enum StatementKind {
         body: Vec<StatementNode>,
     },
     Instruction(AstInstruction),
+    Variable(Variable),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

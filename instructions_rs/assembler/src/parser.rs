@@ -70,6 +70,7 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
         Rule::LabelStatement => Ok(Some(parse_label(inner, source)?)),
         Rule::BlockLabel => Ok(Some(parse_block_label(inner, source)?)),
         Rule::Block => Ok(Some(parse_block_statement(inner, source)?)),
+        Rule::VariableStatement => Ok(Some(parse_variable_statement(inner, source)?)),
         Rule::COMMENT => Ok(None),
         r => Err(ParseError::from_expected(
             "Statement parsing error".to_string(),
@@ -83,6 +84,52 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
             &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
+}
+
+fn parse_variable_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+    let span = AstSpan::from_span(pair.as_span(), source);
+
+    let mut name: Result<String> = Err(ParseError::from_span(
+        "Instruction name not found".to_string(),
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
+
+    let mut expr: Result<VariableExprKind> = Err(ParseError::from_span(
+        "Function Block not found".to_string(),
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
+
+    for item in pair.into_inner() {
+        match item.as_rule() {
+            Rule::Identifier => {
+                // merge span covering label in case no params
+                name = Ok(item.to_string());
+            }
+            Rule::Expr => {
+                expr = Ok(VariableExprKind::Expr(parse_expr(
+                    item.into_inner(),
+                    source,
+                )?));
+            }
+            Rule::Block => {
+                expr = Ok(VariableExprKind::Block(parse_block(item, source)?));
+            }
+            Rule::COMMENT => (),
+            r => Err(ParseError::from_expected(
+                "Variable statement parsing error".to_string(),
+                vec![Rule::Identifier, Rule::VariableExpr, Rule::COMMENT],
+                vec![r],
+                &AstSpan::from_span(item.as_span(), source),
+            ))?,
+        };
+    }
+
+    Ok(StatementNode::new(
+        Statement::new(StatementKind::Variable(Variable::new(name?, expr?))),
+        span,
+    ))
 }
 
 fn parse_return_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {

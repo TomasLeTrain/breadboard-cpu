@@ -53,6 +53,10 @@ fib {
 }
 
 fn int_fn(return_addr: Address) {
+	let variable = 0
+	let variable = {
+		jmp MAR
+	}
 	return return_addr
 }
 
