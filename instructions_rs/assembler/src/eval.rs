@@ -159,7 +159,7 @@ impl ExprValue {
             }
 
             Type::Unknown => unreachable!(),
-            Type::Function => unreachable!(),
+            Type::Function { .. } => unreachable!(),
             Type::Block => unreachable!(),
         }
     }
@@ -344,7 +344,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                 Err(EvalExprError::new(EvalExprErrorKind::SymbolNotFound(
                     EvalSymbol {
                         name: name.to_string(),
-                        ty: inner.ty,
+                        ty: inner.ty.clone(),
                         span: Some(inner_span),
                         value: ExprValue::Unknown,
                     },

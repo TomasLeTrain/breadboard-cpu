@@ -1,14 +1,14 @@
 use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash, sync::Arc};
 
 use crate::ast::{
-    AstNode, AstSpan, BinaryOp, Expr, ExprKind, FunctionCall, FunctionSignature, ReturnKind,
-    StatementKind, StatementNode, UnaryOp,
+    AstNode, AstSpan, BinaryOp, Expr, ExprKind, FunctionCall, ReturnKind, StatementKind,
+    StatementNode, UnaryOp,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
 pub type Address = u16;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Int,
     Addr,
@@ -21,7 +21,11 @@ pub enum Type {
     AddressRegister,
 
     Label,
-    Function,
+    Function {
+        name: String,
+        params: Vec<Type>,
+        return_ty: Box<Type>,
+    },
 
     Block,
 
@@ -29,12 +33,32 @@ pub enum Type {
 }
 
 impl Type {
+    // collapses functions to their return type to allow operating on their output
+    // pub fn to_simple(&self) -> Type {
+    //     if let Type::Function { return_ty, .. } = self {
+    //         return_ty.as_ref().clone()
+    //     } else {
+    //         self.clone()
+    //     }
+    // }
+
+    pub fn as_simple(&self) -> &Type {
+        if let Type::Function { return_ty, .. } = self {
+            return_ty.as_ref()
+        } else {
+            self
+        }
+    }
+
     pub fn int_operable(&self) -> bool {
-        matches!(self, Type::Int | Type::Label | Type::Byte | Type::Addr)
+        matches!(
+            self.as_simple(),
+            Type::Int | Type::Label | Type::Byte | Type::Addr
+        )
     }
 
     pub fn bool_operable(&self) -> bool {
-        matches!(self, Type::Bool)
+        matches!(self.as_simple(), Type::Bool)
     }
 
     // returns true if types are comparable to each other
@@ -51,12 +75,15 @@ impl Type {
     }
 
     pub fn unify(&self, other: &Type) -> Option<Type> {
-        if Self::int_binary_operable(self, other) {
+        let self_simple = self.as_simple();
+        let other_simple = other.as_simple();
+
+        if Self::int_binary_operable(self_simple, other_simple) {
             Some(Type::Int)
-        } else if Self::bool_binary_operable(self, other) {
+        } else if Self::bool_binary_operable(self_simple, other_simple) {
             Some(Type::Bool)
-        } else if let (Type::Unknown, t) | (t, Type::Unknown) = (self, other) {
-            Some(*t)
+        } else if let (Type::Unknown, t) | (t, Type::Unknown) = (self_simple, other_simple) {
+            Some(t.clone())
         } else {
             None
         }
@@ -124,7 +151,7 @@ pub struct TypecheckContext {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum ContextKind {
+pub enum ContextKind {
     Local,
     Global,
 }
@@ -248,7 +275,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
 
                 let curr_symbol = Symbol {
                     name: inner.name.clone(),
-                    ty: inner.ty,
+                    ty: inner.ty.clone(),
                     span: Some(param.span().clone()),
                 };
 
@@ -268,7 +295,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
 
                 let curr_symbol = Symbol {
                     name: inner.name.clone(),
-                    ty: inner.ty,
+                    ty: inner.ty.clone(),
                     span: Some(param.span().clone()),
                 };
 
@@ -293,7 +320,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
             if let Some(statement) = return_statement {
                 if let StatementKind::Return(return_kind) = statement.inner().inner() {
                     function.return_type = match return_kind {
-                        ReturnKind::Expr(expr) => expr.inner().ty,
+                        ReturnKind::Expr(expr) => expr.inner().ty.clone(),
                         ReturnKind::Block(_) => Type::Block,
                     };
                 } else {
@@ -327,7 +354,11 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 let curr_symbol = Symbol {
                     name: function.name.clone(),
                     span: Some(statement.span().clone()),
-                    ty: function.return_type,
+                    ty: Type::Function {
+                        name: function.name.clone(),
+                        params: function.as_signature().params,
+                        return_ty: Box::new(function.return_type.clone()),
+                    },
                 };
 
                 ctx.push_global(curr_symbol.clone())
@@ -397,22 +428,81 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
         // literals already have their typed filled in
         ExprKind::Literal => (),
         // NOTE: assumes unique function names
-        ExprKind::FunctionCall(FunctionCall { name, .. }) | ExprKind::Identity(name) => {
-            // try and find identity in symbols
+        ExprKind::FunctionCall(FunctionCall { name, params }) => {
+            // typecheck all params first
+            for param in params.iter_mut() {
+                typecheck_expr(param, symbols)?;
+            }
 
+            // try and find identity in symbols
             if symbols.contains(name) {
                 if !matches!(inner.ty, Type::Unknown) {
                     Err(TypecheckExprError::new(
-                        TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
+                        TypecheckExprErrorKind::IdentityAlreadyTyped((
+                            inner_span,
+                            inner.ty.clone(),
+                        )),
                     ))?;
                 }
 
-                inner.ty = symbols.get(name).unwrap().ty;
+                let found_symbol = symbols.get(name).unwrap();
+
+                // make sure function signature of call and found symbol match
+                if let Type::Function {
+                    params: found_params,
+                    ..
+                } = &inner.ty
+                {
+                    let matching_elements = params
+                        .iter()
+                        .map(|e| e.inner.ty.clone())
+                        .zip(found_params.iter())
+                        .filter(|(a, b)| a.as_simple() == b.as_simple())
+                        .count();
+
+                    if matching_elements == params.len() && matching_elements == found_params.len()
+                    {
+                        // signature matches, function is valid
+                        inner.ty = found_symbol.ty.clone();
+                    } else {
+                        // TODO: make detailed error
+                        Err(miette!(
+                            "expected function of signature, found function with different signature"
+                        ))?;
+                    }
+                } else {
+                    // TODO: make detailed error
+                    Err(miette!("expected function, got different type:"))?;
+                }
             } else {
                 Err(TypecheckExprError::new(
                     TypecheckExprErrorKind::SymbolNotFound(Symbol {
                         name: name.to_string(),
-                        ty: inner.ty,
+                        ty: inner.ty.clone(),
+                        span: Some(typed_expr.span.clone()),
+                    }),
+                ))?;
+            }
+        }
+        ExprKind::Identity(name) => {
+            // try and find identity in symbols
+            if symbols.contains(name) {
+                if !matches!(inner.ty, Type::Unknown) {
+                    Err(TypecheckExprError::new(
+                        TypecheckExprErrorKind::IdentityAlreadyTyped((
+                            inner_span,
+                            inner.ty.clone(),
+                        )),
+                    ))?;
+                }
+
+                // TODO: ensure type is not invalid (example function)
+                inner.ty = symbols.get(name).unwrap().ty.clone();
+            } else {
+                Err(TypecheckExprError::new(
+                    TypecheckExprErrorKind::SymbolNotFound(Symbol {
+                        name: name.to_string(),
+                        ty: inner.ty.clone(),
                         span: Some(typed_expr.span.clone()),
                     }),
                 ))?;
@@ -430,7 +520,10 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                 UnaryOp::Neg | UnaryOp::BitNegation => {
                     if !unary_expr.ty.int_operable() {
                         Err(TypecheckExprError::new(
-                            TypecheckExprErrorKind::InvalidUnaryOpType((span, unary_expr.ty), *op),
+                            TypecheckExprErrorKind::InvalidUnaryOpType(
+                                (span, unary_expr.ty.clone()),
+                                *op,
+                            ),
                         ))?;
                     }
                     inner.ty = Type::Int;
@@ -438,7 +531,10 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                 UnaryOp::Not => {
                     if !unary_expr.ty.bool_operable() {
                         Err(TypecheckExprError::new(
-                            TypecheckExprErrorKind::InvalidUnaryOpType((span, unary_expr.ty), *op),
+                            TypecheckExprErrorKind::InvalidUnaryOpType(
+                                (span, unary_expr.ty.clone()),
+                                *op,
+                            ),
                         ))?;
                     }
                     inner.ty = Type::Bool;
@@ -470,8 +566,8 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                     if !Type::int_binary_operable(&left.ty, &right.ty) {
                         Err(TypecheckExprError::new(
                             TypecheckExprErrorKind::InvalidBinaryOpTypes(
-                                (left_span, left.ty),
-                                (right_span, right.ty),
+                                (left_span, left.ty.clone()),
+                                (right_span, right.ty.clone()),
                                 *op,
                             ),
                         ))?;
@@ -482,8 +578,8 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                     if !Type::bool_binary_operable(&left.ty, &right.ty) {
                         Err(TypecheckExprError::new(
                             TypecheckExprErrorKind::InvalidBinaryOpTypes(
-                                (left_span, left.ty),
-                                (right_span, right.ty),
+                                (left_span, left.ty.clone()),
+                                (right_span, right.ty.clone()),
                                 *op,
                             ),
                         ))?;
@@ -494,8 +590,8 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                     if !Type::comparable(&left.ty, &right.ty) {
                         Err(TypecheckExprError::new(
                             TypecheckExprErrorKind::InvalidComparisonTypes(
-                                (left_span, left.ty),
-                                (right_span, right.ty),
+                                (left_span, left.ty.clone()),
+                                (right_span, right.ty.clone()),
                             ),
                         ))?;
                     }
@@ -505,8 +601,8 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                     if left.ty.unify(&right.ty).is_none() {
                         Err(TypecheckExprError::new(
                             TypecheckExprErrorKind::InvalidEqualityTypes(
-                                (left_span, left.ty),
-                                (right_span, right.ty),
+                                (left_span, left.ty.clone()),
+                                (right_span, right.ty.clone()),
                             ),
                         ))?;
                     }
@@ -575,7 +671,7 @@ impl Error for EmptyStackError {}
 
 impl Display for EmptyStackError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "No symbols in {} stack.", self.kind.to_string())
+        write!(f, "No symbols in {} stack.", self.kind)
     }
 }
 

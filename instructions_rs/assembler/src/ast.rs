@@ -264,8 +264,8 @@ pub struct Function {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
-    name: String,
-    params: Vec<Type>,
+    pub name: String,
+    pub params: Vec<Type>,
 }
 
 impl Function {
@@ -290,7 +290,7 @@ impl Function {
     pub fn as_signature(&self) -> FunctionSignature {
         FunctionSignature {
             name: self.name.clone(),
-            params: self.params.iter().map(|e| e.inner.ty).collect(),
+            params: self.params.iter().map(|e| e.inner.ty.clone()).collect(),
         }
     }
 }

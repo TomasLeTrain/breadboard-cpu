@@ -13,7 +13,7 @@ use crate::{
 
 fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
     let inner = expr.inner();
-    Ok(match inner.ty {
+    Ok(match &inner.ty {
         // coerce into generic imm since we dont know which it could be
         Type::Int => ArgumentType::GenericImm,
 
