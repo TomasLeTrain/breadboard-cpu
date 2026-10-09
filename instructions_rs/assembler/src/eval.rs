@@ -326,7 +326,9 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
         // literals already have their value filled in
         ExprKind::Literal => (),
         // TODO: implement function evaluation
-        ExprKind::FunctionCall(function_call) => todo!(),
+        ExprKind::FunctionCall(function_call) => {
+            // assert!(function_call.)
+        }
         ExprKind::Identity(name) => {
             // try and find identity in symbols
             if ctx.contains(name) {

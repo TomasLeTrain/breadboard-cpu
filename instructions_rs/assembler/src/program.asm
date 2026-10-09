@@ -44,14 +44,16 @@ fib {
 	jmp MAR
 
 	function_test(0, 0)
+	
+
 	; gets catched later
 	; non_existant(0, 0)
 
-	; jmp int_fn(0,0), MAR
+	jmp int_fn(0), MAR
 }
 
-fn int_fn(what: u8) {
-	return what
+fn int_fn(return_addr: Address) {
+	return return_addr
 }
 
 fn function_test(what: u8, addr: u16) {

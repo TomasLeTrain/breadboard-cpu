@@ -34,14 +34,6 @@ pub enum Type {
 
 impl Type {
     // collapses functions to their return type to allow operating on their output
-    // pub fn to_simple(&self) -> Type {
-    //     if let Type::Function { return_ty, .. } = self {
-    //         return_ty.as_ref().clone()
-    //     } else {
-    //         self.clone()
-    //     }
-    // }
-
     pub fn as_simple(&self) -> &Type {
         if let Type::Function { return_ty, .. } = self {
             return_ty.as_ref()
@@ -386,8 +378,6 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 }
             }
             StatementKind::FunctionCall(FunctionCall { name, params }) => {
-                println!("whar {name}");
-
                 // typecheck all params first
                 for param in params.iter_mut() {
                     typecheck_expr(param, ctx)?;
@@ -489,7 +479,7 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                 if !matches!(inner.ty, Type::Unknown) {
                     Err(TypecheckExprError::new(
                         TypecheckExprErrorKind::IdentityAlreadyTyped((
-                            inner_span,
+                            inner_span.clone(),
                             inner.ty.clone(),
                         )),
                     ))?;
@@ -503,11 +493,13 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                     ..
                 } = &found_symbol.ty
                 {
-                    let matching_elements = params
+                    let expected_params: Vec<_> =
+                        params.iter().map(|e| e.inner.ty.clone()).collect();
+
+                    let matching_elements = expected_params
                         .iter()
-                        .map(|e| e.inner.ty.clone())
                         .zip(found_params.iter())
-                        .filter(|(a, b)| a.as_simple() == b.as_simple())
+                        .filter(|(a, b)| Type::comparable(a, b))
                         .count();
 
                     if matching_elements == params.len() && matching_elements == found_params.len()
@@ -516,8 +508,18 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
                         inner.ty = found_symbol.ty.clone();
                     } else {
                         // TODO: make detailed error
-                        Err(miette!(
-                            "expected function of signature, found function with different signature"
+                        // Err(miette!(
+                        //     "expected function of signature, found function with different signature"
+                        // ))?;
+                        Err(TypecheckExprError::new(
+                            TypecheckExprErrorKind::FunctionSignatureMismatch(
+                                (inner_span, expected_params),
+                                (
+                                    found_symbol.span.as_ref().unwrap().clone(),
+                                    found_params.clone(),
+                                ),
+                                name.clone(),
+                            ),
                         ))?;
                     }
                 } else {
@@ -727,6 +729,7 @@ impl Display for EmptyStackError {
 
 #[derive(Debug)]
 pub enum TypecheckExprErrorKind {
+    FunctionSignatureMismatch((AstSpan, Vec<Type>), (AstSpan, Vec<Type>), String),
     IdentityAlreadyTyped((AstSpan, Type)),
     SymbolNotFound(Symbol),
     InvalidBinaryOpTypes((AstSpan, Type), (AstSpan, Type), BinaryOp),
@@ -738,6 +741,22 @@ pub enum TypecheckExprErrorKind {
 impl TypecheckExprErrorKind {
     fn get_spans(&self) -> Vec<LabeledSpan> {
         match self {
+            TypecheckExprErrorKind::FunctionSignatureMismatch(
+                (span1, params1),
+                (span2, params2),
+                _,
+            ) => {
+                vec![
+                    LabeledSpan::new_with_span(
+                        Some(format!("Function call with parameters {params1:?}")),
+                        span1,
+                    ),
+                    LabeledSpan::new_with_span(
+                        Some(format!("Function defined with parameters {params2:?}")),
+                        span2,
+                    ),
+                ]
+            }
             TypecheckExprErrorKind::IdentityAlreadyTyped((span, ty)) => {
                 vec![LabeledSpan::new_with_span(
                     Some(format!("Identity of type \"{:?}\" defined here", ty)),
@@ -779,7 +798,8 @@ impl TypecheckExprErrorKind {
 
     fn get_source(&self) -> Option<NamedSource<Arc<str>>> {
         match self {
-            TypecheckExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
+            TypecheckExprErrorKind::FunctionSignatureMismatch((ast_span, _), _, _)
+            | TypecheckExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
             | TypecheckExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
             | TypecheckExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
             | TypecheckExprErrorKind::InvalidUnaryOpType((ast_span, _), _)
@@ -796,6 +816,9 @@ impl TypecheckExprErrorKind {
 impl Display for TypecheckExprErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            TypecheckExprErrorKind::FunctionSignatureMismatch(_, _, name) => {
+                write!(f, "Function with mismatched parameters: \"{name}\"")
+            }
             TypecheckExprErrorKind::IdentityAlreadyTyped((_, ty)) => {
                 write!(f, "Identity already has type \"{:?}\"", ty)
             }

@@ -13,7 +13,7 @@ use crate::{
 
 fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
     let inner = expr.inner();
-    Ok(match &inner.ty {
+    Ok(match inner.ty.as_simple() {
         // coerce into generic imm since we dont know which it could be
         Type::Int => ArgumentType::GenericImm,
 
@@ -51,7 +51,7 @@ fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
         Type::Addr => ArgumentType::Addr,
 
         ty => Err(ParseError::from_span(
-            format!("Unexpected parameter expression type {:?}", ty),
+            format!("Unexpected parameter expression type: \"{:?}\"", ty),
             expr.span(),
         ))?,
     }
