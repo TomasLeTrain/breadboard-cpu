@@ -19,6 +19,9 @@ use miette::Result;
 // parser - original ast
 // typecheck - assign all symbols a type
 // function resolver - find functions
+// istr resolver - find all istrs
+// addr alloc
+// eval stage
 
 fn main() -> Result<()> {
     let file_path_str = "src/program.asm";

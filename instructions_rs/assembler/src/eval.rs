@@ -11,6 +11,11 @@ use crate::{
     types::{Address, Type},
 };
 
+// enum FunctionValueKind{
+//     Function(),
+//     Internal,
+// }
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExprValue {
     Int(i32),
@@ -22,6 +27,7 @@ pub enum ExprValue {
 
     Addr(Address),
     Byte(u8),
+    // Block(u8),
 
     Unknown,
 }
@@ -198,13 +204,15 @@ pub struct EvalSymbol {
 pub struct EvalContext {
     symbol_stack: Vec<EvalSymbol>,
     symbols: HashMap<String, EvalSymbol>,
+    is_macro: bool,
 }
 
 impl EvalContext {
-    pub fn new() -> Self {
+    pub fn new(is_macro: bool) -> Self {
         EvalContext {
             symbol_stack: Vec::new(),
             symbols: HashMap::new(),
+            is_macro,
         }
     }
 
@@ -300,16 +308,18 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 let value = match expr_kind {
                     VariableExprKind::Expr(expr) => {
                         eval_expr(expr, ctx)?;
-                        &expr.inner.value
+                        expr.inner.value.clone()
                     }
-                    VariableExprKind::Block(block) => todo!(),
+                    // if its a block variable any use of it should have been processed in
+                    // macro eval, meaning its a no-op here
+                    VariableExprKind::Block(_) => ExprValue::Unknown,
                 };
 
                 // push into local scope
                 let curr_symbol = EvalSymbol {
                     name: name.clone(),
                     ty: ty.clone(),
-                    value: value.clone(),
+                    value,
                     span: Some(statement.span().clone()),
                 };
 

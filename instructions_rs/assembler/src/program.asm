@@ -25,7 +25,7 @@ fib {
 	mv X, 0
 	mv Y, 1
 
-	let num_iters = 128
+	let num_iters = 128 % 5
 
 	mv Z, num_iters
 

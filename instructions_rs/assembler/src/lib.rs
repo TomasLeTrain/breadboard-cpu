@@ -83,7 +83,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
         .wrap_err("Failed to allocate addresses")?;
     // println!("after addresses: {:#?}", program);
 
-    let mut valued_symbols = EvalContext::new();
+    let mut valued_symbols = EvalContext::new(false);
 
     for reg in Register::iterator() {
         valued_symbols.push(EvalSymbol {
