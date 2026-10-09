@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, sync::Arc};
 
 use miette::{Result, miette};
 use opcode_gen::instructions::{
@@ -61,7 +61,7 @@ fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
 
 pub fn resolve_instructions(
     statements: &mut [StatementNode],
-    istr_lookup: &HashMap<InstructionSignature, Rc<Instruction>>,
+    istr_lookup: &HashMap<InstructionSignature, Arc<Instruction>>,
 ) -> Result<()> {
     for statement in statements {
         match statement.inner_mut().inner_mut() {
@@ -79,7 +79,7 @@ pub fn resolve_instructions(
                     InstructionSignature::new(instruction.name.clone(), param_types);
 
                 if let Some(found_istr) = istr_lookup.get(&generic_signature) {
-                    instruction.instruction = Some(Rc::clone(found_istr));
+                    instruction.instruction = Some(Arc::clone(found_istr));
                 } else {
                     return Err(ParseError::from_span(
                         format!(
@@ -121,14 +121,14 @@ pub fn resolve_instructions(
 }
 
 pub fn gen_instruction_lookup_table(
-    istrs: &Vec<Rc<Instruction>>,
-) -> Result<HashMap<InstructionSignature, Rc<Instruction>>> {
+    istrs: &Vec<Arc<Instruction>>,
+) -> Result<HashMap<InstructionSignature, Arc<Instruction>>> {
     let mut res = HashMap::new();
 
     for istr in istrs {
         if let Some(other) = res.insert(
             istr.istr_type().get_signature().to_generic(),
-            Rc::clone(istr),
+            Arc::clone(istr),
         ) {
             return Err(miette!(
                 "Duplicate signatures found - \"{}\" and \"{}\"",

@@ -1,5 +1,5 @@
+use std::fmt::Debug;
 use std::sync::Arc;
-use std::{fmt::Debug, rc::Rc};
 
 use crate::eval::ExprValue;
 use crate::types::{Address, Type};
@@ -127,9 +127,6 @@ impl AstSpan {
     pub fn get_line_str(&self) -> &str {
         self.get_str().lines().next().unwrap()
     }
-
-    // pub fn get_line_number(&self) -> usize {
-    // }
 }
 
 /// wraps T with additional information tied to each token (ex. parent file, span, etc.)
@@ -151,10 +148,6 @@ impl<T> AstNode<T> {
     pub fn inner(&self) -> &T {
         &self.inner
     }
-
-    // pub fn into_inner(self) -> T {
-    //     self.inner
-    // }
 
     pub fn inner_mut(&mut self) -> &mut T {
         &mut self.inner
@@ -191,10 +184,6 @@ impl Statement {
         &self.statement
     }
 
-    // pub fn into_inner(self) -> StatementKind {
-    //     self.statement
-    // }
-
     pub fn inner_mut(&mut self) -> &mut StatementKind {
         &mut self.statement
     }
@@ -204,7 +193,7 @@ impl Statement {
 pub struct AstInstruction {
     pub name: String,
     pub params: Vec<AstNode<Expr>>,
-    pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
+    pub instruction: Option<Arc<opcode_gen::instructions::Instruction>>,
 }
 
 impl AstInstruction {
@@ -226,7 +215,11 @@ pub struct Variable {
 
 impl Variable {
     pub fn new(name: String, expr_kind: VariableExprKind, ty: Type) -> Self {
-        Self { name, expr_kind, ty }
+        Self {
+            name,
+            expr_kind,
+            ty,
+        }
     }
 }
 
@@ -262,7 +255,7 @@ pub enum StatementKind {
     Variable(Variable),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct FunctionCall {
     pub name: String,
     pub params: Vec<AstNode<Expr>>,
@@ -315,7 +308,7 @@ impl Function {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct TypedParameter {
     pub name: String,
     pub ty: Type,
@@ -332,7 +325,7 @@ impl TypedParameter {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Expr {
     pub kind: ExprKind,
     pub ty: Type,
@@ -353,7 +346,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum ExprKind {
     /// Literal
     Literal,

@@ -8,7 +8,7 @@ mod istr_resolver;
 mod parser;
 mod types;
 
-use std::{fs, rc::Rc, sync::Arc};
+use std::{fs, sync::Arc};
 
 use miette::{Context, IntoDiagnostic, Result};
 use opcode_gen::{
@@ -71,7 +71,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
 
     println!("after typecheck: {:#?}", program);
 
-    let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
+    let all_istrs: Vec<Arc<Instruction>> = get_instruction_list().into_iter().map(Arc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)
         .wrap_err("Failed generating instruction lookup table")?;
 

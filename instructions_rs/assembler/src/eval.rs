@@ -16,7 +16,7 @@ use crate::{
 //     Internal,
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum ExprValue {
     Int(i32),
     Bool(bool),
@@ -27,7 +27,7 @@ pub enum ExprValue {
 
     Addr(Address),
     Byte(u8),
-    // Block(u8),
+    Block(Vec<StatementNode>),
 
     Unknown,
 }
@@ -43,6 +43,7 @@ impl ExprValue {
             | ExprValue::Unknown
             | ExprValue::Bool(_)
             | ExprValue::String(_) => None,
+            ExprValue::Block(_) => todo!(),
         }
     }
 
@@ -56,6 +57,7 @@ impl ExprValue {
             | ExprValue::AddressRegister(_)
             | ExprValue::Unknown
             | ExprValue::String(_) => None,
+            ExprValue::Block(_) => todo!(),
         }
     }
 
@@ -187,11 +189,12 @@ impl ExprValue {
             ExprValue::Int(_) => panic!(),
             ExprValue::Bool(_) => panic!(),
             ExprValue::String(_) => panic!(),
+            ExprValue::Block(_) => todo!(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct EvalSymbol {
     pub name: String,
     pub ty: Type,
@@ -343,7 +346,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
     // goes in reverse since pop starts from the last added element
     for label in local_symbols.into_iter().rev() {
         let curr = ctx.pop()?;
-        if label != curr {
+        if label.name != curr.name {
             return Err(miette!(
                 "Popped symbol does not match - original: {:?}, got: {:?}",
                 label,
