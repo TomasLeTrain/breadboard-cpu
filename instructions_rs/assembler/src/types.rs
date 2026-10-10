@@ -302,7 +302,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
 
             if let Some(statement) = return_statement {
                 if let StatementKind::Return(return_kind) = statement.inner().inner() {
-                    function.return_type = match return_kind {
+                    function.return_ty = match return_kind {
                         ReturnKind::Expr(expr) => expr.inner().ty.clone(),
                         ReturnKind::Block(_) => Type::Block,
                     };
@@ -340,7 +340,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                     ty: Type::Function {
                         name: function.name.clone(),
                         params: function.as_signature().params,
-                        return_ty: Box::new(function.return_type.clone()),
+                        return_ty: Box::new(function.return_ty.clone()),
                     },
                 };
 

@@ -272,7 +272,7 @@ pub struct Function {
     pub name: String,
     pub params: Vec<AstNode<TypedParameter>>,
     pub body: Vec<StatementNode>,
-    pub return_type: Type,
+    pub return_ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -291,13 +291,8 @@ impl Function {
             name,
             params,
             body,
-            return_type: Type::Unknown,
+            return_ty: Type::Unknown,
         }
-    }
-
-    // macro is implicitly defined as being required only when returning instructions
-    pub fn is_macro(&self) -> bool {
-        matches!(self.return_type, Type::Block)
     }
 
     pub fn as_signature(&self) -> FunctionSignature {
@@ -312,16 +307,11 @@ impl Function {
 pub struct TypedParameter {
     pub name: String,
     pub ty: Type,
-    pub value: ExprValue,
 }
 
 impl TypedParameter {
     pub fn new(name: String, ty: Type) -> Self {
-        Self {
-            name,
-            ty,
-            value: ExprValue::Unknown,
-        }
+        Self { name, ty }
     }
 }
 

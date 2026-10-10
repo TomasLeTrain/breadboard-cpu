@@ -22,6 +22,9 @@ use miette::Result;
 // istr resolver - find all istrs
 // addr alloc
 // eval stage
+//
+// reuse eval stage twice:
+// on first pass simplify as much as possible ()
 
 fn main() -> Result<()> {
     let file_path_str = "src/program.asm";
