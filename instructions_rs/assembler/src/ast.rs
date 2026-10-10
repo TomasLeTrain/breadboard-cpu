@@ -1,5 +1,5 @@
+use std::fmt::Debug;
 use std::sync::Arc;
-use std::{fmt::Debug, rc::Rc};
 
 use crate::eval::ExprValue;
 use crate::types::{Address, Type};
@@ -127,9 +127,6 @@ impl AstSpan {
     pub fn get_line_str(&self) -> &str {
         self.get_str().lines().next().unwrap()
     }
-
-    // pub fn get_line_number(&self) -> usize {
-    // }
 }
 
 /// wraps T with additional information tied to each token (ex. parent file, span, etc.)
@@ -151,10 +148,6 @@ impl<T> AstNode<T> {
     pub fn inner(&self) -> &T {
         &self.inner
     }
-
-    // pub fn into_inner(self) -> T {
-    //     self.inner
-    // }
 
     pub fn inner_mut(&mut self) -> &mut T {
         &mut self.inner
@@ -191,10 +184,6 @@ impl Statement {
         &self.statement
     }
 
-    // pub fn into_inner(self) -> StatementKind {
-    //     self.statement
-    // }
-
     pub fn inner_mut(&mut self) -> &mut StatementKind {
         &mut self.statement
     }
@@ -204,8 +193,9 @@ impl Statement {
 pub struct AstInstruction {
     pub name: String,
     pub params: Vec<AstNode<Expr>>,
-    pub instruction: Option<Rc<opcode_gen::instructions::Instruction>>,
+    pub instruction: Option<Arc<opcode_gen::instructions::Instruction>>,
 }
+
 impl AstInstruction {
     pub fn new(name: String, params: Vec<AstNode<Expr>>) -> Self {
         AstInstruction {
@@ -217,7 +207,40 @@ impl AstInstruction {
 }
 
 #[derive(Debug, Clone)]
+pub struct Variable {
+    pub name: String,
+    pub expr_kind: VariableExprKind,
+    pub ty: Type,
+}
+
+impl Variable {
+    pub fn new(name: String, expr_kind: VariableExprKind, ty: Type) -> Self {
+        Self {
+            name,
+            expr_kind,
+            ty,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum VariableExprKind {
+    Expr(AstNode<Expr>),
+    Block(Vec<StatementNode>),
+}
+
+#[derive(Debug, Clone)]
+pub enum ReturnKind {
+    Expr(AstNode<Expr>),
+    Block(Vec<StatementNode>),
+}
+
+#[derive(Debug, Clone)]
 pub enum StatementKind {
+    Function(Function),
+    Return(ReturnKind),
+    // this kind of call is always a macro (not an expr) so not wrapped in type/value
+    FunctionCall(FunctionCall),
     Label {
         name: String,
     },
@@ -225,10 +248,74 @@ pub enum StatementKind {
         name: String,
         body: Vec<StatementNode>,
     },
+    Block {
+        body: Vec<StatementNode>,
+    },
     Instruction(AstInstruction),
+    Variable(Variable),
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionCall {
+    pub name: String,
+    pub params: Vec<AstNode<Expr>>,
+}
+
+impl FunctionCall {
+    pub fn new(name: String, params: Vec<AstNode<Expr>>) -> Self {
+        Self { name, params }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub params: Vec<AstNode<TypedParameter>>,
+    pub body: Vec<StatementNode>,
+    pub return_ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionSignature {
+    pub name: String,
+    pub params: Vec<Type>,
+}
+
+impl Function {
+    pub fn new(
+        name: String,
+        params: Vec<AstNode<TypedParameter>>,
+        body: Vec<StatementNode>,
+    ) -> Self {
+        Function {
+            name,
+            params,
+            body,
+            return_ty: Type::Unknown,
+        }
+    }
+
+    pub fn as_signature(&self) -> FunctionSignature {
+        FunctionSignature {
+            name: self.name.clone(),
+            params: self.params.iter().map(|e| e.inner.ty.clone()).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypedParameter {
+    pub name: String,
+    pub ty: Type,
+}
+
+impl TypedParameter {
+    pub fn new(name: String, ty: Type) -> Self {
+        Self { name, ty }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Expr {
     pub kind: ExprKind,
     pub ty: Type,
@@ -249,12 +336,14 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum ExprKind {
     /// Literal
     Literal,
     /// Identity (could be var, reg, etc.)
     Identity(String),
+    FunctionCall(FunctionCall),
+
     /// Unary operation
     Unary {
         op: UnaryOp,

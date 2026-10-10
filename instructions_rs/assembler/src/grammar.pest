@@ -3,18 +3,42 @@ COMMENT    = _{ Newline* ~ ";" ~ (!NEWLINE ~ ANY)* }
 // COMMENT    = _{ "####" }
 // Comment    = _{ Newline* ~ WHITESPACE* ~ ";" ~ (!NEWLINE ~ ANY)* }
 
+
+KEYWORD = @{
+    "fn" | "true" | "false" | "int" | "bool" | "return" | "let"
+}
+
 // Program is a sequence of statements/expressions
 Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 
 Newline = _{ NEWLINE }
 
 // Statements
-Statement             = { Newline* ~ (LabelStatement | BlockLabel | InstructionStatement) }
+Statement  = { Newline* ~ ((FunctionCall ~ Newline*) | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | VariableStatement | InstructionStatement) }
 
-InstructionStatement  = { InstructionLabel ~ InstructionParameters? ~ Newline+ }
-InstructionParameters = { InstructionParameter ~ ("," ~ InstructionParameter)* }
+VariableStatement = { "let" ~ Identifier ~ (":" ~ Type)? ~ "=" ~ VariableExpr ~ Newline+ }
+VariableExpr = _{ Block | Expr }
+
+ExprParameters = { ExprParameter ~ ("," ~ ExprParameter)* }
+ExprParameter  = _{ Expr }
+
+InstructionStatement  = { InstructionLabel ~ ExprParameters? ~ Newline+ }
 InstructionLabel      = { Identifier }
-InstructionParameter  = _{ Expr }
+
+FunctionCall = { FunctionCallName ~ "(" ~ ExprParameters? ~ ")" }
+FunctionCallName      = { Identifier }
+FunctionCallParameter  = _{ Expr }
+
+ReturnStatement = { "return" ~ ReturnParameter ~ Newline* }
+ReturnParameter = _{ Block | Expr }
+
+TypedParameter = { Identifier ~ ":" ~ Type }
+
+FunctionStatement = { "fn" ~ FunctionName ~ "(" ~ FunctionParameters? ~ ")" ~ FunctionReturnType? ~ Newline* ~ Block }
+FunctionParameters = { FunctionParameter ~ ("," ~ FunctionParameter)* }
+FunctionName      = { Identifier }
+FunctionParameter  = _{ TypedParameter }
+FunctionReturnType = { "->" ~ Type }
 
 // label:
 LabelStatement = { LabelIdentifier ~ ":" ~ Newline+ }
@@ -74,7 +98,7 @@ bit_negation = { "~" }
 logical_not = { "!" }
 
 // Primary expressions
-Primary = _{ Literal | (Identifier ~ !":") | "(" ~ Expr ~ ")" }
+Primary = _{ FunctionCall | Literal | (Identifier ~ !":") | "(" ~ Expr ~ ")" }
 
 // Literals
 // Hex must have higher precedence otherwise gets recognized as int
@@ -82,6 +106,16 @@ Literal =  { Bool | Hexadecimal | Int  | String | Character }
 
 HexadecimalDigit = @{ ASCII_HEX_DIGIT+ }
 Hexadecimal       = { ^"0x" ~ HexadecimalDigit }
+
+Type = { U16Type | U8Type | I16Type | I8Type | IntType | BoolType | LabelType | AddrType }
+U16Type = { "u16" }
+U8Type = { "u8" }
+I16Type = { "i16" }
+I8Type = { "i8" }
+IntType = { "int" }
+BoolType = { "bool" }
+LabelType = { "Label" }
+AddrType = { "Address" }
 
 Int     = @{ ASCII_DIGIT+ }
 

@@ -8,7 +8,7 @@ mod istr_resolver;
 mod parser;
 mod types;
 
-use std::{fs, rc::Rc, sync::Arc};
+use std::{fs, sync::Arc};
 
 use miette::{Context, IntoDiagnostic, Result};
 use opcode_gen::{
@@ -46,31 +46,32 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
 
     // println!("initial: {:#?}", program);
 
-    let mut global_symbols = types::SymbolTypeContext::new();
+    let mut global_symbols = types::TypecheckContext::new();
 
     // add global symbols reserved for register names and the like
 
     for reg in Register::iterator() {
-        global_symbols.push(Symbol {
+        global_symbols.push_global(Symbol {
             name: reg.name().to_string(),
-            symbol_type: Type::Register,
+            ty: Type::Register,
             span: None,
         })?;
     }
 
     for reg in AddressRegister::iterator() {
-        global_symbols.push(Symbol {
+        global_symbols.push_global(Symbol {
             name: reg.name().to_string(),
-            symbol_type: Type::AddressRegister,
+            ty: Type::AddressRegister,
             span: None,
         })?;
     }
 
     // println!("initial: {:#?}", program);
     types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
-    // println!("after typecheck: {:#?}", program);
 
-    let all_istrs: Vec<Rc<Instruction>> = get_instruction_list().into_iter().map(Rc::new).collect();
+    println!("after typecheck: {:#?}", program);
+
+    let all_istrs: Vec<Arc<Instruction>> = get_instruction_list().into_iter().map(Arc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)
         .wrap_err("Failed generating instruction lookup table")?;
 
@@ -82,12 +83,12 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
         .wrap_err("Failed to allocate addresses")?;
     // println!("after addresses: {:#?}", program);
 
-    let mut valued_symbols = EvalContext::new();
+    let mut valued_symbols = EvalContext::new(false);
 
     for reg in Register::iterator() {
         valued_symbols.push(EvalSymbol {
             name: reg.name().to_string(),
-            symbol_type: Type::Register,
+            ty: Type::Register,
             value: ExprValue::Register(*reg),
             span: None,
         })?;
@@ -96,7 +97,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
     for reg in AddressRegister::iterator() {
         valued_symbols.push(EvalSymbol {
             name: reg.name().to_string(),
-            symbol_type: Type::AddressRegister,
+            ty: Type::AddressRegister,
             value: ExprValue::AddressRegister(*reg),
             span: None,
         })?;

@@ -6,8 +6,6 @@ start:
 
 	; this is some more comments
 	; these are next to each other
-	
-	; TODO: this only works since we know the push_return will be smaller than 256 - need to implement addr placeholder 
 	pusha push_return
 
 	jmp fib, MAR     ; jump to func
@@ -27,7 +25,9 @@ fib {
 	mv X, 0
 	mv Y, 1
 
-	mv Z, 255
+	let num_iters = 128 % 5
+
+	mv Z, num_iters
 
 	lda MAR, loop
 
@@ -44,4 +44,39 @@ fib {
 	; return routine
 	pop MAR
 	jmp MAR
+
+	function_test(0, 0)
+	
+
+	; gets catched later
+	; non_existant(0, 0)
+
+	; jmp int_fn(0), MAR
+}
+
+fn int_fn(return_addr: Address) {
+	let variable: u16 = return_addr
+	; let variable_u16: u16 = 0
+	let variable_2 = {
+		jmp MAR
+	}
+
+	return variable_2
+}
+
+fn function_test(what: u8, addr: u16) {
+	; istrs outside return end up as no op?
+	return {
+		pop MAR
+	}
+}
+
+; unabeled block
+{
+	pop MAR
+}
+
+; unabeled block
+{
+	pop MAR
 }
