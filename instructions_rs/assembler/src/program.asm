@@ -6,7 +6,10 @@ start:
 
 	; this is some more comments
 	; these are next to each other
-	pusha push_return
+	; pusha push_return
+	push low_byte(push_return)
+	push high_byte(push_return)
+
 
 	jmp fib, MAR     ; jump to func
 
@@ -40,32 +43,17 @@ fib {
 		jnz Z, MAR
 	}
 
-
 	; return routine
 	pop MAR
 	jmp MAR
-
-	; function_test(0, 0)
-
-	; gets catched later
-	; non_existant(0, 0)
-
-	jmp int_fn(0x8080), MAR
 }
 
-fn int_fn(return_addr: Address) {
-	let variable: u16 = return_addr
-	; let variable_u16: u16 = 0
-	let variable_2 = {
-		jmp MAR
-	}
-
-	return variable
+fn low_byte(x: u16) {
+	let low_byte: u8 = x & 0xff
+	return low_byte
 }
 
-fn function_test(what: u8, addr: u16) {
-	; istrs outside return end up as no op?
-	return {
-		pop MAR
-	}
+fn high_byte(x: u16) {
+	let high_byte: u8 = (x >> 8) & 0xff
+	return high_byte
 }

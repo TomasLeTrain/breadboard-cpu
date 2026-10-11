@@ -1,1 +1,9 @@
 /target
+
+/assembler/asm_bin.bin
+/assembler/asm_logisim.img
+
+/assembler/rom0.bin
+/assembler/rom0_logisim.img
+/assembler/rom1.bin
+/assembler/rom1_logisim.img
