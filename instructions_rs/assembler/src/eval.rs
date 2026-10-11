@@ -8,6 +8,7 @@ use crate::{
         AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, StatementKind,
         StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind,
     },
+    eval,
     types::{Address, Type},
 };
 
@@ -125,6 +126,11 @@ impl ExprValue {
     }
 
     fn cast_value(self, ty: &Type) -> Self {
+        // unknown casts to everything
+        if matches!(self, Self::Unknown) {
+            return self;
+        }
+
         match ty {
             Type::Bool => {
                 assert!(matches!(self, Self::Bool(_)));
@@ -226,10 +232,12 @@ impl EvalFunctionKind {
     }
 
     // runs with given parameters
+    // can return Unknown value if params or the function itself has unkowns
     // TODO: impl
     pub fn eval(&self, params: Vec<ExprValue>) -> ExprValue {
         match self {
-            EvalFunctionKind::Function(function) => todo!(),
+            // EvalFunctionKind::Function(function) => todo!(),
+            EvalFunctionKind::Function(function) => ExprValue::Int(1),
             EvalFunctionKind::Internal => todo!(),
         }
     }
@@ -386,12 +394,12 @@ impl EvalContext {
         Ok(map_function)
     }
 
-    fn get_function(&self, name: &String) -> Option<&EvalSymbol> {
-        self.symbols.get(name)
+    fn get_function(&self, name: &String) -> Option<&FunctionEvalSymbol> {
+        self.functions.get(name)
     }
 
     fn contains_function(&self, name: &String) -> bool {
-        self.symbols.contains_key(name)
+        self.functions.contains_key(name)
     }
 
     pub fn is_macro(&self) -> bool {
@@ -482,7 +490,6 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 // TODO: make into detailed error
                 let function = ctx.get_function(name).expect("Function not found!");
 
-
                 // then run eval
                 // new element will be in an isolated scope from all locals, except for parameters
                 // can implement this by adding them as local variables, and since we have evaluated
@@ -547,7 +554,36 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
         // literals already have their value filled in
         ExprKind::Literal => (),
         // TODO: implement function evaluation
-        ExprKind::FunctionCall(function_call) => (),
+        ExprKind::FunctionCall(FunctionCall { name, params }) => {
+            if !ctx.contains_function(name) {
+                // TODO: detailed error
+                Err(miette!("function from function call not found"))?;
+            }
+
+            // eval all params
+            for param in params.iter_mut() {
+                eval_expr(param, ctx)?;
+
+                if !ctx.is_macro() && matches!(param.inner().value, ExprValue::Unknown) {
+                    // TODO: detailed error
+                    Err(miette!("function parameter unknown on final eval stage"))?;
+                }
+            }
+
+            let function_symbol = ctx.get_function(name).unwrap();
+            let valued_params: Vec<ExprValue> =
+                params.iter().map(|e| e.inner().value.clone()).collect();
+
+            // evaluate function
+            let eval_value = function_symbol.inner().eval(valued_params);
+
+            if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
+                // TODO: detailed error
+                Err(miette!("function returned unknown on final eval stage"))?;
+            }
+
+            inner.value = eval_value.cast_value(&inner.ty);
+        }
         ExprKind::Identity(name) => {
             // try and find identity in symbols
             if ctx.contains(name) {

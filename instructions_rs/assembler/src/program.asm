@@ -45,13 +45,12 @@ fib {
 	pop MAR
 	jmp MAR
 
-	function_test(0, 0)
-	
+	; function_test(0, 0)
 
 	; gets catched later
 	; non_existant(0, 0)
 
-	; jmp int_fn(0), MAR
+	jmp int_fn(0), MAR
 }
 
 fn int_fn(return_addr: Address) {
@@ -61,7 +60,7 @@ fn int_fn(return_addr: Address) {
 		jmp MAR
 	}
 
-	return variable_2
+	return variable
 }
 
 fn function_test(what: u8, addr: u16) {
@@ -69,14 +68,4 @@ fn function_test(what: u8, addr: u16) {
 	return {
 		pop MAR
 	}
-}
-
-; unabeled block
-{
-	pop MAR
-}
-
-; unabeled block
-{
-	pop MAR
 }
