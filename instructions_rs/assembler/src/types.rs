@@ -267,6 +267,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                     .wrap_err("Pushing function symbol failed.")?;
             }
 
+            // TODO: can process return types inside typecheck itself
             typecheck(&mut function.body, &mut function_ctx).context(format!(
                 "Parsing function body of \"{}\" failed.",
                 function.name

@@ -5,8 +5,8 @@ use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
     ast::{
-        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, StatementKind,
-        StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind,
+        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, ReturnKind,
+        StatementKind, StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind,
     },
     eval,
     types::{Address, Type},
@@ -125,6 +125,7 @@ impl ExprValue {
         })
     }
 
+    // TODO: add is_castable function to catch errors before calling this func
     fn cast_value(self, ty: &Type) -> Self {
         // unknown casts to everything
         if matches!(self, Self::Unknown) {
@@ -233,11 +234,18 @@ impl EvalFunctionKind {
 
     // runs with given parameters
     // can return Unknown value if params or the function itself has unkowns
-    // TODO: impl
-    pub fn eval(&self, params: Vec<ExprValue>) -> ExprValue {
+    pub fn eval(&self, params: Vec<EvalSymbol>, is_macro: bool) -> Result<ExprValue> {
         match self {
-            // EvalFunctionKind::Function(function) => todo!(),
-            EvalFunctionKind::Function(function) => ExprValue::Int(1),
+            EvalFunctionKind::Function(function) => {
+                let mut curr_func = function.clone();
+                let mut ctx = EvalContext::new(is_macro);
+
+                for param in params {
+                    ctx.push(param);
+                }
+
+                eval_program(&mut curr_func.body, &mut ctx)
+            }
             EvalFunctionKind::Internal => todo!(),
         }
     }
@@ -407,9 +415,12 @@ impl EvalContext {
     }
 }
 
-pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> Result<()> {
+pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> Result<ExprValue> {
     let mut local_symbols = Vec::new();
     let mut function_symbols = Vec::new();
+
+    let mut return_value = ExprValue::Unknown;
+    let mut return_hit = false;
 
     // first find all labels in the current scope (accessible from anywhere in scope)
     for statement in statements.iter() {
@@ -448,6 +459,10 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
     // then eval everything else
     for statement in statements.iter_mut() {
+        if return_hit {
+            Err(miette!("unreachable code after return statement!"))?;
+        }
+
         match statement.inner_mut().inner_mut() {
             StatementKind::Variable(Variable {
                 name,
@@ -505,6 +520,17 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 // eval_program(, ctx)?;
             }
 
+            StatementKind::Return(return_kind) => {
+                match return_kind {
+                    ReturnKind::Expr(expr) => {
+                        eval_expr(expr, ctx)?;
+                        return_value = expr.inner().value.clone();
+                    }
+                    ReturnKind::Block(block) => return_value = ExprValue::Block(block.clone()),
+                }
+                return_hit = true;
+            }
+
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 eval_program(body, ctx)?;
             }
@@ -542,7 +568,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
         }
     }
 
-    Ok(())
+    Ok(return_value)
 }
 
 // TODO: make sure int type gets casted to whatever type current expr is (say addr or byte)
@@ -553,7 +579,6 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
     match &mut inner.kind {
         // literals already have their value filled in
         ExprKind::Literal => (),
-        // TODO: implement function evaluation
         ExprKind::FunctionCall(FunctionCall { name, params }) => {
             if !ctx.contains_function(name) {
                 // TODO: detailed error
@@ -571,11 +596,22 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             }
 
             let function_symbol = ctx.get_function(name).unwrap();
-            let valued_params: Vec<ExprValue> =
-                params.iter().map(|e| e.inner().value.clone()).collect();
+
+            let valued_params: Vec<EvalSymbol> = params
+                .iter()
+                .zip(function_symbol.inner().params())
+                .map(|(expr, typed_param)| EvalSymbol {
+                    name: typed_param.inner().name.clone(),
+                    ty: expr.inner().ty.clone(),
+                    value: expr.inner().value.clone(),
+                    span: Some(expr.span().clone()),
+                })
+                .collect();
 
             // evaluate function
-            let eval_value = function_symbol.inner().eval(valued_params);
+            let eval_value = function_symbol
+                .inner()
+                .eval(valued_params, ctx.is_macro())?;
 
             if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
                 // TODO: detailed error
@@ -585,16 +621,8 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             inner.value = eval_value.cast_value(&inner.ty);
         }
         ExprKind::Identity(name) => {
-            // try and find identity in symbols
             if ctx.contains(name) {
                 let symbol = ctx.get(name).unwrap();
-
-                // TODO: already valued error
-                if inner.ty != symbol.ty {
-                    // Err(EvalExprError::new(
-                    //     TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
-                    // ))?;
-                }
 
                 inner.value = symbol.value.clone().cast_value(&inner.ty);
             } else {
