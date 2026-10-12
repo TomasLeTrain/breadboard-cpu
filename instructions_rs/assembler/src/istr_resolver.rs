@@ -6,7 +6,7 @@ use opcode_gen::instructions::{
 };
 
 use crate::{
-    ast::{AstNode, Expr, StatementKind, StatementNode},
+    ast::{AstNode, Expr, InlinedFunctionCall, StatementKind, StatementNode},
     error::ParseError,
     types::Type,
 };
@@ -65,7 +65,9 @@ pub fn resolve_instructions(
 ) -> Result<()> {
     for statement in statements {
         match statement.inner_mut().inner_mut() {
-            StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
+            StatementKind::BlockLabel { body, .. }
+            | StatementKind::Block { body }
+            | StatementKind::InlinedFunctionCall(InlinedFunctionCall { body, .. }) => {
                 resolve_instructions(body, istr_lookup)?;
             }
             StatementKind::Instruction(instruction) => {

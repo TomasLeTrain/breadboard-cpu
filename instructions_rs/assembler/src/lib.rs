@@ -69,9 +69,33 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
     // println!("initial: {:#?}", program);
     types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
 
+    // first eval stage, parts of the program will be unknown since labels don't have values yet
+    let mut valued_symbols = EvalContext::new(true);
+
+    for reg in Register::iterator() {
+        valued_symbols.push(EvalSymbol {
+            name: reg.name().to_string(),
+            ty: Type::Register,
+            value: ExprValue::Register(*reg),
+            span: None,
+        })?;
+    }
+
+    for reg in AddressRegister::iterator() {
+        valued_symbols.push(EvalSymbol {
+            name: reg.name().to_string(),
+            ty: Type::AddressRegister,
+            value: ExprValue::AddressRegister(*reg),
+            span: None,
+        })?;
+    }
+
+    eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
+
     println!("after typecheck: {:#?}", program);
 
-    let all_istrs: Vec<Arc<Instruction>> = get_instruction_list().into_iter().map(Arc::new).collect();
+    let all_istrs: Vec<Arc<Instruction>> =
+        get_instruction_list().into_iter().map(Arc::new).collect();
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)
         .wrap_err("Failed generating instruction lookup table")?;
 
@@ -83,6 +107,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
         .wrap_err("Failed to allocate addresses")?;
     // println!("after addresses: {:#?}", program);
 
+    // second eval, all values should be determined now
     let mut valued_symbols = EvalContext::new(false);
 
     for reg in Register::iterator() {

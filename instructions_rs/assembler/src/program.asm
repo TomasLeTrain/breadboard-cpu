@@ -44,7 +44,8 @@ fib {
 	}
 
 	; return routine
-	pop MAR
+	; pop MAR
+	pop_mar()
 	jmp MAR
 }
 
@@ -56,4 +57,10 @@ fn low_byte(x: u16) {
 fn high_byte(x: u16) {
 	let high_byte: u8 = (x >> 8) & 0xff
 	return high_byte
+}
+
+fn pop_mar() {
+	return {
+		pop MAR
+	}
 }

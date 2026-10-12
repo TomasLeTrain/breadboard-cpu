@@ -1,5 +1,5 @@
 use crate::{
-    ast::{StatementKind, StatementNode},
+    ast::{InlinedFunctionCall, StatementKind, StatementNode},
     types::Address,
 };
 use miette::Result;
@@ -38,7 +38,9 @@ pub fn allocate_adresses(
             StatementKind::Label { .. } => {
                 // label does not advance address
             }
-            StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
+            StatementKind::BlockLabel { body, .. }
+            | StatementKind::Block { body }
+            | StatementKind::InlinedFunctionCall(InlinedFunctionCall { body, .. }) => {
                 // label does not advance address
                 // allocate addresses inside body
                 allocate_adresses(body, ctx)?;

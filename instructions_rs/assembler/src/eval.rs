@@ -5,8 +5,9 @@ use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
     ast::{
-        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, ReturnKind,
-        StatementKind, StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind,
+        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, InlinedFunctionCall,
+        ReturnKind, Statement, StatementKind, StatementNode, TypedParameter, UnaryOp, Variable,
+        VariableExprKind,
     },
     eval,
     types::{Address, Type},
@@ -239,12 +240,22 @@ impl EvalFunctionKind {
             EvalFunctionKind::Function(function) => {
                 let mut curr_func = function.clone();
                 let mut ctx = EvalContext::new(is_macro);
+                let param_names: Vec<String> = params.iter().map(|e| e.name.clone()).collect();
 
                 for param in params {
-                    ctx.push(param);
+                    ctx.push(param)?;
                 }
 
-                eval_program(&mut curr_func.body, &mut ctx)
+                let eval_value = eval_program(&mut curr_func.body, &mut ctx)?;
+
+                for name in param_names.into_iter().rev() {
+                    if name != ctx.pop()?.name {
+                        // TODO: make detailed error
+                        Err(miette!("popped parameter symbol does not match pushed"))?;
+                    }
+                }
+
+                Ok(eval_value)
             }
             EvalFunctionKind::Internal => todo!(),
         }
@@ -459,10 +470,10 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
     // then eval everything else
     for statement in statements.iter_mut() {
+        // TODO: should already be caught by typecheck
         if return_hit {
             Err(miette!("unreachable code after return statement!"))?;
         }
-
         match statement.inner_mut().inner_mut() {
             StatementKind::Variable(Variable {
                 name,
@@ -489,37 +500,6 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     .wrap_err("Pushing local variable symbol failed.")?;
                 local_symbols.push(curr_symbol);
             }
-            StatementKind::FunctionCall(FunctionCall { name, params }) => {
-                if !ctx.is_macro() {
-                    // TODO: detailed error
-                    Err(miette!("function call found on normal eval"))?;
-                }
-
-                // must replace current element with block generated from function
-
-                // first eval all parameters
-                for param in params.iter_mut() {
-                    eval_expr(param, ctx)?;
-                }
-
-                // TODO: make into detailed error
-                let function = ctx.get_function(name).expect("Function not found!");
-
-                // then run eval
-                // new element will be in an isolated scope from all locals, except for parameters
-                // can implement this by adding them as local variables, and since we have evaluated
-                // their values here (it must be possible)
-                //
-                // inlined function call element
-                // has body of function, however it can be parsed as a normal block
-                // during evaluation all its parameters can be
-                //
-                // during macro stage, inline function call, but ensure the return type has a
-                // defined value if its of type block, otherwise leave as is (in case of function
-                // call statement it must be type block)
-                // eval_program(, ctx)?;
-            }
-
             StatementKind::Return(return_kind) => {
                 match return_kind {
                     ReturnKind::Expr(expr) => {
@@ -529,6 +509,70 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     ReturnKind::Block(block) => return_value = ExprValue::Block(block.clone()),
                 }
                 return_hit = true;
+            }
+
+            StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, params, body }) => {
+                // eval function first, then reuse that context for the body itself
+                // this assumes that the value returned by eval_program(function.body,ctx) = body, except
+                // body has addresses allocated
+
+                if !ctx.contains_function(name) {
+                    // TODO: detailed error
+                    Err(miette!("function from function call not found"))?;
+                }
+
+                // eval all params
+                for param in params.iter_mut() {
+                    eval_expr(param, ctx)?;
+
+                    if !ctx.is_macro() && matches!(param.inner().value, ExprValue::Unknown) {
+                        // TODO: detailed error
+                        Err(miette!("function parameter unknown on final eval stage"))?;
+                    }
+                }
+
+                let function_symbol = ctx.get_function(name).unwrap();
+
+                let valued_params: Vec<EvalSymbol> = params
+                    .iter()
+                    .zip(function_symbol.inner().params())
+                    .map(|(expr, typed_param)| EvalSymbol {
+                        name: typed_param.inner().name.clone(),
+                        ty: expr.inner().ty.clone(),
+                        value: expr.inner().value.clone(),
+                        span: Some(expr.span().clone()),
+                    })
+                    .collect();
+
+                // evaluate function, only for collecting context
+                if let EvalFunctionKind::Function(function) = function_symbol.inner() {
+                    let mut curr_func = function.clone();
+                    let mut ctx = EvalContext::new(ctx.is_macro());
+                    let param_names: Vec<String> =
+                        valued_params.iter().map(|e| e.name.clone()).collect();
+
+                    for param in valued_params {
+                        ctx.push(param)?;
+                    }
+
+                    // only eval to collect context, what this returns should equal the inlined
+                    // function call body but without allocated addresses
+                    eval_program(&mut curr_func.body, &mut ctx)?;
+
+                    // now eval the inlined function call body with the context after the function ends
+                    eval_program(body, &mut ctx)?;
+
+                    for name in param_names.into_iter().rev() {
+                        if name != ctx.pop()?.name {
+                            // TODO: make detailed error
+                            Err(miette!("popped parameter symbol does not match pushed"))?;
+                        }
+                    }
+                } else {
+                    // TODO: detailed error
+                    // should never happen since its an inlined/block function
+                    unreachable!()
+                }
             }
 
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
@@ -542,6 +586,76 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             }
             _ => (),
         };
+
+        if matches!(statement.inner().inner(), StatementKind::FunctionCall(_)) {
+            // clone the statement to be able to replace original
+            let mut new_statement = statement.clone();
+
+            if let StatementKind::FunctionCall(FunctionCall { name, params }) =
+                new_statement.inner_mut().inner_mut()
+            {
+                if !ctx.is_macro() {
+                    // TODO: detailed error
+                    Err(miette!("function call found on normal eval"))?;
+                }
+
+                if !ctx.contains_function(name) {
+                    // TODO: detailed error
+                    Err(miette!("function from function call not found"))?;
+                }
+
+                // eval all params
+                for param in params.iter_mut() {
+                    eval_expr(param, ctx)?;
+
+                    if !ctx.is_macro() && matches!(param.inner().value, ExprValue::Unknown) {
+                        // TODO: detailed error
+                        Err(miette!("function parameter unknown on final eval stage"))?;
+                    }
+                }
+
+                let function_symbol = ctx.get_function(name).unwrap();
+
+                let valued_params: Vec<EvalSymbol> = params
+                    .iter()
+                    .zip(function_symbol.inner().params())
+                    .map(|(expr, typed_param)| EvalSymbol {
+                        name: typed_param.inner().name.clone(),
+                        ty: expr.inner().ty.clone(),
+                        value: expr.inner().value.clone(),
+                        span: Some(expr.span().clone()),
+                    })
+                    .collect();
+
+                // evaluate function
+                let eval_value = function_symbol
+                    .inner()
+                    .eval(valued_params, ctx.is_macro())?;
+
+                if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
+                    // TODO: detailed error
+                    Err(miette!("function returned unknown on final eval stage"))?;
+                }
+
+                let block = if let ExprValue::Block(eval_block) = eval_value {
+                    eval_block
+                } else {
+                    // TODO: detailed error
+                    Err(miette!(
+                        "expected block from function call eval, got else instead"
+                    ))?;
+                    unreachable!();
+                };
+
+                // now, replace the current statement with the inlined function call
+                *statement = StatementNode::new(
+                    Statement::new(StatementKind::InlinedFunctionCall(
+                        InlinedFunctionCall::new(name.clone(), params.clone(), block),
+                    )),
+                    new_statement.span().clone(),
+                );
+            }
+        }
     }
 
     // checks that all returned symbols match what was pushed in
@@ -571,10 +685,15 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
     Ok(return_value)
 }
 
-// TODO: make sure int type gets casted to whatever type current expr is (say addr or byte)
 fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()> {
     let inner_span = typed_expr.span().clone();
     let inner = typed_expr.inner_mut();
+
+    // expr already evaluated, must still cast in case its a literal
+    if !matches!(inner.value, ExprValue::Unknown) {
+        inner.value = inner.value.clone().cast_value(&inner.ty);
+        return Ok(());
+    }
 
     match &mut inner.kind {
         // literals already have their value filled in

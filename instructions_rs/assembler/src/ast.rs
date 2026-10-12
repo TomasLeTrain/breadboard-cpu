@@ -241,6 +241,7 @@ pub enum StatementKind {
     Return(ReturnKind),
     // this kind of call is always a macro (not an expr) so not wrapped in type/value
     FunctionCall(FunctionCall),
+    InlinedFunctionCall(InlinedFunctionCall),
     Label {
         name: String,
     },
@@ -264,6 +265,19 @@ pub struct FunctionCall {
 impl FunctionCall {
     pub fn new(name: String, params: Vec<AstNode<Expr>>) -> Self {
         Self { name, params }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InlinedFunctionCall {
+    pub name: String,
+    pub params: Vec<AstNode<Expr>>,
+    pub body: Vec<StatementNode>,
+}
+
+impl InlinedFunctionCall {
+    pub fn new(name: String, params: Vec<AstNode<Expr>>, body: Vec<StatementNode>) -> Self {
+        Self { name, params, body }
     }
 }
 
