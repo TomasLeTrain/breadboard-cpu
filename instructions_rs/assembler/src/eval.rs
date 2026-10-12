@@ -235,21 +235,21 @@ impl EvalFunctionKind {
 
     // runs with given parameters
     // can return Unknown value if params or the function itself has unkowns
-    pub fn eval(&self, params: Vec<EvalSymbol>, is_macro: bool) -> Result<ExprValue> {
+    pub fn eval(&self, params: Vec<EvalSymbol>, ctx: &EvalContext) -> Result<ExprValue> {
         match self {
             EvalFunctionKind::Function(function) => {
                 let mut curr_func = function.clone();
-                let mut ctx = EvalContext::new(is_macro);
+                let mut ctx = ctx.clone_non_local();
                 let param_names: Vec<String> = params.iter().map(|e| e.name.clone()).collect();
 
                 for param in params {
-                    ctx.push(param)?;
+                    ctx.push_local(param)?;
                 }
 
                 let eval_value = eval_program(&mut curr_func.body, &mut ctx)?;
 
                 for name in param_names.into_iter().rev() {
-                    if name != ctx.pop()?.name {
+                    if name != ctx.pop_local()?.name {
                         // TODO: make detailed error
                         Err(miette!("popped parameter symbol does not match pushed"))?;
                     }
@@ -290,8 +290,8 @@ impl FunctionEvalSymbol {
 // keeps track of symbols by keeping track of their scope as well
 // allows reusing one context struct through all operations
 pub struct EvalContext {
-    symbol_stack: Vec<EvalSymbol>,
-    symbols: HashMap<String, EvalSymbol>,
+    local_ctx: SymbolContext,
+    global_ctx: SymbolContext,
 
     function_stack: Vec<FunctionEvalSymbol>,
     functions: HashMap<String, FunctionEvalSymbol>,
@@ -299,44 +299,27 @@ pub struct EvalContext {
     is_macro: bool,
 }
 
-impl EvalContext {
-    pub fn new(is_macro: bool) -> Self {
-        EvalContext {
+#[derive(Debug, Clone)]
+struct SymbolContext {
+    symbol_stack: Vec<EvalSymbol>,
+    symbols: HashMap<String, EvalSymbol>,
+}
+
+impl SymbolContext {
+    fn new() -> Self {
+        Self {
             symbol_stack: Vec::new(),
             symbols: HashMap::new(),
-            function_stack: Vec::new(),
-            functions: HashMap::new(),
-            is_macro,
         }
     }
 
-    pub fn push(&mut self, symbol: EvalSymbol) -> Result<()> {
+    fn push(&mut self, symbol: EvalSymbol) -> Result<()> {
         self.symbol_stack.push(symbol.clone());
 
         let push_result = self.symbols.insert(symbol.clone().name, symbol.clone());
 
         if let Some(other) = push_result {
-            let mut spans = Vec::new();
-            let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
-
-            for ast_span in [symbol.span.as_ref(), other.span.as_ref()]
-                .into_iter()
-                .flatten()
-            {
-                spans.push(LabeledSpan::new_with_span(
-                    Some(format!(
-                        "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
-                        symbol.ty, symbol.value
-                    )),
-                    ast_span.to_miette_span(),
-                ));
-            }
-
-            Err(DuplicateSymbolError {
-                name: symbol.name,
-                source,
-                spans,
-            })?
+            DuplicateSymbolError::from_symbols(symbol, other)
         } else {
             Ok(())
         }
@@ -360,6 +343,60 @@ impl EvalContext {
 
     fn contains(&self, name: &String) -> bool {
         self.symbols.contains_key(name)
+    }
+}
+
+impl EvalContext {
+    pub fn new(is_macro: bool) -> Self {
+        EvalContext {
+            global_ctx: SymbolContext::new(),
+            local_ctx: SymbolContext::new(),
+            function_stack: Vec::new(),
+            functions: HashMap::new(),
+            is_macro,
+        }
+    }
+
+    pub fn clone_non_local(&self) -> Self {
+        Self {
+            global_ctx: self.global_ctx.clone(),
+            local_ctx: SymbolContext::new(),
+            function_stack: self.function_stack.clone(),
+            functions: self.functions.clone(),
+            is_macro: self.is_macro(),
+        }
+    }
+
+    pub fn push_global(&mut self, symbol: EvalSymbol) -> Result<()> {
+        // must check if its in either local or global context to avoid conflicts bewteen them
+        if self.contains(&symbol.name) {
+            let other = self.get(&symbol.name).unwrap().clone();
+            return DuplicateSymbolError::from_symbols(symbol, other);
+        }
+
+        self.global_ctx.push(symbol)
+    }
+
+    fn push_local(&mut self, symbol: EvalSymbol) -> Result<()> {
+        // must check if its in either local or global context to avoid conflicts bewteen them
+        if self.contains(&symbol.name) {
+            let other = self.get(&symbol.name).unwrap().clone();
+            return DuplicateSymbolError::from_symbols(symbol, other);
+        }
+
+        self.local_ctx.push(symbol)
+    }
+
+    fn pop_local(&mut self) -> Result<EvalSymbol> {
+        self.local_ctx.pop()
+    }
+
+    fn get(&self, name: &String) -> Option<&EvalSymbol> {
+        self.local_ctx.get(name).or(self.global_ctx.get(name))
+    }
+
+    fn contains(&self, name: &String) -> bool {
+        self.local_ctx.contains(name) | self.global_ctx.contains(name)
     }
 
     pub fn push_function(&mut self, function: FunctionEvalSymbol) -> Result<()> {
@@ -449,7 +486,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     span: Some(statement.span().clone()),
                 };
 
-                ctx.push(curr_symbol.clone())
+                ctx.push_local(curr_symbol.clone())
                     .wrap_err("Pushing local label symbol failed.")?;
 
                 local_symbols.push(curr_symbol);
@@ -496,7 +533,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     span: Some(statement.span().clone()),
                 };
 
-                ctx.push(curr_symbol.clone())
+                ctx.push_local(curr_symbol.clone())
                     .wrap_err("Pushing local variable symbol failed.")?;
                 local_symbols.push(curr_symbol);
             }
@@ -547,12 +584,13 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 // evaluate function, only for collecting context
                 if let EvalFunctionKind::Function(function) = function_symbol.inner() {
                     let mut curr_func = function.clone();
-                    let mut ctx = EvalContext::new(ctx.is_macro());
+                    let mut ctx = ctx.clone_non_local();
+
                     let param_names: Vec<String> =
                         valued_params.iter().map(|e| e.name.clone()).collect();
 
                     for param in valued_params {
-                        ctx.push(param)?;
+                        ctx.push_local(param)?;
                     }
 
                     // only eval to collect context, what this returns should equal the inlined
@@ -563,7 +601,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     eval_program(body, &mut ctx)?;
 
                     for name in param_names.into_iter().rev() {
-                        if name != ctx.pop()?.name {
+                        if name != ctx.pop_local()?.name {
                             // TODO: make detailed error
                             Err(miette!("popped parameter symbol does not match pushed"))?;
                         }
@@ -628,9 +666,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     .collect();
 
                 // evaluate function
-                let eval_value = function_symbol
-                    .inner()
-                    .eval(valued_params, ctx.is_macro())?;
+                let eval_value = function_symbol.inner().eval(valued_params, ctx)?;
 
                 if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
                     // TODO: detailed error
@@ -661,7 +697,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
     // checks that all returned symbols match what was pushed in
     // goes in reverse since pop starts from the last added element
     for label in local_symbols.into_iter().rev() {
-        let curr = ctx.pop()?;
+        let curr = ctx.pop_local()?;
         if label.name != curr.name {
             return Err(miette!(
                 "Popped symbol does not match - original: {:?}, got: {:?}",
@@ -728,9 +764,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                 .collect();
 
             // evaluate function
-            let eval_value = function_symbol
-                .inner()
-                .eval(valued_params, ctx.is_macro())?;
+            let eval_value = function_symbol.inner().eval(valued_params, ctx)?;
 
             if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
                 // TODO: detailed error
@@ -816,6 +850,33 @@ pub struct DuplicateSymbolError {
 
     #[label(collection, "Defined here")]
     spans: Vec<LabeledSpan>,
+}
+
+impl DuplicateSymbolError {
+    fn from_symbols(symbol: EvalSymbol, other: EvalSymbol) -> Result<()> {
+        let mut spans = Vec::new();
+
+        let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
+
+        for ast_span in [symbol.span.as_ref(), other.span.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            spans.push(LabeledSpan::new_with_span(
+                Some(format!(
+                    "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
+                    symbol.ty, symbol.value
+                )),
+                ast_span.to_miette_span(),
+            ));
+        }
+
+        Err(DuplicateSymbolError {
+            name: symbol.name,
+            source,
+            spans,
+        })?
+    }
 }
 
 impl Error for DuplicateSymbolError {}
