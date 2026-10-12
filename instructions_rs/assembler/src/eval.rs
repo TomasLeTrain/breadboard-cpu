@@ -74,8 +74,7 @@ impl ExprValue {
             BinaryOp::BitAnd => lhs & rhs,
             BinaryOp::BitXor => lhs ^ rhs,
             BinaryOp::BitOr => lhs | rhs,
-            // TODO: turn into error
-            _ => Err(miette!("invalid binary op!"))?,
+            _ => unreachable!(),
         }))
     }
 
@@ -86,7 +85,6 @@ impl ExprValue {
         Ok(Self::Bool(match op {
             BinaryOp::And => lhs && rhs,
             BinaryOp::Or => lhs || rhs,
-            // TODO: turn into error
             _ => unreachable!(),
         }))
     }
@@ -127,7 +125,6 @@ impl ExprValue {
             BinaryOp::Gt => lhs > rhs,
             BinaryOp::Le => lhs <= rhs,
             BinaryOp::Ge => lhs >= rhs,
-            // TODO: turn into error
             _ => unreachable!(),
         }))
     }
@@ -160,60 +157,77 @@ impl ExprValue {
         Ok(Self::Bool(match op {
             BinaryOp::Eq => equal,
             BinaryOp::Ne => !equal,
-            // TODO: turn into error
             _ => unreachable!(),
         }))
     }
 
-    // TODO: add is_castable function to catch errors before calling this func
-    fn cast_value(self, ty: &Type) -> Self {
+    // returns error if value is not castable
+    fn cast_value(self, ty: &Type) -> Result<Self> {
         // unknown casts to everything
         if matches!(self, Self::Unknown) {
-            return self;
+            return Ok(self);
         }
 
         match ty {
-            Type::Bool => {
-                assert!(matches!(self, Self::Bool(_)));
-                self
-            }
-
+            Type::Bool => self.as_bool().map(ExprValue::Bool),
             Type::Int => {
                 // casting from any int-able value
-                Self::Int(self.as_int().unwrap())
+                self.as_int().map(ExprValue::Int)
             }
             Type::Addr => {
                 // casting from any int-able value
-                Self::Addr(self.as_int().unwrap().try_into().unwrap())
+                self.as_int()?
+                    .try_into()
+                    .map(|e: u16| ExprValue::Addr(e))
+                    .map_err(|_| miette!("could not downcast into addr"))
             }
             Type::Byte => {
                 // casting from any int-able value
-                // TODO: disallow loose casting
-                Self::Byte(self.as_int().unwrap().try_into().unwrap())
+                self.as_int()?
+                    .try_into()
+                    .map(|e: u8| ExprValue::Byte(e))
+                    .map_err(|_| miette!("could not downcast into byte"))
             }
 
             Type::Label => {
-                assert!(matches!(self, Self::Addr(_)));
-                self
+                if matches!(self, Self::Addr(_)) {
+                    Ok(self)
+                } else {
+                    Err(miette!("not castable to label"))
+                }
             }
 
             Type::Register => {
-                assert!(matches!(self, Self::Register(_)));
-                self
+                if matches!(self, Self::Register(_)) {
+                    Ok(self)
+                } else {
+                    Err(miette!("not castable to register"))
+                }
             }
             Type::AddressRegister => {
-                assert!(matches!(self, Self::AddressRegister(_)));
-                self
+                if matches!(self, Self::AddressRegister(_)) {
+                    Ok(self)
+                } else {
+                    Err(miette!("not castable to address register"))
+                }
             }
 
             Type::String => {
-                assert!(matches!(self, Self::String(_)));
-                self
+                if matches!(self, Self::String(_)) {
+                    Ok(self)
+                } else {
+                    Err(miette!("not castable to address register"))
+                }
             }
-
-            Type::Unknown => unreachable!(),
-            Type::Function { .. } => unreachable!(),
-            Type::Block => unreachable!(),
+            Type::Function { .. } => Err(miette!("nothing castable to function")),
+            Type::Block => {
+                if matches!(self, Self::Block(_)) {
+                    Ok(self)
+                } else {
+                    Err(miette!("not castable to block"))
+                }
+            }
+            Type::Unknown => Err(miette!("nothing castable to unkown")),
         }
     }
 
@@ -770,7 +784,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
 
     // expr already evaluated, must still cast in case its a literal
     if !matches!(inner.value, ExprValue::Unknown) {
-        inner.value = inner.value.clone().cast_value(&inner.ty);
+        inner.value = inner.value.clone().cast_value(&inner.ty)?;
         return Ok(());
     }
 
@@ -814,13 +828,13 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
                 Err(miette!("function returned unknown on final eval stage"))?;
             }
 
-            inner.value = eval_value.cast_value(&inner.ty);
+            inner.value = eval_value.cast_value(&inner.ty)?;
         }
         ExprKind::Identity(name) => {
             if ctx.contains(name) {
                 let symbol = ctx.get(name).unwrap();
 
-                inner.value = symbol.value.clone().cast_value(&inner.ty);
+                inner.value = symbol.value.clone().cast_value(&inner.ty)?;
             } else {
                 Err(EvalExprError::new(EvalExprErrorKind::SymbolNotFound(
                     EvalSymbol {
@@ -857,7 +871,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
     }
 
     // ensure value confines to the type
-    inner.value = inner.value.clone().cast_value(&inner.ty);
+    inner.value = inner.value.clone().cast_value(&inner.ty)?;
 
     Ok(())
 }

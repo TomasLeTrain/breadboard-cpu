@@ -2,19 +2,6 @@ start:
 	; initialize stack
 	lda SP, 0xffe0 ; lda sp, sp_start_addr
 
-	; set up variables for fib routine
-
-	; this is some more comments
-	; these are next to each other
-	; pusha push_return
-	; push low_byte(push_return)
-	; push high_byte(push_return)
-	;
-	;
-	; jmp fib, MAR     ; jump to func
-	;
-	; push_return:
-
 	jsr(fib)
 
 	mv A, X
@@ -47,9 +34,7 @@ fib {
 	}
 
 	; return routine
-	; pop MAR
-	pop_mar()
-	jmp MAR
+	jsr_return()
 }
 
 fn low_byte(x: u16) {
@@ -62,9 +47,10 @@ fn high_byte(x: u16) {
 	return high_byte
 }
 
-fn pop_mar() {
+fn jsr_return() {
 	return {
 		pop MAR
+		jmp MAR
 	}
 }
 
