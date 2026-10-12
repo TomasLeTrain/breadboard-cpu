@@ -92,7 +92,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
 
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
 
-    println!("after typecheck: {:#?}", program);
+    // println!("after eval: {:#?}", program);
 
     let all_istrs: Vec<Arc<Instruction>> =
         get_instruction_list().into_iter().map(Arc::new).collect();

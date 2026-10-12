@@ -42,7 +42,6 @@ pub fn parse_file(source: Source) -> Result<Ast> {
 
     let pairs = AssemblyParser::parse(Rule::Program, source.source())
         .map_err(|e| ParseError::from_pest(e, &source))?;
-    // println!("bruh: {:#?}", pairs);
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {
@@ -333,11 +332,14 @@ fn parse_type(pair: Pair<Rule>, source: &Source) -> Result<Type> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
-        // TODO: differentiate int types
-        Rule::U16Type => Ok(Type::Int),
-        Rule::U8Type => Ok(Type::Int),
-        Rule::I16Type => Ok(Type::Int),
-        Rule::I8Type => Ok(Type::Int),
+        Rule::RegType => Ok(Type::Register),
+        Rule::AddrRegType => Ok(Type::AddressRegister),
+
+        // TODO: differentiate sign types/make more explicit
+        Rule::U16Type => Ok(Type::Addr),
+        Rule::U8Type => Ok(Type::Byte),
+        Rule::I16Type => Ok(Type::Addr),
+        Rule::I8Type => Ok(Type::Byte),
         Rule::IntType => Ok(Type::Int),
         Rule::BoolType => Ok(Type::Bool),
         Rule::LabelType => Ok(Type::Label),

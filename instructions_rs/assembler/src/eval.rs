@@ -543,7 +543,11 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                         eval_expr(expr, ctx)?;
                         return_value = expr.inner().value.clone();
                     }
-                    ReturnKind::Block(block) => return_value = ExprValue::Block(block.clone()),
+                    ReturnKind::Block(block) => {
+                        let mut new_block = block.clone();
+                        eval_program(&mut new_block, ctx)?;
+                        return_value = ExprValue::Block(new_block)
+                    }
                 }
                 return_hit = true;
             }
@@ -617,7 +621,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 eval_program(body, ctx)?;
             }
             // instructions not evaled on macro
-            StatementKind::Instruction(instruction) if !ctx.is_macro() => {
+            StatementKind::Instruction(instruction) => {
                 for param in instruction.params.iter_mut() {
                     eval_expr(param, ctx)?;
                 }

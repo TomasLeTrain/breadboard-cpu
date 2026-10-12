@@ -7,13 +7,16 @@ start:
 	; this is some more comments
 	; these are next to each other
 	; pusha push_return
-	push low_byte(push_return)
-	push high_byte(push_return)
+	; push low_byte(push_return)
+	; push high_byte(push_return)
+	;
+	;
+	; jmp fib, MAR     ; jump to func
+	;
+	; push_return:
 
+	jsr(fib)
 
-	jmp fib, MAR     ; jump to func
-
-	push_return:
 	mv A, X
 	mv B, Y
 
@@ -32,15 +35,15 @@ fib {
 
 	mv Z, num_iters
 
-	lda MAR, loop
+	; lda MAR, loop
 
 	loop {
 		add X, Y
 		add Y, X
 		
-		sub Z, 1
-
-		jnz Z, MAR
+		; sub Z, 1
+		; jnz Z, MAR
+		jnz_end(Z, MAR, loop)
 	}
 
 	; return routine
@@ -62,5 +65,22 @@ fn high_byte(x: u16) {
 fn pop_mar() {
 	return {
 		pop MAR
+	}
+}
+
+fn jsr(addr: Address) {
+	return {
+		pusha return_addr
+		jmp addr, MAR
+		return_addr:
+	}
+}
+
+
+fn jnz_end(reg: Register, addrReg: AddressRegister, addr: Address) {
+	return {
+		sub reg, 1
+		lda addrReg, addr
+		jnz reg, addrReg
 	}
 }

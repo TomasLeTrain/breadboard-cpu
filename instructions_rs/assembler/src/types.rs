@@ -76,6 +76,9 @@ impl Type {
             Some(Type::Bool)
         } else if let (Type::Unknown, t) | (t, Type::Unknown) = (self_simple, other_simple) {
             Some(t.clone())
+        // directly same type
+        } else if std::mem::discriminant(self) == std::mem::discriminant(other) {
+            Some(self.clone())
         } else {
             None
         }
@@ -426,7 +429,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                             .iter()
                             .map(|e| e.inner.ty.clone())
                             .zip(found_params.iter())
-                            .filter(|(a, b)| a.as_simple() == b.as_simple())
+                            .filter(|(a, b)| a.as_simple().unify(b.as_simple()).is_some())
                             .count();
 
                         if matching_elements != params.len()
@@ -435,7 +438,9 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                             // parameters dont match
                             // TODO: make detailed error
                             Err(miette!(
-                                "expected function of signature, found function with different signature"
+                                "expected function of signature, found function with different signature: first: {:#?},\n second:{:#?}",
+                                params,
+                                found_params
                             ))?;
                         }
 
@@ -495,8 +500,6 @@ fn typecheck_expr(typed_expr: &mut AstNode<Expr>, symbols: &TypecheckContext) ->
         // literals already have their typed filled in
         ExprKind::Literal => (),
         ExprKind::FunctionCall(FunctionCall { name, params }) => {
-            println!("whar {name}");
-
             // typecheck all params first
             for param in params.iter_mut() {
                 typecheck_expr(param, symbols)?;

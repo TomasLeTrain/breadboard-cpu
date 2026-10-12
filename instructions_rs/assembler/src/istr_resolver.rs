@@ -8,6 +8,7 @@ use opcode_gen::instructions::{
 use crate::{
     ast::{AstNode, Expr, InlinedFunctionCall, StatementKind, StatementNode},
     error::ParseError,
+    eval::ExprValue,
     types::Type,
 };
 
@@ -18,32 +19,26 @@ fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
         Type::Int => ArgumentType::GenericImm,
 
         Type::Register => {
-            let name = inner.kind.as_identity().ok_or(ParseError::from_span(
-                "Expression with type Register is not identity",
-                expr.span(),
-            ))?;
-            let register = Register::iterator()
-                .find(|reg| reg.name() == name.as_str())
-                .ok_or(ParseError::from_span(
-                    format!("Register not found from name \"{}\"", name),
-                    expr.span(),
+            if let ExprValue::Register(reg) = expr.inner().value {
+                ArgumentType::Reg(reg)
+            } else {
+                // TODO: detailed
+                Err(miette!(
+                    "register without value! make sure its evaluable before address alloc"
                 ))?;
-            ArgumentType::Reg(*register)
+                unreachable!();
+            }
         }
-
         Type::AddressRegister => {
-            let name = inner.kind.as_identity().ok_or(ParseError::from_span(
-                "Expression with type AddressRegister is not identity",
-                expr.span(),
-            ))?;
-            let register = AddressRegister::iterator()
-                .find(|reg| reg.name() == name.as_str())
-                .ok_or(ParseError::from_span(
-                    format!("AddressRegister not found from name \"{}\"", name),
-                    expr.span(),
+            if let ExprValue::AddressRegister(reg) = expr.inner().value {
+                ArgumentType::AddrReg(reg)
+            } else {
+                // TODO: detailed
+                Err(miette!(
+                    "address register without value! make sure its evaluable before address alloc"
                 ))?;
-
-            ArgumentType::AddrReg(*register)
+                unreachable!();
+            }
         }
 
         // coerce labels into address

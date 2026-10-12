@@ -107,7 +107,7 @@ Literal =  { Bool | Hexadecimal | Int  | String | Character }
 HexadecimalDigit = @{ ASCII_HEX_DIGIT+ }
 Hexadecimal       = { ^"0x" ~ HexadecimalDigit }
 
-Type = { U16Type | U8Type | I16Type | I8Type | IntType | BoolType | LabelType | AddrType }
+Type = { RegType | AddrRegType | U16Type | U8Type | I16Type | I8Type | IntType | BoolType | LabelType | AddrType }
 U16Type = { "u16" }
 U8Type = { "u8" }
 I16Type = { "i16" }
@@ -116,6 +116,8 @@ IntType = { "int" }
 BoolType = { "bool" }
 LabelType = { "Label" }
 AddrType = { "Address" }
+RegType = { "Register" }
+AddrRegType = { "AddressRegister" }
 
 Int     = @{ ASCII_DIGIT+ }
 
