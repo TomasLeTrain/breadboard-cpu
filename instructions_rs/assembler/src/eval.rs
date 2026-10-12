@@ -30,23 +30,23 @@ pub enum ExprValue {
 }
 
 impl ExprValue {
-    fn as_int(&self) -> Option<i32> {
+    fn as_int(&self) -> Result<i32> {
         match self {
-            ExprValue::Int(val) => Some(*val),
-            ExprValue::Addr(val) => Some(*val as i32),
-            ExprValue::Byte(val) => Some(*val as i32),
+            ExprValue::Int(val) => Ok(*val),
+            ExprValue::Addr(val) => Ok(*val as i32),
+            ExprValue::Byte(val) => Ok(*val as i32),
             ExprValue::Block(_)
             | ExprValue::Register(_)
             | ExprValue::AddressRegister(_)
             | ExprValue::Unknown
             | ExprValue::Bool(_)
-            | ExprValue::String(_) => None,
+            | ExprValue::String(_) => Err(miette!("not castable to int!")),
         }
     }
 
-    fn as_bool(&self) -> Option<bool> {
+    fn as_bool(&self) -> Result<bool> {
         match self {
-            ExprValue::Bool(val) => Some(*val),
+            ExprValue::Bool(val) => Ok(*val),
             ExprValue::Block(_)
             | ExprValue::Int(_)
             | ExprValue::Addr(_)
@@ -54,15 +54,15 @@ impl ExprValue {
             | ExprValue::Register(_)
             | ExprValue::AddressRegister(_)
             | ExprValue::Unknown
-            | ExprValue::String(_) => None,
+            | ExprValue::String(_) => Err(miette!("not castable to bool!")),
         }
     }
 
-    fn apply_int_binary_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Self {
-        let lhs = lhs.as_int().unwrap();
-        let rhs = rhs.as_int().unwrap();
+    fn apply_int_binary_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Result<Self> {
+        let lhs = lhs.as_int().context("Casting lhs to int")?;
+        let rhs = rhs.as_int().context("Casting rhs to int")?;
 
-        Self::Int(match op {
+        Ok(Self::Int(match op {
             BinaryOp::Add => lhs + rhs,
             BinaryOp::Sub => lhs - rhs,
             BinaryOp::Mul => lhs * rhs,
@@ -75,55 +75,94 @@ impl ExprValue {
             BinaryOp::BitXor => lhs ^ rhs,
             BinaryOp::BitOr => lhs | rhs,
             // TODO: turn into error
-            _ => unreachable!(),
-        })
+            _ => Err(miette!("invalid binary op!"))?,
+        }))
     }
 
-    fn apply_bool_binary_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Self {
-        let lhs = lhs.as_bool().unwrap();
-        let rhs = rhs.as_bool().unwrap();
+    fn apply_bool_binary_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Result<Self> {
+        let lhs = lhs.as_bool().context("Casting lhs to bool")?;
+        let rhs = rhs.as_bool().context("Casting rhs to bool")?;
 
-        Self::Bool(match op {
+        Ok(Self::Bool(match op {
             BinaryOp::And => lhs && rhs,
             BinaryOp::Or => lhs || rhs,
             // TODO: turn into error
             _ => unreachable!(),
-        })
+        }))
     }
 
-    fn apply_comparison_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Self {
-        // TODO: add support for other comparison types
-        let lhs = lhs.as_int().unwrap();
-        let rhs = rhs.as_int().unwrap();
+    fn apply_binary_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Result<Self> {
+        match op {
+            BinaryOp::Add
+            | BinaryOp::Sub
+            | BinaryOp::Mul
+            | BinaryOp::Div
+            | BinaryOp::Mod
+            | BinaryOp::Pow
+            | BinaryOp::ShiftLeft
+            | BinaryOp::ShiftRight
+            | BinaryOp::BitAnd
+            | BinaryOp::BitXor
+            | BinaryOp::BitOr => ExprValue::apply_int_binary_op(lhs, rhs, op)
+                .context("Applying int binary operation"),
+            BinaryOp::And | BinaryOp::Or => ExprValue::apply_bool_binary_op(lhs, rhs, op)
+                .context("Applying bool binary operation"),
+            BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
+                ExprValue::apply_comparison_op(lhs, rhs, op)
+                    .context("Applying comparison operation")
+            }
+            BinaryOp::Eq | BinaryOp::Ne => {
+                ExprValue::apply_equality_op(lhs, rhs, op).context("Applying equality operation")
+            }
+        }
+    }
 
-        Self::Bool(match op {
+    fn apply_comparison_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Result<Self> {
+        // TODO: add support for other comparison types
+        let lhs = lhs.as_int().context("Casting lhs to int")?;
+        let rhs = rhs.as_int().context("Casting rhs to int")?;
+
+        Ok(Self::Bool(match op {
             BinaryOp::Lt => lhs < rhs,
             BinaryOp::Gt => lhs > rhs,
             BinaryOp::Le => lhs <= rhs,
             BinaryOp::Ge => lhs >= rhs,
             // TODO: turn into error
             _ => unreachable!(),
-        })
+        }))
     }
 
-    fn apply_equality_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Self {
+    fn apply_equality_op(lhs: &Self, rhs: &Self, op: &BinaryOp) -> Result<Self> {
         // TODO: add support for other comparison types
         // TODO: make checking of both types as compatible more robust
-        let equal = if lhs.as_int().is_some() {
-            lhs.as_int().unwrap() == rhs.as_int().unwrap()
-        } else if lhs.as_bool().is_some() {
-            lhs.as_bool().unwrap() == rhs.as_bool().unwrap()
+        let equal = if lhs.as_int().is_ok() && rhs.as_int().is_ok() {
+            lhs.as_int()? == rhs.as_int()?
+        } else if lhs.as_bool().is_ok() && rhs.as_bool().is_ok() {
+            lhs.as_bool()? == rhs.as_bool()?
+        } else if std::mem::discriminant(lhs) == std::mem::discriminant(rhs) {
+            // comparable by comparing contents
+            match (lhs, rhs) {
+                (ExprValue::AddressRegister(reg0), ExprValue::AddressRegister(reg1)) => {
+                    reg0 == reg1
+                }
+                (ExprValue::Register(reg0), ExprValue::Register(reg1)) => reg0 == reg1,
+                (ExprValue::String(string0), ExprValue::String(string1)) => string0 == string1,
+                (ExprValue::Block(_), ExprValue::Block(_)) => {
+                    Err(miette!("comparison between blocks not supported!"))?
+                }
+                _ => unreachable!(),
+            }
         } else {
-            // TODO: make into error
-            unreachable!();
+            // TODO: make expressive error
+            Err(miette!("incomparable values"))?
         };
 
-        Self::Bool(match op {
+        Ok(Self::Bool(match op {
             BinaryOp::Eq => equal,
             BinaryOp::Ne => !equal,
             // TODO: turn into error
             _ => unreachable!(),
-        })
+        }))
     }
 
     // TODO: add is_castable function to catch errors before calling this func
@@ -801,8 +840,8 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             let unary_expr = unary_expr.inner_mut();
 
             inner.value = match op {
-                UnaryOp::Neg => ExprValue::Int(-unary_expr.value.as_int().unwrap()),
-                UnaryOp::BitNegation => ExprValue::Int(!unary_expr.value.as_int().unwrap()),
+                UnaryOp::Neg => ExprValue::Int(-unary_expr.value.as_int()?),
+                UnaryOp::BitNegation => ExprValue::Int(!unary_expr.value.as_int()?),
                 UnaryOp::Not => ExprValue::Bool(!unary_expr.value.as_bool().unwrap()),
             };
         }
@@ -813,28 +852,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             let left = left.inner_mut();
             let right = right.inner_mut();
 
-            inner.value = match op {
-                BinaryOp::Add
-                | BinaryOp::Sub
-                | BinaryOp::Mul
-                | BinaryOp::Div
-                | BinaryOp::Mod
-                | BinaryOp::Pow
-                | BinaryOp::ShiftLeft
-                | BinaryOp::ShiftRight
-                | BinaryOp::BitAnd
-                | BinaryOp::BitXor
-                | BinaryOp::BitOr => ExprValue::apply_int_binary_op(&left.value, &right.value, op),
-                BinaryOp::And | BinaryOp::Or => {
-                    ExprValue::apply_bool_binary_op(&left.value, &right.value, op)
-                }
-                BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                    ExprValue::apply_comparison_op(&left.value, &right.value, op)
-                }
-                BinaryOp::Eq | BinaryOp::Ne => {
-                    ExprValue::apply_equality_op(&left.value, &right.value, op)
-                }
-            }
+            inner.value = ExprValue::apply_binary_op(&left.value, &right.value, op)?;
         }
     }
 
