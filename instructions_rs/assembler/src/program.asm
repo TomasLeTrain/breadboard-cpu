@@ -6,13 +6,17 @@ start:
 
 	; this is some more comments
 	; these are next to each other
-	
-	; TODO: this only works since we know the push_return will be smaller than 256 - need to implement addr placeholder 
-	pusha push_return
+	; pusha push_return
+	; push low_byte(push_return)
+	; push high_byte(push_return)
+	;
+	;
+	; jmp fib, MAR     ; jump to func
+	;
+	; push_return:
 
-	jmp fib, MAR     ; jump to func
+	jsr(fib)
 
-	push_return:
 	mv A, X
 	mv B, Y
 
@@ -27,21 +31,56 @@ fib {
 	mv X, 0
 	mv Y, 1
 
-	mv Z, 255
+	let num_iters = 128 % 5
 
-	lda MAR, loop
+	mv Z, num_iters
+
+	; lda MAR, loop
 
 	loop {
 		add X, Y
 		add Y, X
 		
-		sub Z, 1
-
-		jnz Z, MAR
+		; sub Z, 1
+		; jnz Z, MAR
+		jnz_end(Z, MAR, loop)
 	}
 
-
 	; return routine
-	pop MAR
+	; pop MAR
+	pop_mar()
 	jmp MAR
+}
+
+fn low_byte(x: u16) {
+	let low_byte: u8 = x & 0xff
+	return low_byte
+}
+
+fn high_byte(x: u16) {
+	let high_byte: u8 = (x >> 8) & 0xff
+	return high_byte
+}
+
+fn pop_mar() {
+	return {
+		pop MAR
+	}
+}
+
+fn jsr(addr: Address) {
+	return {
+		pusha return_addr
+		jmp addr, MAR
+		return_addr:
+	}
+}
+
+
+fn jnz_end(reg: Register, addrReg: AddressRegister, addr: Address) {
+	return {
+		sub reg, 1
+		lda addrReg, addr
+		jnz reg, addrReg
+	}
 }

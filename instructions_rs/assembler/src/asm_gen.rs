@@ -4,7 +4,7 @@ use owo_colors::{
 };
 
 use crate::{
-    ast::{StatementKind, StatementNode},
+    ast::{InlinedFunctionCall, StatementKind, StatementNode},
     types::Address,
 };
 use miette::{Result, miette};
@@ -222,12 +222,25 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     &[],
                 )?;
             }
+            StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, params, body }) => {
+                ctx.place_statement(
+                    format!("fn {} {{", name.dimmed()),
+                    statement.inner().address().unwrap(),
+                    &[],
+                )?;
+                generate_asm(body, ctx)?;
+            }
+
             StatementKind::BlockLabel { body, name } => {
                 ctx.place_statement(
                     format!("{} {{", name.dimmed()),
                     statement.inner().address().unwrap(),
                     &[],
                 )?;
+                generate_asm(body, ctx)?;
+            }
+            StatementKind::Block { body } => {
+                ctx.place_statement("{".to_string(), statement.inner().address().unwrap(), &[])?;
                 generate_asm(body, ctx)?;
             }
             StatementKind::Instruction(ast_instruction) => {
@@ -249,6 +262,8 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     &istr_bytes,
                 )?;
             }
+            // nothing else emmits asm
+            _ => (),
         };
     }
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, sync::Arc};
 
 use miette::{Result, miette};
 use opcode_gen::instructions::{
@@ -6,44 +6,39 @@ use opcode_gen::instructions::{
 };
 
 use crate::{
-    ast::{AstNode, Expr, StatementKind, StatementNode},
+    ast::{AstNode, Expr, InlinedFunctionCall, StatementKind, StatementNode},
     error::ParseError,
+    eval::ExprValue,
     types::Type,
 };
 
 fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
     let inner = expr.inner();
-    Ok(match inner.ty {
+    Ok(match inner.ty.as_simple() {
         // coerce into generic imm since we dont know which it could be
         Type::Int => ArgumentType::GenericImm,
 
         Type::Register => {
-            let name = inner.kind.as_identity().ok_or(ParseError::from_span(
-                "Expression with type Register is not identity",
-                expr.span(),
-            ))?;
-            let register = Register::iterator()
-                .find(|reg| reg.name() == name.as_str())
-                .ok_or(ParseError::from_span(
-                    format!("Register not found from name \"{}\"", name),
-                    expr.span(),
+            if let ExprValue::Register(reg) = expr.inner().value {
+                ArgumentType::Reg(reg)
+            } else {
+                // TODO: detailed
+                Err(miette!(
+                    "register without value! make sure its evaluable before address alloc"
                 ))?;
-            ArgumentType::Reg(*register)
+                unreachable!();
+            }
         }
-
         Type::AddressRegister => {
-            let name = inner.kind.as_identity().ok_or(ParseError::from_span(
-                "Expression with type AddressRegister is not identity",
-                expr.span(),
-            ))?;
-            let register = AddressRegister::iterator()
-                .find(|reg| reg.name() == name.as_str())
-                .ok_or(ParseError::from_span(
-                    format!("AddressRegister not found from name \"{}\"", name),
-                    expr.span(),
+            if let ExprValue::AddressRegister(reg) = expr.inner().value {
+                ArgumentType::AddrReg(reg)
+            } else {
+                // TODO: detailed
+                Err(miette!(
+                    "address register without value! make sure its evaluable before address alloc"
                 ))?;
-
-            ArgumentType::AddrReg(*register)
+                unreachable!();
+            }
         }
 
         // coerce labels into address
@@ -51,7 +46,7 @@ fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
         Type::Addr => ArgumentType::Addr,
 
         ty => Err(ParseError::from_span(
-            format!("Unexpected parameter expression type {:?}", ty),
+            format!("Unexpected parameter expression type: \"{:?}\"", ty),
             expr.span(),
         ))?,
     }
@@ -61,11 +56,13 @@ fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
 
 pub fn resolve_instructions(
     statements: &mut [StatementNode],
-    istr_lookup: &HashMap<InstructionSignature, Rc<Instruction>>,
+    istr_lookup: &HashMap<InstructionSignature, Arc<Instruction>>,
 ) -> Result<()> {
     for statement in statements {
         match statement.inner_mut().inner_mut() {
-            StatementKind::BlockLabel { body, .. } => {
+            StatementKind::BlockLabel { body, .. }
+            | StatementKind::Block { body }
+            | StatementKind::InlinedFunctionCall(InlinedFunctionCall { body, .. }) => {
                 resolve_instructions(body, istr_lookup)?;
             }
             StatementKind::Instruction(instruction) => {
@@ -79,7 +76,7 @@ pub fn resolve_instructions(
                     InstructionSignature::new(instruction.name.clone(), param_types);
 
                 if let Some(found_istr) = istr_lookup.get(&generic_signature) {
-                    instruction.instruction = Some(Rc::clone(found_istr));
+                    instruction.instruction = Some(Arc::clone(found_istr));
                 } else {
                     return Err(ParseError::from_span(
                         format!(
@@ -121,14 +118,14 @@ pub fn resolve_instructions(
 }
 
 pub fn gen_instruction_lookup_table(
-    istrs: &Vec<Rc<Instruction>>,
-) -> Result<HashMap<InstructionSignature, Rc<Instruction>>> {
+    istrs: &Vec<Arc<Instruction>>,
+) -> Result<HashMap<InstructionSignature, Arc<Instruction>>> {
     let mut res = HashMap::new();
 
     for istr in istrs {
         if let Some(other) = res.insert(
             istr.istr_type().get_signature().to_generic(),
-            Rc::clone(istr),
+            Arc::clone(istr),
         ) {
             return Err(miette!(
                 "Duplicate signatures found - \"{}\" and \"{}\"",

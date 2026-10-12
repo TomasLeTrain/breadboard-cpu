@@ -81,7 +81,6 @@ impl ParseError {
         };
 
         let snippet = Some(SourceSpan::new(span.0.into(), span.1 - span.0));
-        println!("span {:?}", span);
 
         ParseError {
             err_message: err_message.into(),

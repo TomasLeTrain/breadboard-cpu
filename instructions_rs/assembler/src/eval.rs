@@ -4,11 +4,16 @@ use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Resu
 use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
-    ast::{AstNode, AstSpan, BinaryOp, Expr, ExprKind, StatementKind, StatementNode, UnaryOp},
+    ast::{
+        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, InlinedFunctionCall,
+        ReturnKind, Statement, StatementKind, StatementNode, TypedParameter, UnaryOp, Variable,
+        VariableExprKind,
+    },
+    eval,
     types::{Address, Type},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum ExprValue {
     Int(i32),
     Bool(bool),
@@ -19,6 +24,7 @@ pub enum ExprValue {
 
     Addr(Address),
     Byte(u8),
+    Block(Vec<StatementNode>),
 
     Unknown,
 }
@@ -29,7 +35,8 @@ impl ExprValue {
             ExprValue::Int(val) => Some(*val),
             ExprValue::Addr(val) => Some(*val as i32),
             ExprValue::Byte(val) => Some(*val as i32),
-            ExprValue::Register(_)
+            ExprValue::Block(_)
+            | ExprValue::Register(_)
             | ExprValue::AddressRegister(_)
             | ExprValue::Unknown
             | ExprValue::Bool(_)
@@ -40,7 +47,8 @@ impl ExprValue {
     fn as_bool(&self) -> Option<bool> {
         match self {
             ExprValue::Bool(val) => Some(*val),
-            ExprValue::Int(_)
+            ExprValue::Block(_)
+            | ExprValue::Int(_)
             | ExprValue::Addr(_)
             | ExprValue::Byte(_)
             | ExprValue::Register(_)
@@ -118,7 +126,13 @@ impl ExprValue {
         })
     }
 
+    // TODO: add is_castable function to catch errors before calling this func
     fn cast_value(self, ty: &Type) -> Self {
+        // unknown casts to everything
+        if matches!(self, Self::Unknown) {
+            return self;
+        }
+
         match ty {
             Type::Bool => {
                 assert!(matches!(self, Self::Bool(_)));
@@ -159,6 +173,8 @@ impl ExprValue {
             }
 
             Type::Unknown => unreachable!(),
+            Type::Function { .. } => unreachable!(),
+            Type::Block => unreachable!(),
         }
     }
 
@@ -176,66 +192,134 @@ impl ExprValue {
             ExprValue::Int(_) => panic!(),
             ExprValue::Bool(_) => panic!(),
             ExprValue::String(_) => panic!(),
+            ExprValue::Block(_) => todo!(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct EvalSymbol {
     pub name: String,
-    pub symbol_type: Type,
+    pub ty: Type,
     pub value: ExprValue,
     pub span: Option<AstSpan>,
+}
+
+#[derive(Debug, Clone)]
+pub enum EvalFunctionKind {
+    Function(Function),
+    Internal,
+}
+
+impl EvalFunctionKind {
+    pub fn return_ty(&self) -> &Type {
+        match self {
+            EvalFunctionKind::Function(function) => &function.return_ty,
+            EvalFunctionKind::Internal => todo!(),
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        match self {
+            EvalFunctionKind::Function(function) => &function.name,
+            EvalFunctionKind::Internal => todo!(),
+        }
+    }
+
+    pub fn params(&self) -> &Vec<AstNode<TypedParameter>> {
+        match self {
+            EvalFunctionKind::Function(function) => &function.params,
+            EvalFunctionKind::Internal => todo!(),
+        }
+    }
+
+    // runs with given parameters
+    // can return Unknown value if params or the function itself has unkowns
+    pub fn eval(&self, params: Vec<EvalSymbol>, ctx: &EvalContext) -> Result<ExprValue> {
+        match self {
+            EvalFunctionKind::Function(function) => {
+                let mut curr_func = function.clone();
+                let mut ctx = ctx.clone_non_local();
+                let param_names: Vec<String> = params.iter().map(|e| e.name.clone()).collect();
+
+                for param in params {
+                    ctx.push_local(param)?;
+                }
+
+                let eval_value = eval_program(&mut curr_func.body, &mut ctx)?;
+
+                for name in param_names.into_iter().rev() {
+                    if name != ctx.pop_local()?.name {
+                        // TODO: make detailed error
+                        Err(miette!("popped parameter symbol does not match pushed"))?;
+                    }
+                }
+
+                Ok(eval_value)
+            }
+            EvalFunctionKind::Internal => todo!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionEvalSymbol {
+    pub name: String,
+    pub inner: EvalFunctionKind,
+    pub span: Option<AstSpan>,
+}
+
+impl FunctionEvalSymbol {
+    pub fn new(name: String, inner: EvalFunctionKind, span: Option<AstSpan>) -> Self {
+        Self { name, inner, span }
+    }
+
+    pub fn inner(&self) -> &EvalFunctionKind {
+        &self.inner
+    }
+
+    pub fn into_inner(&self) -> &EvalFunctionKind {
+        &self.inner
+    }
+
+    pub fn inner_mut(&mut self) -> &mut EvalFunctionKind {
+        &mut self.inner
+    }
 }
 
 // keeps track of symbols by keeping track of their scope as well
 // allows reusing one context struct through all operations
 pub struct EvalContext {
+    local_ctx: SymbolContext,
+    global_ctx: SymbolContext,
+
+    function_stack: Vec<FunctionEvalSymbol>,
+    functions: HashMap<String, FunctionEvalSymbol>,
+
+    is_macro: bool,
+}
+
+#[derive(Debug, Clone)]
+struct SymbolContext {
     symbol_stack: Vec<EvalSymbol>,
     symbols: HashMap<String, EvalSymbol>,
 }
 
-impl EvalContext {
-    pub fn new() -> Self {
-        EvalContext {
+impl SymbolContext {
+    fn new() -> Self {
+        Self {
             symbol_stack: Vec::new(),
             symbols: HashMap::new(),
         }
     }
 
-    pub fn push(&mut self, symbol: EvalSymbol) -> Result<()> {
+    fn push(&mut self, symbol: EvalSymbol) -> Result<()> {
         self.symbol_stack.push(symbol.clone());
 
         let push_result = self.symbols.insert(symbol.clone().name, symbol.clone());
 
         if let Some(other) = push_result {
-            let mut spans = Vec::new();
-            let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
-
-            if let Some(ast_span) = symbol.span.as_ref() {
-                spans.push(LabeledSpan::new_with_span(
-                    Some(format!(
-                        "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
-                        symbol.symbol_type, symbol.value
-                    )),
-                    ast_span.to_miette_span(),
-                ));
-            };
-            if let Some(ast_span) = other.span.as_ref() {
-                spans.push(LabeledSpan::new_with_span(
-                    Some(format!(
-                        "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
-                        other.symbol_type, other.value
-                    )),
-                    ast_span.to_miette_span(),
-                ));
-            };
-
-            Err(DuplicateSymbolError {
-                name: symbol.name,
-                source,
-                spans,
-            })?
+            DuplicateSymbolError::from_symbols(symbol, other)
         } else {
             Ok(())
         }
@@ -262,34 +346,281 @@ impl EvalContext {
     }
 }
 
-pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> Result<()> {
-    let mut labels = Vec::new();
-
-    // first find all labels in the current scope (accessible from anywhere in scope)
-    for statement in statements.iter() {
-        if let StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } =
-            statement.inner().inner()
-        {
-            // push into local scope
-            let curr_symbol = EvalSymbol {
-                name: name.clone(),
-                symbol_type: Type::Label,
-                value: ExprValue::Addr(statement.inner().address().unwrap()),
-                span: Some(statement.span().clone()),
-            };
-
-            ctx.push(curr_symbol.clone())
-                .wrap_err("Pushing local label symbol failed.")?;
-
-            labels.push(curr_symbol);
+impl EvalContext {
+    pub fn new(is_macro: bool) -> Self {
+        EvalContext {
+            global_ctx: SymbolContext::new(),
+            local_ctx: SymbolContext::new(),
+            function_stack: Vec::new(),
+            functions: HashMap::new(),
+            is_macro,
         }
     }
 
+    pub fn clone_non_local(&self) -> Self {
+        Self {
+            global_ctx: self.global_ctx.clone(),
+            local_ctx: SymbolContext::new(),
+            function_stack: self.function_stack.clone(),
+            functions: self.functions.clone(),
+            is_macro: self.is_macro(),
+        }
+    }
+
+    pub fn push_global(&mut self, symbol: EvalSymbol) -> Result<()> {
+        // must check if its in either local or global context to avoid conflicts bewteen them
+        if self.contains(&symbol.name) {
+            let other = self.get(&symbol.name).unwrap().clone();
+            return DuplicateSymbolError::from_symbols(symbol, other);
+        }
+
+        self.global_ctx.push(symbol)
+    }
+
+    fn push_local(&mut self, symbol: EvalSymbol) -> Result<()> {
+        // must check if its in either local or global context to avoid conflicts bewteen them
+        if self.contains(&symbol.name) {
+            let other = self.get(&symbol.name).unwrap().clone();
+            return DuplicateSymbolError::from_symbols(symbol, other);
+        }
+
+        self.local_ctx.push(symbol)
+    }
+
+    fn pop_local(&mut self) -> Result<EvalSymbol> {
+        self.local_ctx.pop()
+    }
+
+    fn get(&self, name: &String) -> Option<&EvalSymbol> {
+        self.local_ctx.get(name).or(self.global_ctx.get(name))
+    }
+
+    fn contains(&self, name: &String) -> bool {
+        self.local_ctx.contains(name) | self.global_ctx.contains(name)
+    }
+
+    pub fn push_function(&mut self, function: FunctionEvalSymbol) -> Result<()> {
+        self.function_stack.push(function.clone());
+
+        let inner = function.inner();
+
+        let push_result = self
+            .functions
+            .insert(inner.name().clone(), function.clone());
+
+        if let Some(other) = push_result {
+            let mut spans = Vec::new();
+            let source = function.span.as_ref().map(|e| e.to_miette_source_code());
+
+            for ast_span in [function.span.as_ref(), other.span.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                spans.push(LabeledSpan::new_with_span(
+                    Some(format!(
+                        "Function \"{}\" of params \"{:?}\" and return type \"{:?}\" defined here",
+                        inner.name(),
+                        inner.params(),
+                        inner.return_ty()
+                    )),
+                    ast_span.to_miette_span(),
+                ));
+            }
+
+            Err(DuplicateSymbolError {
+                name: function.name,
+                source,
+                spans,
+            })?
+        } else {
+            Ok(())
+        }
+    }
+
+    fn pop_function(&mut self) -> Result<FunctionEvalSymbol> {
+        let popped_symbol = self
+            .function_stack
+            .pop()
+            // TODO: add type of stack to error
+            .ok_or(EmptyStackError {})
+            .into_diagnostic()?;
+
+        let map_function = self.functions.remove(&popped_symbol.name).unwrap();
+
+        Ok(map_function)
+    }
+
+    fn get_function(&self, name: &String) -> Option<&FunctionEvalSymbol> {
+        self.functions.get(name)
+    }
+
+    fn contains_function(&self, name: &String) -> bool {
+        self.functions.contains_key(name)
+    }
+
+    pub fn is_macro(&self) -> bool {
+        self.is_macro
+    }
+}
+
+pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> Result<ExprValue> {
+    let mut local_symbols = Vec::new();
+    let mut function_symbols = Vec::new();
+
+    let mut return_value = ExprValue::Unknown;
+    let mut return_hit = false;
+
+    // first find all labels in the current scope (accessible from anywhere in scope)
+    for statement in statements.iter() {
+        match statement.inner().inner() {
+            StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } => {
+                // push into local scope
+                let curr_symbol = EvalSymbol {
+                    name: name.clone(),
+                    ty: Type::Label,
+                    value: statement
+                        .inner()
+                        .address()
+                        .map(ExprValue::Addr)
+                        .unwrap_or(ExprValue::Unknown),
+                    span: Some(statement.span().clone()),
+                };
+
+                ctx.push_local(curr_symbol.clone())
+                    .wrap_err("Pushing local label symbol failed.")?;
+
+                local_symbols.push(curr_symbol);
+            }
+            StatementKind::Function(function) => {
+                let function_symbol = FunctionEvalSymbol::new(
+                    function.name.clone(),
+                    EvalFunctionKind::Function(function.clone()),
+                    Some(statement.span().clone()),
+                );
+                ctx.push_function(function_symbol.clone())
+                    .wrap_err("Pushing function failed.")?;
+                function_symbols.push(function_symbol);
+            }
+            _ => (),
+        }
+    }
+
+    // then eval everything else
     for statement in statements.iter_mut() {
+        // TODO: should already be caught by typecheck
+        if return_hit {
+            Err(miette!("unreachable code after return statement!"))?;
+        }
         match statement.inner_mut().inner_mut() {
-            StatementKind::BlockLabel { body, .. } => {
+            StatementKind::Variable(Variable {
+                name,
+                expr_kind,
+                ty,
+            }) => {
+                let value = match expr_kind {
+                    VariableExprKind::Expr(expr) => {
+                        eval_expr(expr, ctx)?;
+                        expr.inner.value.clone()
+                    }
+                    VariableExprKind::Block(block) => ExprValue::Block(block.clone()),
+                };
+
+                // push into local scope
+                let curr_symbol = EvalSymbol {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    value,
+                    span: Some(statement.span().clone()),
+                };
+
+                ctx.push_local(curr_symbol.clone())
+                    .wrap_err("Pushing local variable symbol failed.")?;
+                local_symbols.push(curr_symbol);
+            }
+            StatementKind::Return(return_kind) => {
+                match return_kind {
+                    ReturnKind::Expr(expr) => {
+                        eval_expr(expr, ctx)?;
+                        return_value = expr.inner().value.clone();
+                    }
+                    ReturnKind::Block(block) => {
+                        let mut new_block = block.clone();
+                        eval_program(&mut new_block, ctx)?;
+                        return_value = ExprValue::Block(new_block)
+                    }
+                }
+                return_hit = true;
+            }
+
+            StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, params, body }) => {
+                // eval function first, then reuse that context for the body itself
+                // this assumes that the value returned by eval_program(function.body,ctx) = body, except
+                // body has addresses allocated
+
+                if !ctx.contains_function(name) {
+                    // TODO: detailed error
+                    Err(miette!("function from function call not found"))?;
+                }
+
+                // eval all params
+                for param in params.iter_mut() {
+                    eval_expr(param, ctx)?;
+
+                    if !ctx.is_macro() && matches!(param.inner().value, ExprValue::Unknown) {
+                        // TODO: detailed error
+                        Err(miette!("function parameter unknown on final eval stage"))?;
+                    }
+                }
+
+                let function_symbol = ctx.get_function(name).unwrap();
+
+                let valued_params: Vec<EvalSymbol> = params
+                    .iter()
+                    .zip(function_symbol.inner().params())
+                    .map(|(expr, typed_param)| EvalSymbol {
+                        name: typed_param.inner().name.clone(),
+                        ty: expr.inner().ty.clone(),
+                        value: expr.inner().value.clone(),
+                        span: Some(expr.span().clone()),
+                    })
+                    .collect();
+
+                // evaluate function, only for collecting context
+                if let EvalFunctionKind::Function(function) = function_symbol.inner() {
+                    let mut curr_func = function.clone();
+                    let mut ctx = ctx.clone_non_local();
+
+                    let param_names: Vec<String> =
+                        valued_params.iter().map(|e| e.name.clone()).collect();
+
+                    for param in valued_params {
+                        ctx.push_local(param)?;
+                    }
+
+                    // only eval to collect context, what this returns should equal the inlined
+                    // function call body but without allocated addresses
+                    eval_program(&mut curr_func.body, &mut ctx)?;
+
+                    // now eval the inlined function call body with the context after the function ends
+                    eval_program(body, &mut ctx)?;
+
+                    for name in param_names.into_iter().rev() {
+                        if name != ctx.pop_local()?.name {
+                            // TODO: make detailed error
+                            Err(miette!("popped parameter symbol does not match pushed"))?;
+                        }
+                    }
+                } else {
+                    // TODO: detailed error
+                    // should never happen since its an inlined/block function
+                    unreachable!()
+                }
+            }
+
+            StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 eval_program(body, ctx)?;
             }
+            // instructions not evaled on macro
             StatementKind::Instruction(instruction) => {
                 for param in instruction.params.iter_mut() {
                     eval_expr(param, ctx)?;
@@ -297,13 +628,81 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             }
             _ => (),
         };
+
+        if matches!(statement.inner().inner(), StatementKind::FunctionCall(_)) {
+            // clone the statement to be able to replace original
+            let mut new_statement = statement.clone();
+
+            if let StatementKind::FunctionCall(FunctionCall { name, params }) =
+                new_statement.inner_mut().inner_mut()
+            {
+                if !ctx.is_macro() {
+                    // TODO: detailed error
+                    Err(miette!("function call found on normal eval"))?;
+                }
+
+                if !ctx.contains_function(name) {
+                    // TODO: detailed error
+                    Err(miette!("function from function call not found"))?;
+                }
+
+                // eval all params
+                for param in params.iter_mut() {
+                    eval_expr(param, ctx)?;
+
+                    if !ctx.is_macro() && matches!(param.inner().value, ExprValue::Unknown) {
+                        // TODO: detailed error
+                        Err(miette!("function parameter unknown on final eval stage"))?;
+                    }
+                }
+
+                let function_symbol = ctx.get_function(name).unwrap();
+
+                let valued_params: Vec<EvalSymbol> = params
+                    .iter()
+                    .zip(function_symbol.inner().params())
+                    .map(|(expr, typed_param)| EvalSymbol {
+                        name: typed_param.inner().name.clone(),
+                        ty: expr.inner().ty.clone(),
+                        value: expr.inner().value.clone(),
+                        span: Some(expr.span().clone()),
+                    })
+                    .collect();
+
+                // evaluate function
+                let eval_value = function_symbol.inner().eval(valued_params, ctx)?;
+
+                if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
+                    // TODO: detailed error
+                    Err(miette!("function returned unknown on final eval stage"))?;
+                }
+
+                let block = if let ExprValue::Block(eval_block) = eval_value {
+                    eval_block
+                } else {
+                    // TODO: detailed error
+                    Err(miette!(
+                        "expected block from function call eval, got else instead"
+                    ))?;
+                    unreachable!();
+                };
+
+                // now, replace the current statement with the inlined function call
+                *statement = StatementNode::new(
+                    Statement::new(StatementKind::InlinedFunctionCall(
+                        InlinedFunctionCall::new(name.clone(), params.clone(), block),
+                    )),
+                    new_statement.span().clone(),
+                );
+            }
+        }
     }
 
     // checks that all returned symbols match what was pushed in
     // goes in reverse since pop starts from the last added element
-    for label in labels.into_iter().rev() {
-        let curr = ctx.pop()?;
-        if label != curr {
+    for label in local_symbols.into_iter().rev() {
+        let curr = ctx.pop_local()?;
+        if label.name != curr.name {
             return Err(miette!(
                 "Popped symbol does not match - original: {:?}, got: {:?}",
                 label,
@@ -312,35 +711,82 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
         }
     }
 
-    Ok(())
+    for label in function_symbols.into_iter().rev() {
+        let curr = ctx.pop_function()?;
+        if label.name != curr.name {
+            return Err(miette!(
+                "Popped symbol does not match - original: {:?}, got: {:?}",
+                label,
+                curr,
+            ));
+        }
+    }
+
+    Ok(return_value)
 }
 
-// TODO: make sure int type gets casted to whatever type current expr is (say addr or byte)
 fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()> {
     let inner_span = typed_expr.span().clone();
     let inner = typed_expr.inner_mut();
 
+    // expr already evaluated, must still cast in case its a literal
+    if !matches!(inner.value, ExprValue::Unknown) {
+        inner.value = inner.value.clone().cast_value(&inner.ty);
+        return Ok(());
+    }
+
     match &mut inner.kind {
         // literals already have their value filled in
         ExprKind::Literal => (),
+        ExprKind::FunctionCall(FunctionCall { name, params }) => {
+            if !ctx.contains_function(name) {
+                // TODO: detailed error
+                Err(miette!("function from function call not found"))?;
+            }
+
+            // eval all params
+            for param in params.iter_mut() {
+                eval_expr(param, ctx)?;
+
+                if !ctx.is_macro() && matches!(param.inner().value, ExprValue::Unknown) {
+                    // TODO: detailed error
+                    Err(miette!("function parameter unknown on final eval stage"))?;
+                }
+            }
+
+            let function_symbol = ctx.get_function(name).unwrap();
+
+            let valued_params: Vec<EvalSymbol> = params
+                .iter()
+                .zip(function_symbol.inner().params())
+                .map(|(expr, typed_param)| EvalSymbol {
+                    name: typed_param.inner().name.clone(),
+                    ty: expr.inner().ty.clone(),
+                    value: expr.inner().value.clone(),
+                    span: Some(expr.span().clone()),
+                })
+                .collect();
+
+            // evaluate function
+            let eval_value = function_symbol.inner().eval(valued_params, ctx)?;
+
+            if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
+                // TODO: detailed error
+                Err(miette!("function returned unknown on final eval stage"))?;
+            }
+
+            inner.value = eval_value.cast_value(&inner.ty);
+        }
         ExprKind::Identity(name) => {
-            // try and find identity in symbols
             if ctx.contains(name) {
                 let symbol = ctx.get(name).unwrap();
-
-                // TODO: already valued error
-                if inner.ty != symbol.symbol_type {
-                    // Err(EvalExprError::new(
-                    //     TypecheckExprErrorKind::IdentityAlreadyTyped((inner_span, inner.ty)),
-                    // ))?;
-                }
 
                 inner.value = symbol.value.clone().cast_value(&inner.ty);
             } else {
                 Err(EvalExprError::new(EvalExprErrorKind::SymbolNotFound(
                     EvalSymbol {
                         name: name.to_string(),
-                        symbol_type: inner.ty,
+                        ty: inner.ty.clone(),
                         span: Some(inner_span),
                         value: ExprValue::Unknown,
                     },
@@ -352,7 +798,6 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
             expr: unary_expr,
         } => {
             eval_expr(unary_expr, ctx)?;
-            // let span = unary_expr.span().clone();
             let unary_expr = unary_expr.inner_mut();
 
             inner.value = match op {
@@ -364,9 +809,6 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
         ExprKind::Binary { op, left, right } => {
             eval_expr(left, ctx)?;
             eval_expr(right, ctx)?;
-
-            // let left_span = left.span().clone();
-            // let right_span = right.span().clone();
 
             let left = left.inner_mut();
             let right = right.inner_mut();
@@ -414,6 +856,33 @@ pub struct DuplicateSymbolError {
     spans: Vec<LabeledSpan>,
 }
 
+impl DuplicateSymbolError {
+    fn from_symbols(symbol: EvalSymbol, other: EvalSymbol) -> Result<()> {
+        let mut spans = Vec::new();
+
+        let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
+
+        for ast_span in [symbol.span.as_ref(), other.span.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            spans.push(LabeledSpan::new_with_span(
+                Some(format!(
+                    "Symbol of type \"{:?}\" with value \"{:?}\" defined here",
+                    symbol.ty, symbol.value
+                )),
+                ast_span.to_miette_span(),
+            ));
+        }
+
+        Err(DuplicateSymbolError {
+            name: symbol.name,
+            source,
+            spans,
+        })?
+    }
+}
+
 impl Error for DuplicateSymbolError {}
 
 impl Display for DuplicateSymbolError {
@@ -429,7 +898,7 @@ impl Error for EmptyStackError {}
 
 impl Display for EmptyStackError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "No symbols in stack.")
+        write!(f, "No symbols/functions in stack.")
     }
 }
 

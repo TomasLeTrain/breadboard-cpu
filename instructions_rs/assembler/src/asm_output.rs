@@ -5,7 +5,7 @@ use std::{
 };
 
 pub trait AsmOutput {
-    fn generate_output(&mut self, asm: Vec<u8>) -> Result<()>;
+    fn generate_output(&mut self, asm: &Vec<u8>) -> Result<()>;
 }
 
 pub struct LogisimOutput {
@@ -26,7 +26,7 @@ impl LogisimOutput {
 }
 
 impl AsmOutput for LogisimOutput {
-    fn generate_output(&mut self, asm: Vec<u8>) -> Result<()> {
+    fn generate_output(&mut self, asm: &Vec<u8>) -> Result<()> {
         self.file
             .write_all(b"v3.0 hex words plain\n")
             .into_diagnostic()?;
@@ -64,7 +64,7 @@ impl BinaryOutput {
 }
 
 impl AsmOutput for BinaryOutput {
-    fn generate_output(&mut self, asm: Vec<u8>) -> Result<()> {
+    fn generate_output(&mut self, asm: &Vec<u8>) -> Result<()> {
         if asm.len() > self.file_size {
             Err(miette!("generated asm larger than target file size"))?;
         }
