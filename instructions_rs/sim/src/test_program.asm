@@ -7,9 +7,7 @@ start:
 	add A, 0
 
 	; push return addr fib before data
-	pusha push_return
-	jmp fib_32, MAR     
-	push_return:
+	jsr(fib_32)
 
 	; retrieve result from stack into registers
 	pop X
