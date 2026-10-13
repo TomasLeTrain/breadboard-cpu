@@ -1,4 +1,5 @@
 use assembler::parse_file;
+use sdl3::sys::keycode::SDL_Keymod;
 use sim::{CpuState, DataRegister};
 
 use sdl3::event::Event;
@@ -6,6 +7,15 @@ use sdl3::keyboard::Keycode;
 use sdl3::pixels::Color;
 use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
+
+enum CpuMessage {
+    Halt,
+}
+
+enum VideoMessage {
+    KeyboardUpdate(u8),
+    Halt,
+}
 
 fn main() {
     // init cpu state
@@ -26,8 +36,8 @@ fn main() {
 
     state.reset();
 
-    let (cpu_send, video_receieve) = mpsc::channel::<()>();
-    let (video_send, cpu_receive) = mpsc::channel::<()>();
+    let (cpu_send, video_receieve) = mpsc::channel::<CpuMessage>();
+    let (video_send, cpu_receive) = mpsc::channel::<VideoMessage>();
 
     let window_task = std::thread::spawn(move || {
         let sdl_context = sdl3::init().unwrap();
@@ -45,11 +55,21 @@ fn main() {
         canvas.clear();
         canvas.present();
         let mut event_pump = sdl_context.event_pump().unwrap();
+
         let mut i = 0;
         'running: loop {
             i = (i + 1) % 255;
             canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
             canvas.clear();
+
+            for scancode in event_pump.keyboard_state().pressed_scancodes() {
+                let keycode = Keycode::from_scancode(scancode, SDL_Keymod::NONE, false).unwrap();
+                if keycode.to_ll().0 <= 255 {
+                    let code = keycode.to_ll().0 as u8;
+                    let _ = video_send.send(VideoMessage::KeyboardUpdate(code));
+                }
+            }
+
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. }
@@ -73,7 +93,7 @@ fn main() {
             ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
         }
         // NOTE: cpu might have stopped before, so this can fail in expected cases
-        let _ = video_send.send(());
+        let _ = video_send.send(VideoMessage::Halt);
     });
     use std::time::Instant;
 
@@ -99,10 +119,26 @@ fn main() {
         //
         // println!("stack - 0xffe0..0xffa0: {:#x?}", stack);
 
-        let video_halt = matches!(
-            cpu_receive.try_recv(),
-            Ok(_) | Err(TryRecvError::Disconnected)
-        );
+        let mut video_halt = false;
+
+        loop {
+            match cpu_receive.try_recv() {
+                Ok(msg) => match msg {
+                    VideoMessage::KeyboardUpdate(code) => state.keyboard.set_code(code),
+                    VideoMessage::Halt => {
+                        video_halt = true;
+                        break;
+                    }
+                },
+                Err(err) => match err {
+                    TryRecvError::Empty => break,
+                    TryRecvError::Disconnected => {
+                        video_halt = true;
+                        break;
+                    }
+                },
+            }
+        }
 
         if state.is_halt() || video_halt {
             break;
@@ -112,7 +148,7 @@ fn main() {
 
     // halt
     // NOTE: can fail if video stopped before cpu, so not catched
-    let _ = cpu_send.send(());
+    let _ = cpu_send.send(CpuMessage::Halt);
     let _ = window_task.join();
 
     eprintln!(

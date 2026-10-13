@@ -82,8 +82,13 @@ update_state {
 
 	lw Z, pDIR, MAR
 
+	; W = 119
+	; A =  97
+	; S = 115
+	; D = 100
+
 	; if left -> X -= 1
-	cmp Z, 0
+	cmp Z, 97
 	jeq left_eq, MAR
 	jmp left_ret, MAR
 	left_eq:
@@ -91,15 +96,15 @@ update_state {
 	left_ret:
 
 	; if right -> X += 1
-	cmp Z, 1
+	cmp Z, 100
 	jeq right_eq, MAR
 	jmp right_ret, MAR
 	right_eq:
 	add X, 1
 	right_ret:
 
-	; if right -> Y -= 1
-	cmp Z, 2
+	; if down -> Y -= 1
+	cmp Z, 115
 	jeq down_eq, MAR
 	jmp down_ret, MAR
 	down_eq:
@@ -107,7 +112,7 @@ update_state {
 	down_ret:
 
 	; if up -> Y += 1
-	cmp Z, 3
+	cmp Z, 119
 	jeq up_eq, MAR
 	jmp up_ret, MAR
 	up_eq:

@@ -170,6 +170,30 @@ impl Alu {
     }
 }
 
+pub struct KeyboardRegister {
+    state: u8,
+}
+
+impl KeyboardRegister {
+    pub fn new() -> Self {
+        Self { state: 0 }
+    }
+
+    fn bout(&self) -> Option<u8> {
+        Some(self.state)
+    }
+
+    pub fn set_code(&mut self, code: u8) {
+        self.state = code
+    }
+}
+
+impl Default for KeyboardRegister {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct AddressRegister {
     state: Option<u16>,
     name: String,
@@ -433,6 +457,8 @@ pub struct CpuState {
 
     pub alu: Alu,
 
+    pub keyboard: KeyboardRegister,
+
     pub clk: bool,
 
     pub halt: bool,
@@ -472,6 +498,7 @@ impl CpuState {
             data_ram: Ram::new(1 << 15),
 
             alu: Alu::new(),
+            keyboard: KeyboardRegister::new(),
 
             clk: true,
 
@@ -549,7 +576,7 @@ impl CpuState {
             7 => None, // SpDec
             8 => self.a.bout(),
             9 => self.b.bout(),
-            10 => todo!(), // TODO: add keyb
+            10 => self.keyboard.bout(),
             11 => self.alu.bout(),
             12 => self.flags.bout(),
             13 => self.x.bout(),
@@ -702,7 +729,7 @@ impl CpuState {
             let opcode_addr = self.get_opcode_addr();
             println!("opcode_addr: {opcode_addr:x}");
 
-            diagnostic_from_addr(opcode_addr, &self.istr_set);
+            // diagnostic_from_addr(opcode_addr, &self.istr_set);
 
             self.opcode_latch0
                 .load(self.opcode_rom0.read(opcode_addr).unwrap());
