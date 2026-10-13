@@ -21,133 +21,88 @@ start:
 
 
 fib_32 {
+	fn inc_sw(){
+		return {
+			inc MAR
+			sw A, MAR
+		}
+	}
+
 	; 0x8040 - a
 	; 0x8044 - b
 	; 0x8048 - z - counter
 	; lsb - msb
 
 	; set initial condition for a
-	mv A, 1
-	sw A, 0x8040, MAR
+	sw_u8(1, 0x8040, A)
 
 	; load 0 into all other numbers
-	mv A, 0 
-	inc MAR
 	; a
-	sw A, MAR
-	inc MAR
-	sw A, MAR
-	inc MAR
-	sw A, MAR
+	mv A, 0 
+	inc_sw()
+	inc_sw()
+	inc_sw()
 	; b - 0x8044
-	inc MAR
-	sw A, MAR
-	inc MAR
-	sw A, MAR
-	inc MAR
-	sw A, MAR
-	inc MAR
-	sw A, MAR
+	inc_sw()
+	inc_sw()
+	inc_sw()
+	inc_sw()
 	; z - 0x8048
-	inc MAR
-	sw A, MAR 
-	inc MAR
-	sw A, MAR
-	inc MAR
-	sw A, MAR
-	inc MAR
-	sw A, MAR
+	inc_sw()
+	inc_sw()
+	inc_sw()
+	inc_sw()
 
 	; set counter - here its for 2^16 - 1th fib number
-	mv A, 255
-	sw A, 0x8048, MAR
-	mv A, 255 
-	sw A, 0x8048+1, MAR
+	sw_u8(255, 0x8048, A)
+	sw_u8(255, 0x8048+1, A)
 
-	loop {
-		call1 {
+	fn push_u32_at_addr(addr: Address){
+		return {
+			lw A, addr+3, MAR
+			push A
+			lw A, addr+2, MAR
+			push A
+			lw A, addr+1, MAR
+			push A
+			lw A, addr, MAR
+			push A
+		}
+	}
+
+	; saves to a
+	fn sum_routine(a_addr: Address, b_addr: Address, routine_addr: Address){
+		return {
 			pusha sum_return
 			; function parameters
-			; push 
-			lw A, 0x8044 + 3, MAR
-			push A
-			lw A, 0x8044 + 2, MAR
-			push A
-			lw A, 0x8044 + 1, MAR
-			push A
-			lw A, 0x8044, MAR
-			push A
+			push_u32_at_addr(a_addr)
+			push_u32_at_addr(b_addr)
 
-			lw A, 0x8040 + 3, MAR
-			push A
-			lw A, 0x8040 + 2, MAR
-			push A
-			lw A, 0x8040 + 1, MAR
-			push A
-			lw A, 0x8040, MAR
-			push A
-
-			jmp sum_u32, MAR
+			jmp routine_addr, MAR
 			sum_return:
 
 			; now store result into a
 			pop A
-			sw A, 0x8040 + 3, MAR
+			sw A, a_addr + 3, MAR
 			pop A
-			sw A, 0x8040 + 2, MAR
+			sw A, a_addr + 2, MAR
 			pop A
-			sw A, 0x8040 + 1, MAR
+			sw A, a_addr + 1, MAR
 			pop A
-			sw A, 0x8040, MAR
+			sw A, a_addr, MAR
 		}
+	}
 
-		call2 {
-			pusha sum_return
-			; function parameters
-			; push 
-			lw A, 0x8044 + 3, MAR
-			push A
-			lw A, 0x8044 + 2, MAR
-			push A
-			lw A, 0x8044 + 1, MAR
-			push A
-			lw A, 0x8044, MAR
-			push A
-
-			lw A, 0x8040 + 3, MAR
-			push A
-			lw A, 0x8040 + 2, MAR
-			push A
-			lw A, 0x8040 + 1, MAR
-			push A
-			lw A, 0x8040, MAR
-			push A
-
-			jmp sum_u32, MAR
-			sum_return:
-
-			; now store result into b
-			pop A
-			sw A, 0x8044 + 3, MAR
-			pop A
-			sw A, 0x8044 + 2, MAR
-			pop A
-			sw A, 0x8044 + 1, MAR
-			pop A
-			sw A, 0x8044, MAR
-		}
+	loop {
+		; a = a + b
+		sum_routine(0x8040, 0x8044, sum_u32)
+		; b = b + a
+		sum_routine(0x8044, 0x8040, sum_u32)
 
 		call3 {
 			pusha sum_return
 			; function parameters
-			lw A, 0x8048 + 3, MAR
-			push A
-			lw A, 0x8048 + 2, MAR
-			push A
-			lw A, 0x8048 + 1, MAR
-			push A
-			lw A, 0x8048, MAR
-			push A
+			push_u32_at_addr(0x8048)
 
 			; push -1
 			push 0xff
@@ -194,18 +149,21 @@ fib_32 {
 	pop	A
 	sw A, MAR ; sw A, 0xfff1, MAR
 
+	fn push_lw(){
+		return {
+			inc MAR
+			lw A, MAR
+			push A
+		}
+	}
+
 	; return routine
 	lw A, 0x8040, MAR
 	push A
-	inc MAR
-	lw A, MAR
-	push A
-	inc MAR
-	lw A, MAR
-	push A
-	inc MAR
-	lw A, MAR
-	push A
+
+	push_lw()
+	push_lw()
+	push_lw()
 
 	; get return address back
 	lw A, 0xfff0, MAR
@@ -228,37 +186,32 @@ fib_32 {
 ; [C[0]][C[1]][C[2]][C[3]]
 
 sum_u32 {
+	; func defined only in this scope
+	fn pop_sw(){
+		return {
+			inc MAR
+			pop A
+			sw A, MAR 
+		}
+	}
+	
 	; 0
 	pop A
 	sw A, 0x8080, MAR ; loads 0x8080 into MAR once 
 	; 1
-	inc MAR
-	pop A
-	sw A, MAR 
+	pop_sw()
 	; 2
-	inc MAR
-	pop A
-	sw A, MAR 
+	pop_sw()
 	; 3
-	inc MAR
-	pop A
-	sw A, MAR 
+	pop_sw()
 	; 4
-	inc MAR
-	pop A
-	sw A, MAR 
+	pop_sw()
 	; 5
-	inc MAR
-	pop A
-	sw A, MAR 
+	pop_sw()
 	; 6
-	inc MAR
-	pop A
-	sw A, MAR 
+	pop_sw()
 	; 7
-	inc MAR
-	pop A
-	sw A, MAR 
+	pop_sw()
 
 	; want to store result to stack, so must save return addr elsewhere
 	; get return address and save it to memory, next step changes stack
@@ -318,3 +271,46 @@ sum_u32 {
 	; return
 	jmp MAR
 }
+
+
+fn low_byte(x: u16) {
+	let low_byte: u8 = x & 0xff
+	return low_byte
+}
+
+fn high_byte(x: u16) {
+	let high_byte: u8 = (x >> 8) & 0xff
+	return high_byte
+}
+
+fn jsr_return() {
+	return {
+		pop MAR
+		jmp MAR
+	}
+}
+
+fn jsr(addr: Address) {
+	return {
+		pusha return_addr
+		jmp addr, MAR
+		return_addr:
+	}
+}
+
+
+fn jnz_end(reg: Register, addrReg: AddressRegister, addr: Address) {
+	return {
+		sub reg, 1
+		lda addrReg, addr
+		jnz reg, addrReg
+	}
+}
+
+fn sw_u8(x: u8, addrReg: Address, scratch_reg: Register) {
+	return {
+		mv scratch_reg, x
+		sw scratch_reg, addrReg, MAR
+	}
+}
+
