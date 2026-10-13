@@ -222,7 +222,7 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     &[],
                 )?;
             }
-            StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, params, body }) => {
+            StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, body, .. }) => {
                 ctx.place_statement(
                     format!("fn {} {{", name.dimmed()),
                     statement.inner().address().unwrap(),

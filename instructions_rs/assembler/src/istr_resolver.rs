@@ -45,6 +45,9 @@ fn expr_to_argument_type(expr: &AstNode<Expr>) -> Result<ArgumentType> {
         Type::Label => ArgumentType::Addr,
         Type::Addr => ArgumentType::Addr,
 
+        // direct match
+        Type::Byte => ArgumentType::Byte,
+
         ty => Err(ParseError::from_span(
             format!("Unexpected parameter expression type: \"{:?}\"", ty),
             expr.span(),
@@ -95,8 +98,6 @@ pub fn resolve_instructions(
                     .unwrap()
                     .istr_type()
                     .arguments();
-
-                // println!("{:?}", arguments);
 
                 // set argument types based on the actual signature, to ensure at the eval stage
                 // that casting to the correct types is possible

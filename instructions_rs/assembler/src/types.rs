@@ -92,7 +92,7 @@ pub struct Symbol {
     pub ty: Type,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SymbolContext {
     symbol_stack: Vec<Symbol>,
     symbols: HashMap<String, Symbol>,
@@ -140,6 +140,7 @@ impl SymbolContext {
 // local and global separated for constructing new contexts with only global symbols
 // in this context local means local to only the current scope, global means accessible to all
 // scopes below its definition
+#[derive(Debug)]
 pub struct TypecheckContext {
     local_context: SymbolContext,
     global_context: SymbolContext,
@@ -169,7 +170,7 @@ impl TypecheckContext {
         }
     }
 
-    pub fn clone_global_ctx_only(&self) -> Self {
+    pub fn clone_non_local_only(&self) -> Self {
         Self {
             local_context: SymbolContext::new(ContextKind::Local),
             global_context: self.global_context.clone(),
@@ -251,9 +252,10 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
     // must first typecheck functions to get their return type if not specified
     // only then can its symbol be constructed
     for statement in statements.iter_mut() {
+        let statement_span = statement.span().clone();
         if let StatementKind::Function(function) = statement.inner_mut().inner_mut() {
             // only copies function context - no access to outer labels
-            let mut function_ctx = ctx.clone_global_ctx_only();
+            let mut function_ctx = ctx.clone_non_local_only();
 
             for param in &function.params {
                 // push into local scope
@@ -317,6 +319,24 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 // TODO: turn into detailed error
                 return Err(miette!("No return statement inside function!"));
             }
+
+            // push function immediately so it can be used by later functions
+            // NOTE: this means functions cannot use functions defined after it
+            // TODO: implement function signatures / allow specifying return type directly?
+            let curr_symbol = Symbol {
+                name: function.name.clone(),
+                span: Some(statement_span),
+                ty: Type::Function {
+                    name: function.name.clone(),
+                    params: function.as_signature().params,
+                    return_ty: Box::new(function.return_ty.clone()),
+                },
+            };
+
+            ctx.push_global(curr_symbol.clone())
+                .wrap_err("Pushing function symbol failed.")?;
+
+            pushed_globals.push(curr_symbol);
         }
     }
 
@@ -335,23 +355,6 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                     .wrap_err("Pushing local label symbol failed.")?;
 
                 pushed_locals.push(curr_symbol);
-            }
-            StatementKind::Function(function) => {
-                // push into local scope
-                let curr_symbol = Symbol {
-                    name: function.name.clone(),
-                    span: Some(statement.span().clone()),
-                    ty: Type::Function {
-                        name: function.name.clone(),
-                        params: function.as_signature().params,
-                        return_ty: Box::new(function.return_ty.clone()),
-                    },
-                };
-
-                ctx.push_global(curr_symbol.clone())
-                    .wrap_err("Pushing function symbol failed.")?;
-
-                pushed_globals.push(curr_symbol);
             }
             _ => (),
         }
@@ -454,7 +457,11 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                     }
                 } else {
                     // TODO: make detailed error
-                    Err(miette!("function of name \"{}\" not found", name))?;
+                    Err(miette!(
+                        "function of name \"{}\" not found {:#?}",
+                        name,
+                        ctx
+                    ))?;
                 }
             }
             _ => (),

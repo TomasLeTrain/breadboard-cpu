@@ -272,12 +272,23 @@ impl FunctionCall {
 pub struct InlinedFunctionCall {
     pub name: String,
     pub params: Vec<AstNode<Expr>>,
+    pub original_body: Vec<StatementNode>,
     pub body: Vec<StatementNode>,
 }
 
 impl InlinedFunctionCall {
-    pub fn new(name: String, params: Vec<AstNode<Expr>>, body: Vec<StatementNode>) -> Self {
-        Self { name, params, body }
+    pub fn new(
+        name: String,
+        params: Vec<AstNode<Expr>>,
+        original_body: Vec<StatementNode>,
+        body: Vec<StatementNode>,
+    ) -> Self {
+        Self {
+            name,
+            params,
+            original_body,
+            body,
+        }
     }
 }
 

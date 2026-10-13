@@ -9,7 +9,6 @@ use crate::{
         ReturnKind, Statement, StatementKind, StatementNode, TypedParameter, UnaryOp, Variable,
         VariableExprKind,
     },
-    eval,
     types::{Address, Type},
 };
 
@@ -593,19 +592,28 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             StatementKind::Return(return_kind) => {
                 match return_kind {
                     ReturnKind::Expr(expr) => {
-                        eval_expr(expr, ctx)?;
+                        eval_expr(expr, ctx).wrap_err("Evaluation of return expr failed.")?;
                         return_value = expr.inner().value.clone();
                     }
                     ReturnKind::Block(block) => {
-                        let mut new_block = block.clone();
-                        eval_program(&mut new_block, ctx)?;
-                        return_value = ExprValue::Block(new_block)
+                        // NOTE: block gets evaled in place since function body gets reused on
+                        // second eval. This means return gets re-evaled, in which case all
+                        // functions calls must be inlined
+                        // TODO: is a workaround?
+                        eval_program(block, ctx)
+                            .wrap_err("Evaluation of return block failed.")?;
+                        return_value = ExprValue::Block(block.clone())
                     }
                 }
                 return_hit = true;
             }
 
-            StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, params, body }) => {
+            StatementKind::InlinedFunctionCall(InlinedFunctionCall {
+                name,
+                params,
+                original_body,
+                body,
+            }) => {
                 // eval function first, then reuse that context for the body itself
                 // this assumes that the value returned by eval_program(function.body,ctx) = body, except
                 // body has addresses allocated
@@ -639,34 +647,30 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     .collect();
 
                 // evaluate function, only for collecting context
-                if let EvalFunctionKind::Function(function) = function_symbol.inner() {
-                    let mut curr_func = function.clone();
-                    let mut ctx = ctx.clone_non_local();
+                let mut ctx = ctx.clone_non_local();
 
-                    let param_names: Vec<String> =
-                        valued_params.iter().map(|e| e.name.clone()).collect();
+                let param_names: Vec<String> =
+                    valued_params.iter().map(|e| e.name.clone()).collect();
 
-                    for param in valued_params {
-                        ctx.push_local(param)?;
+                for param in valued_params {
+                    ctx.push_local(param)?;
+                }
+
+                // only eval to collect context, what this returns should equal the inlined
+                // function call body but without allocated addresses
+                eval_program(original_body, &mut ctx)
+                    // .wrap_err("Evaluation of inline function call original body failed.")?;
+                    .wrap_err(format!("bruh: {:#?}", original_body))?;
+
+                // now eval the inlined function call body with the context after the function ends
+                eval_program(body, &mut ctx)
+                    .wrap_err("Evaluation of inline function block failed.")?;
+
+                for name in param_names.into_iter().rev() {
+                    if name != ctx.pop_local()?.name {
+                        // TODO: make detailed error
+                        Err(miette!("popped parameter symbol does not match pushed"))?;
                     }
-
-                    // only eval to collect context, what this returns should equal the inlined
-                    // function call body but without allocated addresses
-                    eval_program(&mut curr_func.body, &mut ctx)?;
-
-                    // now eval the inlined function call body with the context after the function ends
-                    eval_program(body, &mut ctx)?;
-
-                    for name in param_names.into_iter().rev() {
-                        if name != ctx.pop_local()?.name {
-                            // TODO: make detailed error
-                            Err(miette!("popped parameter symbol does not match pushed"))?;
-                        }
-                    }
-                } else {
-                    // TODO: detailed error
-                    // should never happen since its an inlined/block function
-                    unreachable!()
                 }
             }
 
@@ -691,7 +695,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             {
                 if !ctx.is_macro() {
                     // TODO: detailed error
-                    Err(miette!("function call found on normal eval"))?;
+                    Err(miette!("function call found on normal eval: {}", name))?;
                 }
 
                 if !ctx.contains_function(name) {
@@ -723,30 +727,67 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     .collect();
 
                 // evaluate function
-                let eval_value = function_symbol.inner().eval(valued_params, ctx)?;
+                // let eval_value = function_symbol.inner().eval(valued_params, ctx)?;
 
-                if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
-                    // TODO: detailed error
-                    Err(miette!("function returned unknown on final eval stage"))?;
-                }
+                // evaluate function, only for collecting context
+                if let EvalFunctionKind::Function(function) = function_symbol.inner() {
+                    let mut curr_func = function.clone();
+                    let mut ctx = ctx.clone_non_local();
 
-                let block = if let ExprValue::Block(eval_block) = eval_value {
-                    eval_block
+                    let param_names: Vec<String> =
+                        valued_params.iter().map(|e| e.name.clone()).collect();
+
+                    for param in valued_params {
+                        ctx.push_local(param)?;
+                    }
+
+                    // eval to get block, but also collect context for evaling block itself
+                    // change
+                    let eval_value = eval_program(&mut curr_func.body, &mut ctx)?;
+
+                    if !ctx.is_macro() && matches!(eval_value, ExprValue::Unknown) {
+                        // TODO: detailed error
+                        Err(miette!("function returned unknown on final eval stage"))?;
+                    }
+
+                    let mut block = if let ExprValue::Block(eval_block) = eval_value {
+                        eval_block
+                    } else {
+                        // TODO: detailed error
+                        Err(miette!(
+                            "expected block from function call eval, got else instead"
+                        ))?;
+                        unreachable!();
+                    };
+
+                    // want to eval block as much as possible as well in case it has function calls as well
+                    //
+                    eval_program(&mut block, &mut ctx)
+                        .wrap_err(format!("Macro evaluation of inlined body of {name} failed."))?;
+                    for name in param_names.into_iter().rev() {
+                        if name != ctx.pop_local()?.name {
+                            // TODO: make detailed error
+                            Err(miette!("popped parameter symbol does not match pushed"))?;
+                        }
+                    }
+
+                    // now, replace the current statement with the inlined function call
+                    *statement = StatementNode::new(
+                        Statement::new(StatementKind::InlinedFunctionCall(
+                            InlinedFunctionCall::new(
+                                name.clone(),
+                                params.clone(),
+                                curr_func.body,
+                                block,
+                            ),
+                        )),
+                        new_statement.span().clone(),
+                    );
                 } else {
                     // TODO: detailed error
-                    Err(miette!(
-                        "expected block from function call eval, got else instead"
-                    ))?;
-                    unreachable!();
-                };
-
-                // now, replace the current statement with the inlined function call
-                *statement = StatementNode::new(
-                    Statement::new(StatementKind::InlinedFunctionCall(
-                        InlinedFunctionCall::new(name.clone(), params.clone(), block),
-                    )),
-                    new_statement.span().clone(),
-                );
+                    // should never happen since its an inlined/block function
+                    unreachable!()
+                }
             }
         }
     }
