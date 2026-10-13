@@ -1,4 +1,22 @@
-start:
+; snake program
+
+; Goals:
+; - have circular queue of positions, can represent 16x16 in one byte
+
+; where the current snake direction gets stored
+let pDIR = 0
+; game runs until == 0
+let pHALT = 0
+
+; upper byte of queue
+let pQUEUE_BASE = 0
+; read pointer - lower byte of whole addr
+let pQUEUE_READ = 0
+; write pointer - lower byte of whole addr
+let pQUEUE_WRITE = 0
+
+
+start {
 	; initialize stack
 	lda SP, 0xffe0 ; lda sp, sp_start_addr
 
@@ -6,287 +24,108 @@ start:
 	mv A, 0
 	add A, 0
 
-	; push return addr fib before data
-	jsr(fib_32)
+	; main loop
+	loop { 
+		jsr(update_input)
+		jsr(update_state)
+		jsr(update_screen)
 
-	; retrieve result from stack into registers
-	pop X
-	pop Y
-	pop Z
-	pop A
+		lw A, pHALT, MAR
+		jnz A, MAR
+	}
 
 	halt
+}
 
+update_input {
+	; TODO: actually get input
+	mw A, 1
+	sw A, pDIR, MAR
 
-fib_32 {
-	fn inc_sw(){
-		return {
-			inc MAR
-			sw A, MAR
-		}
-	}
-
-	; 0x8040 - a
-	; 0x8044 - b
-	; 0x8048 - z - counter
-	; lsb - msb
-
-	; set initial condition for a
-	sw_u8(1, 0x8040, A)
-
-	; load 0 into all other numbers
-	; a
-	mv A, 0 
-	inc_sw()
-	inc_sw()
-	inc_sw()
-	; b - 0x8044
-	inc_sw()
-	inc_sw()
-	inc_sw()
-	inc_sw()
-	; z - 0x8048
-	inc_sw()
-	inc_sw()
-	inc_sw()
-	inc_sw()
-
-	; set counter - here its for 2^16 - 1th fib number
-	sw_u8(255, 0x8048, A)
-	sw_u8(255, 0x8048+1, A)
-
-	fn push_u32_at_addr(addr: Address){
-		return {
-			lw A, addr+3, MAR
-			push A
-			lw A, addr+2, MAR
-			push A
-			lw A, addr+1, MAR
-			push A
-			lw A, addr, MAR
-			push A
-		}
-	}
-
-	; saves to a
-	fn sum_routine(a_addr: Address, b_addr: Address, routine_addr: Address){
-		return {
-			pusha sum_return
-			; function parameters
-			push_u32_at_addr(a_addr)
-			push_u32_at_addr(b_addr)
-
-			jmp routine_addr, MAR
-			sum_return:
-
-			; now store result into a
-			pop A
-			sw A, a_addr + 3, MAR
-			pop A
-			sw A, a_addr + 2, MAR
-			pop A
-			sw A, a_addr + 1, MAR
-			pop A
-			sw A, a_addr, MAR
-		}
-	}
-
-	loop {
-		; a = a + b
-		sum_routine(0x8040, 0x8044, sum_u32)
-		; b = b + a
-		sum_routine(0x8044, 0x8040, sum_u32)
-
-		call3 {
-			pusha sum_return
-			; function parameters
-			push_u32_at_addr(0x8048)
-
-			; push -1
-			push 0xff
-			push 0xff
-			push 0xff
-			push 0xff
-
-			jmp sum_u32, MAR
-			sum_return:
-
-			; now store result into counter
-			pop A
-			sw A, 0x8048 + 3, MAR
-			pop A
-			sw A, 0x8048 + 2, MAR
-			pop A
-			sw A, 0x8048 + 1, MAR
-			pop A
-			sw A, 0x8048, MAR
-		}
-
-		; at this point must check if counter is zero to see if we are finished
-		; check if its zero
-		mv X, 0
-		lw B, 0x8048 + 3, MAR
-		or X, B
-		lw B, 0x8048 + 2, MAR
-		or X, B
-		lw B, 0x8048 + 1, MAR
-		or X, B
-		lw B, 0x8048, MAR
-		or X, B
-
-		lda MAR, loop
-		cmp X, 0
-		jnz MAR
-	}
-
-	; want to store result to stack, so must save return addr elsewhere
-	; get return address and save it to memory, next step changes stack
-	pop	A
-	sw A, 0xfff0, MAR
-	inc MAR
-	pop	A
-	sw A, MAR ; sw A, 0xfff1, MAR
-
-	fn push_lw(){
-		return {
-			inc MAR
-			lw A, MAR
-			push A
-		}
-	}
-
-	; return routine
-	lw A, 0x8040, MAR
-	push A
-
-	push_lw()
-	push_lw()
-	push_lw()
-
-	; get return address back
-	lw A, 0xfff0, MAR
-	; since next addr is right after can just increase MAR and load it into B
-	; both approaches take the exact same # of clock cycles, but this approach is one less byte long
-	inc MAR
-	lw B, MAR ; lw B, 0xfff1, MAR
-
-	; load into mar
-	mv MarLo, A
-	mv MarHi, B
-
+	pop MAR
 	jmp MAR
 }
 
-; 32 bit sum of 32 bit nums in stack
-; input is 2, 32bit numbers in the stack in the format:
-; [return addr][B[3]][B[2]][B[1]][B[0]][A[3]][A[2]][A[1]][A[0]]
-; stack after operation looks like:
-; [C[0]][C[1]][C[2]][C[3]]
+update_state {
+	; get head of snake (end of queue)
+	lw A, pQUEUE_WRITE, MAR
+	lw B, pQUEUE_BASE, MAR
 
-sum_u32 {
-	; func defined only in this scope
-	fn pop_sw(){
-		return {
-			inc MAR
-			pop A
-			sw A, MAR 
-		}
-	}
-	
-	; 0
-	pop A
-	sw A, 0x8080, MAR ; loads 0x8080 into MAR once 
-	; 1
-	pop_sw()
-	; 2
-	pop_sw()
-	; 3
-	pop_sw()
-	; 4
-	pop_sw()
-	; 5
-	pop_sw()
-	; 6
-	pop_sw()
-	; 7
-	pop_sw()
+	mv MarHi, B
+	mv MarLo, A
 
-	; want to store result to stack, so must save return addr elsewhere
-	; get return address and save it to memory, next step changes stack
-	pop	A
-	sw A, 0xfff0, MAR
-	inc MAR
-	pop	A
-	sw A, MAR ; sw A, 0xfff1, MAR
-
-	; get nums
-	lw X, 0x8080, MAR
-	lw Y, 0x8084, MAR
-	; add nums
-	; NOTE: no carry on first add
-	add X, Y
-	; push result to stack
-	push X
-
-	; get nums
-	inc MAR
-	lw Y, MAR
-	lw X, 0x8081, MAR
-	; add nums
-	adc X, Y
-	; push result to stack
-	push X
-
-	; get nums
-	inc MAR
 	lw X, MAR
-	lw Y, 0x8086, MAR
-	; add nums
-	adc X, Y
-	; push result to stack
-	push X
+	; mask last 4 bits
+	and X, 0b00001111
 
-	; get nums
-	inc MAR
 	lw Y, MAR
-	lw X, 0x8083, MAR
-	; add nums
-	adc X, Y
-	; push result to stack
-	push X
+	; mask first 4 bits
+	and Y, 0b11110000
+	shr Y, 4
 
-	; get return address back
-	lw A, 0xfff0, MAR
-	; since next addr is right after can just increase MAR and load it into B
-	; both approaches take the exact same # of clock cycles, but this approach is one less byte long
-	inc MAR
-	lw B, MAR ; lw B, 0xfff1, MAR
+	lw Z, pDIR, MAR
 
-	; load into mar
+	cmp Z, 0
+	jeq left_ret
+	; if left -> X -= 1
+	sub X, 1
+	left_ret:
+
+	; if right -> X += 1
+	cmp Z, 1
+	jeq right_ret
+	add X, 1
+	right_ret:
+	; if down -> Y -= 1
+	cmp Z, 2
+	jeq down_ret
+	sub Y, 1
+	down_ret:
+	; if up -> X += 1
+	cmp Z, 3
+	jeq up_ret
+	add Y, 1
+	up_ret:
+
+	; increase write pointer, and write to it
+	lw A, pQUEUE_WRITE, MAR
+	add A, 1
+	sw A, pQUEUE_WRITE, MAR
+
+	lw B, pQUEUE_BASE, MAR
 	mv MarLo, A
-	mv MarHi, B
 
-	; return
+	; shift left again
+	shl Y, 4
+
+	; make new byte
+	or X, Y
+
+	; store to queue
+	sw X, pQUEUE_BASE, MAR
+
+	; NOTE: first in queue gets popped when updating screen
+
+	pop MAR
 	jmp MAR
 }
 
+update_screen {
+	lw A, pQUEUE_READ, MAR
+	lw B, pQUEUE_BASE, MAR
 
-fn low_byte(x: u16) {
-	let low_byte: u8 = x & 0xff
-	return low_byte
+	mv MarHi, B
+	mv MarLo, A
+
+	; pop previous
+	lw A, pQUEUE_READ, MAR
+	add A, 1
+	sw A, pQUEUE_READ, MAR
+
+	pop MAR
+	jmp MAR
 }
 
-fn high_byte(x: u16) {
-	let high_byte: u8 = (x >> 8) & 0xff
-	return high_byte
-}
-
-fn jsr_return() {
-	return {
-		pop MAR
-		jmp MAR
-	}
-}
 
 fn jsr(addr: Address) {
 	return {
@@ -295,20 +134,3 @@ fn jsr(addr: Address) {
 		return_addr:
 	}
 }
-
-
-fn jnz_end(reg: Register, addrReg: AddressRegister, addr: Address) {
-	return {
-		sub reg, 1
-		lda addrReg, addr
-		jnz reg, addrReg
-	}
-}
-
-fn sw_u8(x: u8, addrReg: Address, scratch_reg: Register) {
-	return {
-		mv scratch_reg, x
-		sw scratch_reg, addrReg, MAR
-	}
-}
-
