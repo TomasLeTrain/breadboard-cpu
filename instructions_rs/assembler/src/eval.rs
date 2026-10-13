@@ -600,8 +600,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                         // second eval. This means return gets re-evaled, in which case all
                         // functions calls must be inlined
                         // TODO: is a workaround?
-                        eval_program(block, ctx)
-                            .wrap_err("Evaluation of return block failed.")?;
+                        eval_program(block, ctx).wrap_err("Evaluation of return block failed.")?;
                         return_value = ExprValue::Block(block.clone())
                     }
                 }
@@ -658,13 +657,14 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
                 // only eval to collect context, what this returns should equal the inlined
                 // function call body but without allocated addresses
-                eval_program(original_body, &mut ctx)
-                    // .wrap_err("Evaluation of inline function call original body failed.")?;
-                    .wrap_err(format!("bruh: {:#?}", original_body))?;
+                eval_program(original_body, &mut ctx).wrap_err(format!(
+                    "Evaluation of inline function call original body of function \"{name}\" failed.",
+                ))?;
 
                 // now eval the inlined function call body with the context after the function ends
-                eval_program(body, &mut ctx)
-                    .wrap_err("Evaluation of inline function block failed.")?;
+                eval_program(body, &mut ctx).wrap_err(format!(
+                    "Evaluation of inline function block \"{name}\" failed.",
+                ))?;
 
                 for name in param_names.into_iter().rev() {
                     if name != ctx.pop_local()?.name {
@@ -762,8 +762,9 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
                     // want to eval block as much as possible as well in case it has function calls as well
                     //
-                    eval_program(&mut block, &mut ctx)
-                        .wrap_err(format!("Macro evaluation of inlined body of {name} failed."))?;
+                    eval_program(&mut block, &mut ctx).wrap_err(format!(
+                        "Macro evaluation of inlined body of {name} failed."
+                    ))?;
                     for name in param_names.into_iter().rev() {
                         if name != ctx.pop_local()?.name {
                             // TODO: make detailed error

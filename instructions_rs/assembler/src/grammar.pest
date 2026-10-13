@@ -102,10 +102,14 @@ Primary = _{ FunctionCall | Literal | (Identifier ~ !":") | "(" ~ Expr ~ ")" }
 
 // Literals
 // Hex must have higher precedence otherwise gets recognized as int
-Literal =  { Bool | Hexadecimal | Int  | String | Character }
+Literal =  { Bool | BinaryLiteral | Hexadecimal | Int  | String | Character }
 
 HexadecimalDigit = @{ ASCII_HEX_DIGIT+ }
 Hexadecimal       = { ^"0x" ~ HexadecimalDigit }
+
+BinaryDigit = @{ ASCII_BIN_DIGIT+ }
+BinaryLiteral     = { ^"0b" ~ BinaryDigit }
+
 
 Type = { RegType | AddrRegType | U16Type | U8Type | I16Type | I8Type | IntType | BoolType | LabelType | AddrType }
 U16Type = { "u16" }

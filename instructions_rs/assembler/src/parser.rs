@@ -658,6 +658,7 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
             source,
         )),
         Rule::Hexadecimal => parse_hexadecimal(inner, source),
+        Rule::BinaryLiteral => parse_binary_literal(inner, source),
         Rule::Bool => Ok(AstNode::from_pair(
             Expr::new(
                 ExprKind::Literal,
@@ -720,6 +721,28 @@ fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>>
         )),
         r => Err(ParseError::from_expected(
             "Hexadecimal parsing error".to_string(),
+            vec![Rule::Int],
+            vec![r],
+            &AstSpan::from_span(inner.as_span(), source),
+        ))?,
+    }
+}
+
+fn parse_binary_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
+    let inner = pair.into_inner().next().unwrap();
+
+    match inner.as_rule() {
+        Rule::BinaryDigit => Ok(AstNode::from_pair(
+            Expr::new(
+                ExprKind::Literal,
+                Type::Int,
+                ExprValue::Int(i32::from_str_radix(inner.as_str(), 2).unwrap()),
+            ),
+            inner,
+            source,
+        )),
+        r => Err(ParseError::from_expected(
+            "Binary literal parsing error".to_string(),
             vec![Rule::Int],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
