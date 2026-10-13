@@ -4,16 +4,17 @@
 ; - have circular queue of positions, can represent 16x16 in one byte
 
 ; where the current snake direction gets stored
-let pDIR = 0
+let pDIR = 0x9000
 ; game runs until == 0
-let pHALT = 0
+let pHALT = 0x8080
 
 ; upper byte of queue
-let pQUEUE_BASE = 0
+let pQUEUE_BASE = 0xA000
+
 ; read pointer - lower byte of whole addr
-let pQUEUE_READ = 0
+let pQUEUE_READ = 0x9020
 ; write pointer - lower byte of whole addr
-let pQUEUE_WRITE = 0
+let pQUEUE_WRITE = 0x9040
 
 
 start {
@@ -23,6 +24,11 @@ start {
 	; guarantee a clear of carry flag
 	mv A, 0
 	add A, 0
+
+	; start the queue state
+	mv A, 0
+	sw A, pQUEUE_READ, MAR
+	sw A, pQUEUE_WRITE, MAR
 
 	; main loop
 	loop { 
@@ -39,7 +45,7 @@ start {
 
 update_input {
 	; TODO: actually get input
-	mw A, 1
+	mv A, 1
 	sw A, pDIR, MAR
 
 	pop MAR
@@ -48,43 +54,54 @@ update_input {
 
 update_state {
 	; get head of snake (end of queue)
-	lw A, pQUEUE_WRITE, MAR
-	lw B, pQUEUE_BASE, MAR
-
-	mv MarHi, B
-	mv MarLo, A
+	lw MarLo, pQUEUE_WRITE, MAR
+	mv MarHi, high_byte(pQUEUE_BASE)
 
 	lw X, MAR
+	mv Y, X
+
 	; mask last 4 bits
 	and X, 0b00001111
 
-	lw Y, MAR
 	; mask first 4 bits
 	and Y, 0b11110000
-	shr Y, 4
+	shr Y
+	shr Y
+	shr Y
+	shr Y
 
 	lw Z, pDIR, MAR
 
-	cmp Z, 0
-	jeq left_ret
 	; if left -> X -= 1
+	cmp Z, 0
+	jeq left_eq, MAR
+	jmp left_ret, MAR
+	left_eq:
 	sub X, 1
 	left_ret:
 
 	; if right -> X += 1
 	cmp Z, 1
-	jeq right_ret
+	jeq right_eq, MAR
+	jmp right_ret, MAR
+	right_eq:
 	add X, 1
 	right_ret:
-	; if down -> Y -= 1
+
+	; if right -> Y -= 1
 	cmp Z, 2
-	jeq down_ret
+	jeq down_eq, MAR
+	jmp down_ret, MAR
+	down_eq:
 	sub Y, 1
 	down_ret:
-	; if up -> X += 1
+
+	; if up -> Y += 1
 	cmp Z, 3
-	jeq up_ret
-	add Y, 1
+	jeq up_eq, MAR
+	jmp up_ret, MAR
+	up_eq:
+	sub Y, 1
 	up_ret:
 
 	; increase write pointer, and write to it
@@ -92,17 +109,20 @@ update_state {
 	add A, 1
 	sw A, pQUEUE_WRITE, MAR
 
-	lw B, pQUEUE_BASE, MAR
+	mv MarHi, high_byte(pQUEUE_BASE)
 	mv MarLo, A
 
 	; shift left again
-	shl Y, 4
+	shl Y
+	shl Y
+	shl Y
+	shl Y
 
 	; make new byte
 	or X, Y
 
 	; store to queue
-	sw X, pQUEUE_BASE, MAR
+	sw X, MAR
 
 	; NOTE: first in queue gets popped when updating screen
 
@@ -111,11 +131,8 @@ update_state {
 }
 
 update_screen {
-	lw A, pQUEUE_READ, MAR
-	lw B, pQUEUE_BASE, MAR
-
-	mv MarHi, B
-	mv MarLo, A
+	lw MarLo, pQUEUE_READ, MAR
+	mv MarHi, high_byte(pQUEUE_BASE)
 
 	; pop previous
 	lw A, pQUEUE_READ, MAR
@@ -133,4 +150,9 @@ fn jsr(addr: Address) {
 		jmp addr, MAR
 		return_addr:
 	}
+}
+
+fn high_byte(x: u16) {
+	let high_byte: u8 = (x >> 8) & 0xff
+	return high_byte
 }

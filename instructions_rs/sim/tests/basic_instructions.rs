@@ -107,3 +107,35 @@ fn zero_flag() {
     assert_eq!(final_state.a.state(), Some(0));
     assert_eq!(final_state.get_flag(Flags::InvZero), Some(false));
 }
+
+#[test]
+fn eq_flag() {
+    let source = "mv A, 15
+            cmp A, 15
+            jeq if_equal, MAR
+            mv X, 1
+            jmp if_end, MAR
+            if_equal:
+            mv X, 2
+            if_end:
+            \n";
+    let final_state = run_program(source.into()).unwrap();
+    assert_eq!(final_state.x.state(), Some(2));
+    assert_eq!(final_state.get_flag(Flags::Eq), Some(true));
+}
+
+#[test]
+fn not_eq_flag() {
+    let source = "mv A, 15
+            cmp A, 13
+            jeq if_equal, MAR
+            mv X, 1
+            jmp if_end, MAR
+            if_equal:
+            mv X, 2
+            if_end:
+            \n";
+    let final_state = run_program(source.into()).unwrap();
+    assert_eq!(final_state.x.state(), Some(1));
+    assert_eq!(final_state.get_flag(Flags::Eq), Some(false));
+}

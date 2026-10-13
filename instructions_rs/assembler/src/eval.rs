@@ -167,7 +167,7 @@ impl ExprValue {
             return Ok(self);
         }
 
-        match ty {
+        match ty.as_simple() {
             Type::Bool => self.as_bool().map(ExprValue::Bool),
             Type::Int => {
                 // casting from any int-able value

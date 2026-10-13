@@ -90,6 +90,7 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
         })?;
     }
 
+    // println!("before macro eval: {:#?}", program);
     eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
     // println!("after macro eval: {:#?}", program);
 
