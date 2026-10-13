@@ -28,7 +28,15 @@ start {
 	; start the queue state
 	mv A, 0
 	sw A, pQUEUE_READ, MAR
+	mv A, 0
 	sw A, pQUEUE_WRITE, MAR
+
+	; add initial position
+	mv A, 0b0010 | (0b0010 << 4)
+	sw A, pQUEUE_BASE, MAR
+
+	mv A, 1
+	sw A, pHALT, MAR
 
 	; main loop
 	loop { 
@@ -37,7 +45,9 @@ start {
 		jsr(update_screen)
 
 		lw A, pHALT, MAR
-		jnz A, MAR
+		cmp A, 0
+		lda MAR, loop
+		jnz MAR
 	}
 
 	halt
@@ -124,7 +134,10 @@ update_state {
 	; store to queue
 	sw X, MAR
 
-	; NOTE: first in queue gets popped when updating screen
+	; pop previous
+	lw A, pQUEUE_READ, MAR
+	add A, 1
+	sw A, pQUEUE_READ, MAR
 
 	pop MAR
 	jmp MAR
@@ -133,11 +146,6 @@ update_state {
 update_screen {
 	lw MarLo, pQUEUE_READ, MAR
 	mv MarHi, high_byte(pQUEUE_BASE)
-
-	; pop previous
-	lw A, pQUEUE_READ, MAR
-	add A, 1
-	sw A, pQUEUE_READ, MAR
 
 	pop MAR
 	jmp MAR
