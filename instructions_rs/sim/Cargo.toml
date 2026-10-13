@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 opcode_gen = { path = "../opcode_gen" }
 assembler = { path = "../assembler" }
+sdl3 = "0.20.0"

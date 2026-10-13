@@ -31,7 +31,7 @@ start {
 	mv A, 0
 	sw A, pQUEUE_WRITE, MAR
 
-	; add initial position
+	; add initial position at (2, 2)
 	mv A, 0b0010 | (0b0010 << 4)
 	sw A, pQUEUE_BASE, MAR
 

@@ -18,11 +18,13 @@
       };
     in {
       devShell = pkgs.mkShell {
+        nativeBuildInputs = with pkgs; [sdl3];
         buildInputs = with pkgs; [
           openssl
           pkg-config
           rust-bin.stable.latest.default
         ];
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.sdl3];
       };
     });
 }
