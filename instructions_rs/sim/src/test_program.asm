@@ -57,34 +57,35 @@ init_state {
 	; start with two in queue
 	mv A, 0
 	sw A, pQUEUE_READ, MAR
-	; mv A, 0
-	; sw A, pQUEUE_WRITE, MAR
-	; add second position at (2, 3)
-	; mv A, (2) | (3 << 4)
-	; sw A, pQUEUE_BASE, MAR
 
 	mv A, 1
 	sw A, pQUEUE_WRITE, MAR
-
-	; add head position at (3, 3)
-	mv A, (3) | (3 << 4)
-	sw A, pQUEUE_BASE+1, MAR
 
 	; add second position at (2, 3)
 	mv A, (2) | (3 << 4)
 	sw A, pQUEUE_BASE, MAR
 
+	; add head position at (3, 3)
+	mv A, (3) | (3 << 4)
+	sw A, pQUEUE_BASE+1, MAR
+
+
 	mv A, 1
 	sw A, pHALT, MAR
 
-	mv A, 0
+	mv A, 1
 	sw A, pDIR_X, MAR
+	mv A, 0
 	sw A, pDIR_Y, MAR
 
-	mv A, (0) | (0 << 4)
+	mv A, (8) | (8 << 4)
 	sw A, pAPPLE, MAR
 	mv A, 0
 	sw A, pAPPLE_WAS_EATEN, MAR
+
+	; clear screen
+	jsr(clear_screen)
+
 	pop MAR
 	jmp MAR
 }
@@ -93,12 +94,7 @@ start {
 	; initialize stack
 	lda SP, get_STACK_START()
 
-
-	; return
-	; pop MAR
-	; jmp MAR
-jsr(init_state)
-	jsr(clear_screen)
+	jsr(init_state)
 
 	; main loop
 	loop { 
@@ -117,15 +113,28 @@ jsr(init_state)
 			jnz Z, MAR
 		}
 	
-		jsr(update_state)
-		jsr(update_screen)
-
-
 		lw A, pHALT, MAR
 		cmp A, 0
-		lda MAR, loop
-		jnz MAR
+		jeq skip_state_update, MAR
+		; only update state if not halted
+		jsr(update_state)
+		jsr(update_screen)
+		jmp skip_state_update_end, MAR
+		skip_state_update:
+		; if halted, restart state automatically
+		jsr(init_state)
+		skip_state_update_end:
+
+		jmp loop, MAR
+		; lw A, pHALT, MAR
+		; cmp A, 0
+		; lda MAR, loop
+		; jnz MAR
 	}
+
+	; instead of halting just loop forever
+	; forever:
+	; jmp forever, MAR
 
 	halt
 }
@@ -255,6 +264,7 @@ update_input {
 	let A_KEY =  97
 	let S_KEY = 115
 	let D_KEY = 100
+	let R_KEY = 114
 
 	; if left -> X -= 1
 	cmp X, A_KEY
@@ -300,6 +310,15 @@ update_input {
 	mv A, 0
 	sw A, pDIR_X, MAR
 	up_ret:
+
+
+	; if r key -> init state
+	cmp X, R_KEY
+	jeq r_eq, MAR
+	jmp r_ret, MAR
+	r_eq:
+	jsr(init_state)
+	r_ret:
 
 	pop MAR
 	jmp MAR
@@ -365,16 +384,65 @@ update_state {
 	sw A, pAPPLE_WAS_EATEN, MAR
 
 	; now, generate a new apple position
+	; very rough pseudorandom generator
 	lw X, pAPPLE, MAR
 	mv Y, X
-	xor X, 30
+	xor X, 130
 	shl X
 	add X, 51
-	add Y,X
+	; x acts as random position after current, otherwise x eventually ends up at stable position
+	add Y, X
 	sw Y, pAPPLE, MAR
 
 	apple_ret:
 
+	; now, check if current position intersects with any existing snake parts, and if so halt
+	save_stack_ptr()
+
+	; Z holds the end pointer position
+	lw Z, pQUEUE_WRITE, MAR
+
+	; X holds the current position
+	mv MarLo, Z
+	mv MarHi, high_byte(pQUEUE_BASE)
+	lw X, MAR
+
+	; start sp on read pointer
+	lw SpLo, pQUEUE_READ, MAR
+	mv SpHi, high_byte(pQUEUE_BASE)
+
+	; TODO: read is getting deleted so should be fine?
+	; inc SP
+	
+	collision_check_loop {
+		cmp SpLo, Z
+		jeq collision_check_loop_exit, MAR
+
+		; Y holds the current position
+		lw Y, SP
+
+		; check if they are equal
+		cmp Y, X
+		; 
+		jeq collision_eq, MAR
+		jmp collision_end, MAR
+		collision_eq:
+
+		; collision, set halt!
+		mv A, 0
+		sw A, pHALT, MAR
+
+		collision_end:
+
+		inc SP
+		jmp collision_check_loop, MAR
+
+		collision_check_loop_exit:
+	}
+
+	load_stack_ptr()
+
+	; return
 	pop MAR
 	jmp MAR
 }
