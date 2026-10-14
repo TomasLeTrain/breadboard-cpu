@@ -3,6 +3,7 @@ use sdl3::render::ScaleMode;
 use sdl3::surface::Surface;
 use sdl3::sys::keycode::SDL_Keymod;
 use sim::{CpuState, DataRegister};
+use std::hint::spin_loop;
 
 use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
@@ -11,6 +12,7 @@ use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 use std::sync::mpsc::{self, TryRecvError};
+use std::thread;
 use std::time::Duration;
 
 enum CpuMessage {
@@ -141,50 +143,61 @@ fn main() {
     eprintln!("started");
     let start = Instant::now();
 
-    let mut i = 1;
-    loop {
-        // println!();
-        // println!("doing cycle {i}");
+    let batch_size = 1_000;
+    let target_ns_per_iteration = 300; // roughly 3.3 Mhz
+    let target_batch_time = Duration::from_nanos(target_ns_per_iteration * batch_size);
 
-        // perform full clock cycle
-        state.step_half_clk();
-        state.step_half_clk();
+    let mut i: i32 = 1;
+    'main_loop: loop {
+        let batch_start = Instant::now();
+        for _ in 0..batch_size {
+            // println!();
+            // println!("doing cycle {i}");
 
-        // println!(
-        //     "0x8070..0x8090: {:#x?}",
-        //     &state.data_ram.state()[0x0070..0x0090]
-        // );
-        //
-        // let mut stack = Vec::new();
-        // state.data_ram.state()[(0xffa0 - 0x8000)..(0xffe0 - 0x8000)].clone_into(&mut stack);
-        //
-        // println!("stack - 0xffe0..0xffa0: {:#x?}", stack);
+            // perform full clock cycle
+            state.step_half_clk();
+            state.step_half_clk();
 
-        let mut video_halt = false;
+            // println!(
+            //     "0x8070..0x8090: {:#x?}",
+            //     &state.data_ram.state()[0x0070..0x0090]
+            // );
+            //
+            // let mut stack = Vec::new();
+            // state.data_ram.state()[(0xffa0 - 0x8000)..(0xffe0 - 0x8000)].clone_into(&mut stack);
+            //
+            // println!("stack - 0xffe0..0xffa0: {:#x?}", stack);
 
-        loop {
-            match cpu_receive.try_recv() {
-                Ok(msg) => match msg {
-                    VideoMessage::KeyboardUpdate(code) => state.keyboard.set_code(code),
-                    VideoMessage::Halt => {
-                        video_halt = true;
-                        break;
-                    }
-                },
-                Err(err) => match err {
-                    TryRecvError::Empty => break,
-                    TryRecvError::Disconnected => {
-                        video_halt = true;
-                        break;
-                    }
-                },
+            let mut video_halt = false;
+
+            loop {
+                match cpu_receive.try_recv() {
+                    Ok(msg) => match msg {
+                        VideoMessage::KeyboardUpdate(code) => state.keyboard.set_code(code),
+                        VideoMessage::Halt => {
+                            video_halt = true;
+                            break;
+                        }
+                    },
+                    Err(err) => match err {
+                        TryRecvError::Empty => break,
+                        TryRecvError::Disconnected => {
+                            video_halt = true;
+                            break;
+                        }
+                    },
+                }
             }
+
+            if state.is_halt() || video_halt {
+                break 'main_loop;
+            }
+            i += 1;
         }
 
-        if state.is_halt() || video_halt {
-            break;
+        while batch_start.elapsed() < target_batch_time {
+            spin_loop();
         }
-        i += 1;
     }
 
     // halt

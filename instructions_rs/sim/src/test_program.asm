@@ -98,14 +98,38 @@ start {
 
 	; main loop
 	loop { 
-		let speed_dial = 64
-		; let speed_dial = 255
+		; let speed_dial = 1
+		let speed_dial = 100
 
 		; delay since its too fast
 		; NOTE: Z not used in update_input loop, must keep that way!
 		mv Z, speed_dial
 		nop_loop {
 			; keep updating input while waiting
+			; some inlined to multiply impact of speed dial
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
+			jsr(update_input)
 			jsr(update_input)
 
 			sub Z, 1
