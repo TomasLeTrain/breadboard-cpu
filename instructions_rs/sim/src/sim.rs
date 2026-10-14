@@ -557,6 +557,21 @@ impl CpuState {
     }
 
     // used for examining state, not part of sim directly
+    fn vram_write(&mut self) {
+        let addr = self.addr_val.unwrap();
+        let val = self.bus_val.unwrap();
+        let masked_addr = addr & !(1 << 15);
+        if addr & (1 << 15) == 0 {
+            // vram
+            self.video.write().unwrap().write(masked_addr, val);
+        } else {
+            // rom
+            // nop
+            // TODO: alert of nop
+            panic!("writing to rom!")
+        }
+    }
+    // used for examining state, not part of sim directly
     pub fn mem_read_state(&self, addr: u16) -> Option<u8> {
         let masked_addr = addr & !(1 << 15);
         if addr & 1 << 15 != 0 {
@@ -600,8 +615,7 @@ impl CpuState {
         {
             assert_eq!(bout_val, None);
 
-            // TODO: VramRead
-            todo!()
+            self.video.read().unwrap().read(self.addr_value().unwrap())
         } else {
             bout_val
         }
@@ -691,7 +705,9 @@ impl CpuState {
                 1 => self.x.shift_right(),
                 2 => self.y.shift_left(),
                 3 => self.y.shift_right(),
-                4 => (), // TODO: VramWrite
+                4 => self.vram_write(),
+                //
+                // self.video.write().unwrap().read(self.addr_value().unwrap())
                 _ => unreachable!(),
             }
         } else {

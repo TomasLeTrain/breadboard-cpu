@@ -26,8 +26,9 @@ impl VideoState {
         self.state[addr as usize] = Some(val);
     }
 
-    pub fn read(&self, addr: u32) -> Option<u8> {
-        self.state[addr as usize]
+    pub fn read(&self, addr: u16) -> Option<u8> {
+        let masked_addr = addr & !(1 << 15);
+        self.state[masked_addr as usize]
     }
 
     pub fn create_surface_data(&self) -> Vec<u8> {
@@ -62,8 +63,10 @@ impl VideoState {
                 let bg_color = color_value & 0xf;
                 let fg_color = (color_value >> 4) & 0xf;
 
+                // TODO: somewhere there is a flip going on with the direction of i
                 for i in 0..x_width {
-                    let char_on = (char_value >> (x_width-i)) & 1 != 0;
+                    let flipped_i: u8 = (x_width - i - 1) as u8;
+                    let char_on = char_value & (1 << flipped_i) != 0;
                     let palette_data = if char_on { fg_color } else { bg_color };
                     let pixel = palette[palette_data as usize].to_u32(&PixelFormat::RGB332);
                     data[i + x * x_width + y * width] = pixel as u8;

@@ -2,6 +2,8 @@
 
 ; Goals:
 ; - have circular queue of positions, can represent 16x16 in one byte
+; - draw on screen
+; - player input
 
 ; where the current snake direction gets stored
 let pDIR = 0x9000
@@ -40,9 +42,9 @@ start {
 
 	; main loop
 	loop { 
-		jsr(update_input)
-		jsr(update_state)
-		jsr(update_screen)
+		; jsr(update_input)
+		; jsr(update_state)
+		; jsr(update_screen)
 
 		lw A, pHALT, MAR
 		cmp A, 0
@@ -52,6 +54,9 @@ start {
 
 	halt
 }
+
+; clear_screen {
+; }
 
 update_input {
 	; TODO: actually get input
