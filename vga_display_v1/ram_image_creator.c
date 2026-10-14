@@ -58,6 +58,7 @@ void createTestBinary() {
   for (uint8_t x = 0; x < max_x; x++) {
     for (uint8_t y = 0; y < max_y; y++) {
       writeCharacter(x, y, x + 40 * ((y & (~0b111)) >> 3), y & 0xf, x & 0xf);
+      // writeCharacter(x, y, 67, 0b1100, 0b0100);
       // writeCharacter(x, y, character, bg_color, fg_color);
     }
   }

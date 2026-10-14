@@ -1,4 +1,5 @@
 use assembler::parse_file;
+use sdl3::render::ScaleMode;
 use sdl3::surface::Surface;
 use sdl3::sys::keycode::SDL_Keymod;
 use sim::{CpuState, DataRegister};
@@ -59,42 +60,20 @@ fn main() {
         let video_subsystem = sdl_context.video().unwrap();
 
         let window = video_subsystem
-            .window("sim", 640, 480)
+            .window("sim", 640 * 2, 480 * 2)
+            // .window("sim", 640, 480)
             .position_centered()
             .build()
             .unwrap();
 
         let mut canvas = window.into_canvas();
 
-        canvas.set_draw_color(Color::RGB(0, 255, 255));
         canvas.clear();
         canvas.present();
 
-        let mut palette_colors = Vec::new();
-
-        for white in 0..=1 {
-            for g in 0..=1 {
-                for b in 0..=1 {
-                    for r in 0..=1 {
-                        palette_colors.push(Color::RGB(
-                            r * 128 + white * 128,
-                            g * 128 + white * 128,
-                            b * 128 + white * 128,
-                        ));
-                    }
-                }
-            }
-        }
-        println!("size of pallete: {}", palette_colors.len());
-
-        let palette = Palette::with_colors(&palette_colors).unwrap();
-
         let mut event_pump = sdl_context.event_pump().unwrap();
 
-        let mut i = 0;
         'running: loop {
-            i = (i + 1) % 255;
-            canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
             canvas.clear();
 
             let mut some_keyboard = false;
@@ -137,23 +116,17 @@ fn main() {
             let height = 240;
 
             let mut surface_data = video.read().unwrap().create_surface_data();
-            let mut surface = Surface::from_data(
-                &mut surface_data,
-                width,
-                height,
-                width,
-                PixelFormat::INDEX4LSB,
-            )
-            .unwrap();
-            surface.set_palette(&palette).unwrap();
+            let surface =
+                Surface::from_data(&mut surface_data, width, height, width, PixelFormat::RGB332)
+                    .unwrap();
 
             let texture_creator = canvas.texture_creator();
 
-            // let surface2 = Surface::new(512, 512, PixelFormat::RGB24).unwrap();
-            //
-            let texture = texture_creator
+            let mut texture = texture_creator
                 .create_texture_from_surface(surface)
                 .unwrap();
+
+            texture.set_scale_mode(ScaleMode::Nearest);
 
             canvas.copy(&texture, None, None).unwrap();
 
