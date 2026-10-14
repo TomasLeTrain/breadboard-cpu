@@ -434,7 +434,9 @@ update_state {
 
 		collision_end:
 
-		inc SP
+		; NOTE: don't increment sp! circular heap depends on wrap around from byte addition
+		add SpLo, 1
+
 		jmp collision_check_loop, MAR
 
 		collision_check_loop_exit:
