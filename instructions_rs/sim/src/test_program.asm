@@ -18,14 +18,21 @@ let pQUEUE_READ = 0x9020
 ; write pointer - lower byte of whole addr
 let pQUEUE_WRITE = 0x9040
 
+; TODO: add global symbols so they can be used in functions directly
+fn get_STACK_START(){
+	let STACK_START = 0xffe0
+	return STACK_START
+}
+fn get_STACK_SAVE_ADDR(){
+	let STACK_SAVE_ADDR = 0xffe2
+	return  STACK_SAVE_ADDR
+}
+
+
 
 start {
 	; initialize stack
-	lda SP, 0xffe0 ; lda sp, sp_start_addr
-
-	; guarantee a clear of carry flag
-	mv A, 0
-	add A, 0
+	lda SP, get_STACK_START()
 
 	; start the queue state
 	mv A, 0
@@ -39,6 +46,8 @@ start {
 
 	mv A, 1
 	sw A, pHALT, MAR
+
+	jsr(clear_screen)
 
 	; main loop
 	loop { 
@@ -55,8 +64,93 @@ start {
 	halt
 }
 
-; clear_screen {
-; }
+; saves to tmp save addr
+fn save_stack_ptr(){
+	return {
+		sw SpLo, get_STACK_SAVE_ADDR(), MAR
+		sw SpHi, get_STACK_SAVE_ADDR()+1, MAR
+	}
+}
+
+; loads from tmp save addr
+fn load_stack_ptr(){
+	return {
+		lw SpLo, get_STACK_SAVE_ADDR(), MAR
+		lw SpHi, get_STACK_SAVE_ADDR()+1, MAR
+	}
+}
+
+clear_screen {
+	; sp ptr gets used as general pointer here, must save beforehand
+	save_stack_ptr()
+
+	fn clear_10_pixels(){
+		return {
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+			sw_vram Z, SP
+			inc SP
+		}
+	}
+
+	; clears 240 * 40 pixels with given value, at given addr
+	fn clear_range_vram(clear_val: u8, start_addr: Address){
+		return {
+			; value that gets loaded as character everywhere
+			mv Z, clear_val
+
+			mv Y, 240
+
+			lda SP, start_addr+1
+
+			; (x + 1) | (y << 6)
+
+			y_loop {
+				; clear line
+				clear_10_pixels()
+				clear_10_pixels()
+				clear_10_pixels()
+				clear_10_pixels()
+
+				; must add offset to SP to get to next line
+				add SpLo, ((1<<6) + 1) - 41
+				adc SpHi, 0
+
+				sub Y, 1
+				lda MAR, y_loop
+				jnz MAR
+			}
+	}
+	}
+
+	; clear all colors
+	clear_range_vram(0b1001101, 0)
+	; clear all characters
+	clear_range_vram(0b1001101, 1 << 14)
+
+	; get stack pointer back
+	load_stack_ptr()
+
+	; return
+	pop MAR
+	jmp MAR
+}
 
 update_input {
 	; TODO: actually get input

@@ -613,8 +613,9 @@ impl CpuState {
         if self.get_opcode_output().get_misc() == 3
             && self.get_opcode_output().get_flag_select() == 5
         {
+            // nothing should be on the bus at this point
             assert_eq!(bout_val, None);
-
+            // vram_read
             self.video.read().unwrap().read(self.addr_value().unwrap())
         } else {
             bout_val
@@ -706,8 +707,6 @@ impl CpuState {
                 2 => self.y.shift_left(),
                 3 => self.y.shift_right(),
                 4 => self.vram_write(),
-                //
-                // self.video.write().unwrap().read(self.addr_value().unwrap())
                 _ => unreachable!(),
             }
         } else {

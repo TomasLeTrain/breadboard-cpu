@@ -22,7 +22,6 @@ impl VideoState {
     }
 
     pub fn write(&mut self, addr: u16, val: u8) {
-        println!("writing {val:x} at {addr:x} to ram");
         self.state[addr as usize] = Some(val);
     }
 
