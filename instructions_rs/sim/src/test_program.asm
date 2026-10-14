@@ -1,3 +1,6 @@
+; actual start, jumps to wherever the start symbol is
+jmp start, MAR
+
 ; snake program
 
 ; Goals:
@@ -21,6 +24,16 @@ let pQUEUE_READ = 0x9020
 ; write pointer - lower byte of whole addr
 let pQUEUE_WRITE = 0x9040
 
+; apple pointer - where position of apple gets stored
+let pAPPLE = 0x9060
+
+; apple eaten pointer - is non-zero if apple was eaten, reset by display update
+let pAPPLE_WAS_EATEN = 0x9080
+
+let background_color = 0b11000100
+let main_color = 0b11000000
+
+
 ; TODO: add global symbols so they can be used in functions directly
 fn get_STACK_START(){
 	let STACK_START = 0xffe0
@@ -39,10 +52,7 @@ fn get_BASE_GAME_POSITION(){
 }
 
 
-start {
-	; initialize stack
-	lda SP, get_STACK_START()
-
+init_state {
 	; start the queue state
 	; start with two in queue
 	mv A, 0
@@ -71,6 +81,23 @@ start {
 	sw A, pDIR_X, MAR
 	sw A, pDIR_Y, MAR
 
+	mv A, (0) | (0 << 4)
+	sw A, pAPPLE, MAR
+	mv A, 0
+	sw A, pAPPLE_WAS_EATEN, MAR
+	pop MAR
+	jmp MAR
+}
+
+start {
+	; initialize stack
+	lda SP, get_STACK_START()
+
+
+	; return
+	; pop MAR
+	; jmp MAR
+jsr(init_state)
 	jsr(clear_screen)
 
 	; main loop
@@ -206,12 +233,12 @@ clear_screen {
 	}
 
 	; clear all colors
-	clear_range_vram(0b11000100, 0, 240)
+	clear_range_vram(background_color, 0, 240)
 	; clear all characters
 	clear_range_vram(0b00000000, 1 << 14, 240)
 
 	; make valid snake positions a different color
-	clear_range_vram_16x(0b11000000, get_BASE_GAME_POSITION(), 8 * 16 - 1)
+	clear_range_vram_16x(main_color, get_BASE_GAME_POSITION(), 8 * 16 - 1)
 
 	; get stack pointer back
 	load_stack_ptr()
@@ -326,6 +353,28 @@ update_state {
 	mv MarLo, A
 	sw X, MAR
 
+	; now, check if this position is the same as apple 
+	lw Y, pAPPLE, MAR
+	cmp X, Y
+
+	jeq apple_eaten, MAR
+	jmp apple_ret, MAR
+	apple_eaten:
+	; store 1 that apple was eaten
+	mv A, 1
+	sw A, pAPPLE_WAS_EATEN, MAR
+
+	; now, generate a new apple position
+	lw X, pAPPLE, MAR
+	mv Y, X
+	xor X, 30
+	shl X
+	add X, 51
+	add Y,X
+	sw Y, pAPPLE, MAR
+
+	apple_ret:
+
 	pop MAR
 	jmp MAR
 }
@@ -334,9 +383,9 @@ update_screen {
 	; save stack ptr since it gets used here
 	save_stack_ptr()
 
-	; assumes X has position
-	; leaves MAR with the desired position
-	fn position_to_mar_addr(){
+
+	; draws pixel with given character pattern at position stored in X
+	fn draw_big_pixel_helper(){
 		return {
 			; copy value to Y as well
 			mv Y, X
@@ -382,62 +431,127 @@ update_screen {
 			; MAR += x
 			add MarLo, X
 			adc MarHi, 0
+
+			; can save this mar addr to sp, and reuse it for coloring
+			mv SpLo, MarLo
+			mv SpHi, MarHi
+			; ; remove last bit for color instad of character
+			and SpHi, 0b00111111
+		}
+	}
+
+	fn line_write(Reg0: Register, Reg1: Register, addrReg: AddressRegister){
+		return {
+			; known offset to get to next line
+			add Reg0, 1<<6
+			adc Reg1, 0
+			sw_vram X, addrReg
+		}
+	}
+
+	fn draw_big_pixel(color: u8, character: u8){
+		return {
+			draw_big_pixel_helper()
+			mv X, character
+			sw_vram X, MAR
+			line_write(MarLo,MarHi,MAR) ; 2
+			line_write(MarLo,MarHi,MAR) ; 3
+			line_write(MarLo,MarHi,MAR) ; 4
+			line_write(MarLo,MarHi,MAR) ; 5
+			line_write(MarLo,MarHi,MAR) ; 6
+			line_write(MarLo,MarHi,MAR) ; 7
+			line_write(MarLo,MarHi,MAR) ; 8
+
+			mv X, color
+			sw_vram X, SP
+			line_write(SpLo,SpHi,SP) ; 2
+			line_write(SpLo,SpHi,SP) ; 3
+			line_write(SpLo,SpHi,SP) ; 4
+			line_write(SpLo,SpHi,SP) ; 5
+			line_write(SpLo,SpHi,SP) ; 6
+			line_write(SpLo,SpHi,SP) ; 7
+			line_write(SpLo,SpHi,SP) ; 8
 		}
 	}
 
 	; draw new position
 	lw MarLo, pQUEUE_WRITE, MAR
 	mv MarHi, high_byte(pQUEUE_BASE)
-
-	; read to x
 	lw X, MAR
+	; main color, filled block
+	draw_big_pixel(main_color, 0xff)
 
-	position_to_mar_addr()
-
-	fn line_write(){
-		return {
-			; known offset to get to next line
-			add MarLo, 1<<6
-			adc MarHi, 0
-			sw_vram X, MAR
-		}
-	}
-
-	mv X, 0xff
-	sw_vram X, MAR
-	line_write() ; 2
-	line_write() ; 3
-	line_write() ; 4
-	line_write() ; 5
-	line_write() ; 6
-	line_write() ; 7
-	line_write() ; 8
-
-	; now erase last one
+	; check if apple was eaten
+	lw X, pAPPLE_WAS_EATEN, MAR
+	cmp X, 0
+	jnz apple_eaten, MAR
+	apple_not_eaten:
+	; now erase last one since no eat happened
 	lw MarLo, pQUEUE_READ, MAR
 	mv MarHi, high_byte(pQUEUE_BASE)
-
-	; read to x
 	lw X, MAR
+	; main color, empty block
+	draw_big_pixel(main_color, 0x00)
 
-	position_to_mar_addr()
-	mv X, 0b00000000
-	sw_vram X, MAR
-	line_write() ; 2
-	line_write() ; 3
-	line_write() ; 4
-	line_write() ; 5
-	line_write() ; 6
-	line_write() ; 7
-	line_write() ; 8
-
-	; get stack pointer back
-	load_stack_ptr()
-
-	; pop previous after erasing it
+	; not eaten, pop previous after erasing it in display
 	lw A, pQUEUE_READ, MAR
 	add A, 1
 	sw A, pQUEUE_READ, MAR
+
+	apple_eaten:
+	; eaten, don't pop queue
+	apple_return:
+
+	; no matter what, draw apple
+	lw X, pAPPLE, MAR
+	; draw design for apple
+	draw_big_pixel_helper()
+	let apple0 = 0b000001000
+	let apple1 = 0b000010000
+	let apple2 = 0b000111000
+	let apple3 = 0b001111100
+	let apple4 = 0b001111100
+	let apple5 = 0b001111100
+	let apple6 = 0b000111000
+	let apple7 = 0b000000000
+
+	let apple_color_red = 0b10010000
+	let apple_color_green = 0b01000000
+
+	mv X, apple0
+	sw_vram X, MAR
+	mv X, apple1
+	line_write(MarLo,MarHi,MAR) ; 2
+	mv X, apple2
+	line_write(MarLo,MarHi,MAR) ; 3
+	mv X, apple3
+	line_write(MarLo,MarHi,MAR) ; 4
+	mv X, apple4
+	line_write(MarLo,MarHi,MAR) ; 5
+	mv X, apple5
+	line_write(MarLo,MarHi,MAR) ; 6
+	mv X, apple6
+	line_write(MarLo,MarHi,MAR) ; 7
+	mv X, apple7
+	line_write(MarLo,MarHi,MAR) ; 8
+
+	mv X, apple_color_green
+	sw_vram X, SP
+	line_write(SpLo,SpHi,SP) ; 2
+	mv X, apple_color_red
+	line_write(SpLo,SpHi,SP) ; 3
+	line_write(SpLo,SpHi,SP) ; 4
+	line_write(SpLo,SpHi,SP) ; 5
+	line_write(SpLo,SpHi,SP) ; 6
+	line_write(SpLo,SpHi,SP) ; 7
+	line_write(SpLo,SpHi,SP) ; 8
+
+	; reset apple being eaten
+	mv A, 0
+	sw A, pAPPLE_WAS_EATEN, MAR
+
+	; get stack pointer back
+	load_stack_ptr()
 
 	pop MAR
 	jmp MAR
