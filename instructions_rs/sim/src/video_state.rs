@@ -27,11 +27,11 @@ impl VideoState {
     }
 
     pub fn create_surface_data(&self) -> Vec<u8> {
-        let mut data = Vec::new();
-
         let char_width = 40;
-        let width = char_width;
+        let width = char_width * 8;
         let height = 240;
+
+        let mut data: Vec<u8> = std::iter::repeat_n(0, width * height).collect::<Vec<_>>();
 
         for x in 0..40 {
             for y in 0..height {
@@ -42,8 +42,8 @@ impl VideoState {
                 let fg_color = (color_value >> 4) & 0xf;
 
                 for i in 0..8 {
-                    let char_on = char_value >> i != 0;
-                    data[(x + i) + y * width] = if char_on { bg_color } else { fg_color };
+                    let char_on = (char_value >> i) & 1 != 0;
+                    data[i + x * 8 + y * char_width] = if char_on { bg_color } else { fg_color };
                 }
             }
         }

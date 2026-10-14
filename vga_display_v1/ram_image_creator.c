@@ -79,7 +79,7 @@ void write_image_logisim() {
 void write_binary_image() {
   FILE *fptr;
   // Open a file in append mode
-  fptr = fopen("vga_rom.bin", "wb");
+  fptr = fopen("vga_test_image.bin", "wb");
 
   for (int addr = 0; addr < ram_size; addr++) {
     uint8_t curr = ram_contents[addr];

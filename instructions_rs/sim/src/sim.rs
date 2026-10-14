@@ -505,7 +505,7 @@ impl CpuState {
             data_rom: Rom::new(1 << 15),
             data_ram: Ram::new(1 << 15),
 
-            video: Arc::new(RwLock::new(VideoState::new(1 << 32))),
+            video: Arc::new(RwLock::new(VideoState::new(1 << 15))),
 
             alu: Alu::new(),
             keyboard: KeyboardRegister::new(),

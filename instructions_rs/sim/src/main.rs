@@ -5,7 +5,7 @@ use sim::{CpuState, DataRegister};
 
 use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
-use sdl3::pixels::{Color, PixelFormat};
+use sdl3::pixels::{Color, Palette, PixelFormat};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -21,8 +21,6 @@ enum VideoMessage {
     Halt,
 }
 
-fn get_texture() {}
-
 fn main() {
     // init cpu state
     let mut state = CpuState::new();
@@ -33,7 +31,7 @@ fn main() {
 
     let mut video_rom = Vec::new();
 
-    File::open("thing")
+    File::open("../../vga_display_v1/vga_test_image.bin")
         .unwrap()
         .read_to_end(&mut video_rom)
         .unwrap();
@@ -69,29 +67,27 @@ fn main() {
         let mut canvas = window.into_canvas();
 
         canvas.set_draw_color(Color::RGB(0, 255, 255));
-
         canvas.clear();
-
-        // draw image here
-        let width = 320;
-        let height = 240;
-        let mut surface_data = video.read().unwrap().create_surface_data();
-        let surface = Surface::from_data(
-            &mut surface_data,
-            width,
-            height,
-            width,
-            PixelFormat::INDEX2LSB,
-        )
-        .unwrap();
-        let texture_creator = canvas.texture_creator();
-        let texture = texture_creator
-            .create_texture_from_surface(surface)
-            .unwrap();
-
-        canvas.copy(&texture, None, None).unwrap();
-
         canvas.present();
+
+        let mut palette_colors = Vec::new();
+
+        for white in 0..=1 {
+            for g in 0..=1 {
+                for b in 0..=1 {
+                    for r in 0..=1 {
+                        palette_colors.push(Color::RGB(
+                            r * 128 + white * 128,
+                            g * 128 + white * 128,
+                            b * 128 + white * 128,
+                        ));
+                    }
+                }
+            }
+        }
+        println!("size of pallete: {}", palette_colors.len());
+
+        let palette = Palette::with_colors(&palette_colors).unwrap();
 
         let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -135,6 +131,31 @@ fn main() {
                 }
                 Err(TryRecvError::Empty) => {}
             }
+
+            // draw image here
+            let width = 320;
+            let height = 240;
+
+            let mut surface_data = video.read().unwrap().create_surface_data();
+            let mut surface = Surface::from_data(
+                &mut surface_data,
+                width,
+                height,
+                width,
+                PixelFormat::INDEX4LSB,
+            )
+            .unwrap();
+            surface.set_palette(&palette).unwrap();
+
+            let texture_creator = canvas.texture_creator();
+
+            // let surface2 = Surface::new(512, 512, PixelFormat::RGB24).unwrap();
+            //
+            let texture = texture_creator
+                .create_texture_from_surface(surface)
+                .unwrap();
+
+            canvas.copy(&texture, None, None).unwrap();
 
             canvas.present();
             ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
