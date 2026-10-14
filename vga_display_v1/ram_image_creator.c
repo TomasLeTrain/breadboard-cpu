@@ -76,8 +76,23 @@ void write_image_logisim() {
   }
 }
 
+void write_binary_image() {
+  FILE *fptr;
+  // Open a file in append mode
+  fptr = fopen("vga_rom.bin", "wb");
+
+  for (int addr = 0; addr < ram_size; addr++) {
+    uint8_t curr = ram_contents[addr];
+    fputc(curr, fptr);
+  }
+
+  // Close the file
+  fclose(fptr);
+}
+
 int main() {
   readCharBin();
   createTestBinary();
   write_image_logisim();
+  write_binary_image();
 }

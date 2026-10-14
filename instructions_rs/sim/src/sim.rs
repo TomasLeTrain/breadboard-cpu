@@ -5,12 +5,18 @@ macro_rules! println {
     }
 }
 
-use std::{fs::File, io::Read};
+use std::{
+    fs::File,
+    io::Read,
+    sync::{Arc, RwLock},
+};
 
 use opcode_gen::{
     diagnostic_from_addr, get_instruction_set, instructions::IstrSet, opcode::Opcode,
     output::Output,
 };
+
+use crate::VideoState;
 
 enum AluOp {
     Addition, // carry decided independently
@@ -463,6 +469,8 @@ pub struct CpuState {
 
     pub halt: bool,
 
+    pub video: Arc<RwLock<VideoState>>,
+
     pub bus_val: Option<u8>,
     pub addr_val: Option<u16>,
 
@@ -496,6 +504,8 @@ impl CpuState {
 
             data_rom: Rom::new(1 << 15),
             data_ram: Ram::new(1 << 15),
+
+            video: Arc::new(RwLock::new(VideoState::new(1 << 32))),
 
             alu: Alu::new(),
             keyboard: KeyboardRegister::new(),

@@ -1,10 +1,14 @@
 use assembler::parse_file;
+use sdl3::surface::Surface;
 use sdl3::sys::keycode::SDL_Keymod;
 use sim::{CpuState, DataRegister};
 
 use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
-use sdl3::pixels::Color;
+use sdl3::pixels::{Color, PixelFormat};
+use std::fs::File;
+use std::io::Read;
+use std::sync::Arc;
 use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
@@ -17,11 +21,24 @@ enum VideoMessage {
     Halt,
 }
 
+fn get_texture() {}
+
 fn main() {
     // init cpu state
     let mut state = CpuState::new();
 
+    let video = Arc::clone(&state.video);
+
     state.load_opcode_roms("../opcode_gen/rom0.bin", "../opcode_gen/rom1.bin");
+
+    let mut video_rom = Vec::new();
+
+    File::open("thing")
+        .unwrap()
+        .read_to_end(&mut video_rom)
+        .unwrap();
+
+    video.write().unwrap().load_image(video_rom);
 
     let asm_context = parse_file("src/test_program.asm");
 
@@ -52,8 +69,30 @@ fn main() {
         let mut canvas = window.into_canvas();
 
         canvas.set_draw_color(Color::RGB(0, 255, 255));
+
         canvas.clear();
+
+        // draw image here
+        let width = 320;
+        let height = 240;
+        let mut surface_data = video.read().unwrap().create_surface_data();
+        let surface = Surface::from_data(
+            &mut surface_data,
+            width,
+            height,
+            width,
+            PixelFormat::INDEX2LSB,
+        )
+        .unwrap();
+        let texture_creator = canvas.texture_creator();
+        let texture = texture_creator
+            .create_texture_from_surface(surface)
+            .unwrap();
+
+        canvas.copy(&texture, None, None).unwrap();
+
         canvas.present();
+
         let mut event_pump = sdl_context.event_pump().unwrap();
 
         let mut i = 0;
@@ -62,12 +101,20 @@ fn main() {
             canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
             canvas.clear();
 
+            let mut some_keyboard = false;
+
             for scancode in event_pump.keyboard_state().pressed_scancodes() {
                 let keycode = Keycode::from_scancode(scancode, SDL_Keymod::NONE, false).unwrap();
                 if keycode.to_ll().0 <= 255 {
                     let code = keycode.to_ll().0 as u8;
                     let _ = video_send.send(VideoMessage::KeyboardUpdate(code));
+                    some_keyboard = true;
                 }
+            }
+
+            // nothing valid being held down, send 0 to signal
+            if !some_keyboard {
+                let _ = video_send.send(VideoMessage::KeyboardUpdate(0));
             }
 
             for event in event_pump.poll_iter() {
