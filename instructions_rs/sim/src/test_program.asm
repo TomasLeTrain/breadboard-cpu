@@ -38,15 +38,24 @@ start {
 	lda SP, get_STACK_START()
 
 	; start the queue state
+	; start with two in queue
 	mv A, 0
 	sw A, pQUEUE_READ, MAR
-	mv A, 0
+	; mv A, 0
+	; sw A, pQUEUE_WRITE, MAR
+	; add second position at (2, 3)
+	; mv A, (2) | (3 << 4)
+	; sw A, pQUEUE_BASE, MAR
+
+	mv A, 1
 	sw A, pQUEUE_WRITE, MAR
 
-	; add initial position at (2, 2)
-	; mv A, 0b0010 | (0b0010 << 4)
-	mv A, 0b1111 | (0b0010 << 4)
-	; 00100010
+	; add head position at (3, 3)
+	mv A, (3) | (3 << 4)
+	sw A, pQUEUE_BASE+1, MAR
+
+	; add second position at (2, 3)
+	mv A, (2) | (3 << 4)
 	sw A, pQUEUE_BASE, MAR
 
 	mv A, 1
@@ -60,9 +69,12 @@ start {
 
 	; main loop
 	loop { 
+		let speed_dial = 64
+		; let speed_dial = 255
+
 		; delay since its too fast
 		; NOTE: Z not used in update_input loop, must keep that way!
-		mv Z, 128
+		mv Z, speed_dial
 		nop_loop {
 			; keep updating input while waiting
 			jsr(update_input)
@@ -161,7 +173,8 @@ clear_screen {
 	}
 
 	; clear all colors
-	clear_range_vram(0b11110001, 0)
+	; clear_range_vram(0b11110001, 0)
+	clear_range_vram(0b11000000, 0)
 	; clear all characters
 	; clear_range_vram(0b11111111, 1 << 14)
 	clear_range_vram(0b00000000, 1 << 14)
@@ -177,13 +190,13 @@ clear_screen {
 update_input {
 	mv X, Keyb
 
-	; W = 119
-	; A =  97
-	; S = 115
-	; D = 100
+	let W_KEY = 119
+	let A_KEY =  97
+	let S_KEY = 115
+	let D_KEY = 100
 
 	; if left -> X -= 1
-	cmp X, 97
+	cmp X, A_KEY
 	jeq left_eq, MAR
 	jmp left_ret, MAR
 	left_eq:
@@ -195,7 +208,7 @@ update_input {
 	left_ret:
 
 	; if right -> X += 1
-	cmp X, 100
+	cmp X, D_KEY
 	jeq right_eq, MAR
 	jmp right_ret, MAR
 	right_eq:
@@ -206,7 +219,7 @@ update_input {
 	right_ret:
 
 	; if down -> Y += 1
-	cmp X, 115
+	cmp X, S_KEY
 	jeq down_eq, MAR
 	jmp down_ret, MAR
 	down_eq:
@@ -217,7 +230,7 @@ update_input {
 	down_ret:
 
 	; if up -> Y -= 1
-	cmp X, 119
+	cmp X, W_KEY
 	jeq up_eq, MAR
 	jmp up_ret, MAR
 	up_eq:
@@ -252,8 +265,13 @@ update_state {
 	; calculate new position
 	lw Z, pDIR_X, MAR
 	add X, Z
+	; mods the position
+	and X, 0b1111
+
 	lw Z, pDIR_Y, MAR
 	add Y, Z
+	; mods the position
+	and Y, 0b1111
 
 	; shift left again
 	shl Y
@@ -296,27 +314,13 @@ update_screen {
 
 			; shift right 4 times, add z to it, then shift back up
 			; only shifts y once to have it be y << 3 = y * 8, so the snake moves in uniform 8 by 8 squares
-			shr Y
-			; shr Y
-			; shr Y
-			; shr Y
-			add Y, Z
 
 			; TODO: in the future could implement 16-bit shifting?
-			; y is already shifted by 4, but need shifted by 6
-			; can do by:
-			; y << 2 = (y + y) + (y + y)
-			; final addr is
-			; base_addr + (y << 2) + x
-			lda SP, 0
-
+			; shifted 5 times, in theory is 6 but y is implicitly shifted by 4 already (want y to be by three originally to move in multiples of 8)
 			; Sp = y
 			mv SpLo, Y
 			mv SpHi, 0
 
-			; Sp << 1
-			add SpLo, SpLo
-			adc SpHi, SpHi
 			; Sp << 1
 			add SpLo, SpLo
 			adc SpHi, SpHi
@@ -347,37 +351,51 @@ update_screen {
 		}
 	}
 
-	; loop index
-	mv Z, 8
+	; draw new position
+	lw MarLo, pQUEUE_WRITE, MAR
+	mv MarHi, high_byte(pQUEUE_BASE)
 
-	loop {
-		; draw new position
-		lw MarLo, pQUEUE_WRITE, MAR
-		mv MarHi, high_byte(pQUEUE_BASE)
+	; read to x
+	lw X, MAR
 
-		; read to x
-		lw X, MAR
+	position_to_mar_addr()
 
-		position_to_mar_addr()
-		; mv X, 0b01010101
-		mv X, 0xff
-		sw_vram X, MAR
-
-		; now erase last one
-		lw MarLo, pQUEUE_READ, MAR
-		mv MarHi, high_byte(pQUEUE_BASE)
-
-		; read to x
-		lw X, MAR
-
-		position_to_mar_addr()
-		mv X, 0b00000000
-		sw_vram X, MAR
-	
-		sub Z, 1
-		lda MAR, loop
-		jnz Z, MAR
+	fn line_write(){
+		return {
+			; known offset to get to next line
+			add MarLo, 1<<6
+			adc MarHi, 0
+			sw_vram X, MAR
+		}
 	}
+
+	mv X, 0xff
+	sw_vram X, MAR
+	line_write() ; 2
+	line_write() ; 3
+	line_write() ; 4
+	line_write() ; 5
+	line_write() ; 6
+	line_write() ; 7
+	line_write() ; 8
+
+	; now erase last one
+	lw MarLo, pQUEUE_READ, MAR
+	mv MarHi, high_byte(pQUEUE_BASE)
+
+	; read to x
+	lw X, MAR
+
+	position_to_mar_addr()
+	mv X, 0b00000000
+	sw_vram X, MAR
+	line_write() ; 2
+	line_write() ; 3
+	line_write() ; 4
+	line_write() ; 5
+	line_write() ; 6
+	line_write() ; 7
+	line_write() ; 8
 
 	; get stack pointer back
 	load_stack_ptr()
