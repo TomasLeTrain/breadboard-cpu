@@ -5,8 +5,11 @@
 ; - draw on screen
 ; - player input
 
-; where the current snake direction gets stored
-let pDIR = 0x9000
+; where the current x direction gets stored
+let pDIR_X = 0x9001
+; where the current y direction gets stored
+let pDIR_Y = 0x9002
+
 ; game runs until == 0
 let pHALT = 0x8080
 
@@ -41,19 +44,37 @@ start {
 	sw A, pQUEUE_WRITE, MAR
 
 	; add initial position at (2, 2)
-	mv A, 0b0010 | (0b0010 << 4)
+	; mv A, 0b0010 | (0b0010 << 4)
+	mv A, 0b1111 | (0b0010 << 4)
+	; 00100010
 	sw A, pQUEUE_BASE, MAR
 
 	mv A, 1
 	sw A, pHALT, MAR
 
+	mv A, 0
+	sw A, pDIR_X, MAR
+	sw A, pDIR_Y, MAR
+
 	jsr(clear_screen)
 
 	; main loop
 	loop { 
-		; jsr(update_input)
-		; jsr(update_state)
-		; jsr(update_screen)
+		; delay since its too fast
+		; NOTE: Z not used in update_input loop, must keep that way!
+		mv Z, 128
+		nop_loop {
+			; keep updating input while waiting
+			jsr(update_input)
+
+			sub Z, 1
+			lda MAR, nop_loop
+			jnz Z, MAR
+		}
+	
+		jsr(update_state)
+		jsr(update_screen)
+
 
 		lw A, pHALT, MAR
 		cmp A, 0
@@ -119,7 +140,7 @@ clear_screen {
 
 			lda SP, start_addr+1
 
-			; (x + 1) | (y << 6)
+			; addr = (x + 1) | (y << 6)
 
 			y_loop {
 				; clear line
@@ -140,9 +161,10 @@ clear_screen {
 	}
 
 	; clear all colors
-	clear_range_vram(0b1001101, 0)
+	clear_range_vram(0b11110001, 0)
 	; clear all characters
-	clear_range_vram(0b1001101, 1 << 14)
+	; clear_range_vram(0b11111111, 1 << 14)
+	clear_range_vram(0b00000000, 1 << 14)
 
 	; get stack pointer back
 	load_stack_ptr()
@@ -153,9 +175,57 @@ clear_screen {
 }
 
 update_input {
-	; TODO: actually get input
+	mv X, Keyb
+
+	; W = 119
+	; A =  97
+	; S = 115
+	; D = 100
+
+	; if left -> X -= 1
+	cmp X, 97
+	jeq left_eq, MAR
+	jmp left_ret, MAR
+	left_eq:
+	; TODO: fix negation parsing
+	mv A, 255
+	sw A, pDIR_X, MAR
+	mv A, 0
+	sw A, pDIR_Y, MAR
+	left_ret:
+
+	; if right -> X += 1
+	cmp X, 100
+	jeq right_eq, MAR
+	jmp right_ret, MAR
+	right_eq:
 	mv A, 1
-	sw A, pDIR, MAR
+	sw A, pDIR_X, MAR
+	mv A, 0
+	sw A, pDIR_Y, MAR
+	right_ret:
+
+	; if down -> Y += 1
+	cmp X, 115
+	jeq down_eq, MAR
+	jmp down_ret, MAR
+	down_eq:
+	mv A, 1
+	sw A, pDIR_Y, MAR
+	mv A, 0
+	sw A, pDIR_X, MAR
+	down_ret:
+
+	; if up -> Y -= 1
+	cmp X, 119
+	jeq up_eq, MAR
+	jmp up_ret, MAR
+	up_eq:
+	mv A, 255
+	sw A, pDIR_Y, MAR
+	mv A, 0
+	sw A, pDIR_X, MAR
+	up_ret:
 
 	pop MAR
 	jmp MAR
@@ -169,62 +239,21 @@ update_state {
 	lw X, MAR
 	mv Y, X
 
-	; mask last 4 bits
+	; mask first 4 bits
 	and X, 0b00001111
 
-	; mask first 4 bits
+	; mask last 4 bits
 	and Y, 0b11110000
 	shr Y
 	shr Y
 	shr Y
 	shr Y
 
-	lw Z, pDIR, MAR
-
-	; W = 119
-	; A =  97
-	; S = 115
-	; D = 100
-
-	; if left -> X -= 1
-	cmp Z, 97
-	jeq left_eq, MAR
-	jmp left_ret, MAR
-	left_eq:
-	sub X, 1
-	left_ret:
-
-	; if right -> X += 1
-	cmp Z, 100
-	jeq right_eq, MAR
-	jmp right_ret, MAR
-	right_eq:
-	add X, 1
-	right_ret:
-
-	; if down -> Y -= 1
-	cmp Z, 115
-	jeq down_eq, MAR
-	jmp down_ret, MAR
-	down_eq:
-	sub Y, 1
-	down_ret:
-
-	; if up -> Y += 1
-	cmp Z, 119
-	jeq up_eq, MAR
-	jmp up_ret, MAR
-	up_eq:
-	sub Y, 1
-	up_ret:
-
-	; increase write pointer, and write to it
-	lw A, pQUEUE_WRITE, MAR
-	add A, 1
-	sw A, pQUEUE_WRITE, MAR
-
-	mv MarHi, high_byte(pQUEUE_BASE)
-	mv MarLo, A
+	; calculate new position
+	lw Z, pDIR_X, MAR
+	add X, Z
+	lw Z, pDIR_Y, MAR
+	add Y, Z
 
 	; shift left again
 	shl Y
@@ -235,21 +264,128 @@ update_state {
 	; make new byte
 	or X, Y
 
-	; store to queue
-	sw X, MAR
-
-	; pop previous
-	lw A, pQUEUE_READ, MAR
+	; increase write pointer, and write to it
+	lw A, pQUEUE_WRITE, MAR
 	add A, 1
-	sw A, pQUEUE_READ, MAR
+	sw A, pQUEUE_WRITE, MAR
+
+	; store to queue
+	mv MarHi, high_byte(pQUEUE_BASE)
+	mv MarLo, A
+	sw X, MAR
 
 	pop MAR
 	jmp MAR
 }
 
 update_screen {
-	lw MarLo, pQUEUE_READ, MAR
-	mv MarHi, high_byte(pQUEUE_BASE)
+	; save stack ptr since it gets used here
+	save_stack_ptr()
+
+	; assumes X has position
+	; leaves MAR with the desired position
+	fn position_to_mar_addr(){
+		return {
+			; copy value to Y as well
+			mv Y, X
+
+			; mask first 4 bits
+			and X, 0b00001111
+			; mask last 4 bits
+			and Y, 0b11110000
+
+			; shift right 4 times, add z to it, then shift back up
+			; only shifts y once to have it be y << 3 = y * 8, so the snake moves in uniform 8 by 8 squares
+			shr Y
+			; shr Y
+			; shr Y
+			; shr Y
+			add Y, Z
+
+			; TODO: in the future could implement 16-bit shifting?
+			; y is already shifted by 4, but need shifted by 6
+			; can do by:
+			; y << 2 = (y + y) + (y + y)
+			; final addr is
+			; base_addr + (y << 2) + x
+			lda SP, 0
+
+			; Sp = y
+			mv SpLo, Y
+			mv SpHi, 0
+
+			; Sp << 1
+			add SpLo, SpLo
+			adc SpHi, SpHi
+			; Sp << 1
+			add SpLo, SpLo
+			adc SpHi, SpHi
+			; Sp << 1
+			add SpLo, SpLo
+			adc SpHi, SpHi
+			; Sp << 1
+			add SpLo, SpLo
+			adc SpHi, SpHi
+			; Sp << 1
+			add SpLo, SpLo
+			adc SpHi, SpHi
+			; Sp << 1
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			; must write to 8 blocks most likely, loop?
+			; MAR = base_addr + 1
+			lda MAR, (1 << 14) + 1
+			
+			; MAR += Sp
+			add MarLo, SpLo
+			adc MarHi, SpHi
+
+			; MAR += x
+			add MarLo, X
+			adc MarHi, 0
+		}
+	}
+
+	; loop index
+	mv Z, 8
+
+	loop {
+		; draw new position
+		lw MarLo, pQUEUE_WRITE, MAR
+		mv MarHi, high_byte(pQUEUE_BASE)
+
+		; read to x
+		lw X, MAR
+
+		position_to_mar_addr()
+		; mv X, 0b01010101
+		mv X, 0xff
+		sw_vram X, MAR
+
+		; now erase last one
+		lw MarLo, pQUEUE_READ, MAR
+		mv MarHi, high_byte(pQUEUE_BASE)
+
+		; read to x
+		lw X, MAR
+
+		position_to_mar_addr()
+		mv X, 0b00000000
+		sw_vram X, MAR
+	
+		sub Z, 1
+		lda MAR, loop
+		jnz Z, MAR
+	}
+
+	; get stack pointer back
+	load_stack_ptr()
+
+	; pop previous after erasing it
+	lw A, pQUEUE_READ, MAR
+	add A, 1
+	sw A, pQUEUE_READ, MAR
 
 	pop MAR
 	jmp MAR

@@ -60,8 +60,8 @@ fn main() {
         let video_subsystem = sdl_context.video().unwrap();
 
         let window = video_subsystem
-            // .window("sim", 640 * 2, 480 * 2)
-            .window("sim", 640, 480)
+            .window("sim", 640 * 2, 480 * 2)
+            // .window("sim", 640, 480)
             .position_centered()
             .build()
             .unwrap();
