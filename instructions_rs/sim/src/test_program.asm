@@ -31,6 +31,12 @@ fn get_STACK_SAVE_ADDR(){
 	return  STACK_SAVE_ADDR
 }
 
+fn get_BASE_GAME_POSITION(){
+	let base_game_position_x = 12
+	let base_game_position_y = 56
+	let base_game_position = (base_game_position_x) | (base_game_position_y << 6)
+	return base_game_position
+}
 
 
 start {
@@ -117,24 +123,8 @@ clear_screen {
 	; sp ptr gets used as general pointer here, must save beforehand
 	save_stack_ptr()
 
-	fn clear_10_pixels(){
+	fn clear_2_pixels(){
 		return {
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
 			sw_vram Z, SP
 			inc SP
 			sw_vram Z, SP
@@ -142,13 +132,23 @@ clear_screen {
 		}
 	}
 
+	fn clear_10_pixels(){
+		return {
+			clear_2_pixels()
+			clear_2_pixels()
+			clear_2_pixels()
+			clear_2_pixels()
+			clear_2_pixels()
+		}
+	}
+
 	; clears 240 * 40 pixels with given value, at given addr
-	fn clear_range_vram(clear_val: u8, start_addr: Address){
+	fn clear_range_vram(clear_val: u8, start_addr: Address, num_lines: u8){
 		return {
 			; value that gets loaded as character everywhere
 			mv Z, clear_val
 
-			mv Y, 240
+			mv Y, num_lines
 
 			lda SP, start_addr+1
 
@@ -156,28 +156,62 @@ clear_screen {
 
 			y_loop {
 				; clear line
+				; TODO: make the number of cleared pixels adjustable
 				clear_10_pixels()
 				clear_10_pixels()
 				clear_10_pixels()
 				clear_10_pixels()
 
 				; must add offset to SP to get to next line
-				add SpLo, ((1<<6) + 1) - 41
+				add SpLo, ((1<<6) + 1) - (40+1)
 				adc SpHi, 0
 
 				sub Y, 1
 				lda MAR, y_loop
 				jnz MAR
 			}
+		}
 	}
+
+	fn clear_range_vram_16x(clear_val: u8, start_addr: Address, num_lines: u8){
+		return {
+			; value that gets loaded as character everywhere
+			mv Z, clear_val
+
+			mv Y, num_lines
+
+			lda SP, start_addr+1
+
+			y_loop {
+				; clear line
+				; TODO: make the number of cleared pixels adjustable
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+
+				; must add offset to SP to get to next line
+				add SpLo, ((1<<6) + 1) - (16+1)
+				adc SpHi, 0
+
+				sub Y, 1
+				lda MAR, y_loop
+				jnz MAR
+			}
+		}
 	}
 
 	; clear all colors
-	; clear_range_vram(0b11110001, 0)
-	clear_range_vram(0b11000000, 0)
+	clear_range_vram(0b11000100, 0, 240)
 	; clear all characters
-	; clear_range_vram(0b11111111, 1 << 14)
-	clear_range_vram(0b00000000, 1 << 14)
+	clear_range_vram(0b00000000, 1 << 14, 240)
+
+	; make valid snake positions a different color
+	clear_range_vram_16x(0b11000000, get_BASE_GAME_POSITION(), 8 * 16 - 1)
 
 	; get stack pointer back
 	load_stack_ptr()
@@ -339,7 +373,7 @@ update_screen {
 
 			; must write to 8 blocks most likely, loop?
 			; MAR = base_addr + 1
-			lda MAR, (1 << 14) + 1
+			lda MAR, get_BASE_GAME_POSITION() + 1 + (1 << 14)
 			
 			; MAR += Sp
 			add MarLo, SpLo
