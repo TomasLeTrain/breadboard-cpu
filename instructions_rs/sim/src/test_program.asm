@@ -12,27 +12,41 @@ jmp start, MAR
 let pDIR_X = 0x9001
 ; where the current y direction gets stored
 let pDIR_Y = 0x9002
-
 ; game runs until == 0
-let pHALT = 0x8080
+let pHALT = 0x9003
 
 ; upper byte of queue
 let pQUEUE_BASE = 0xA000
 
 ; read pointer - lower byte of whole addr
-let pQUEUE_READ = 0x9020
+let pQUEUE_READ = 0x9100
 ; write pointer - lower byte of whole addr
-let pQUEUE_WRITE = 0x9040
-
+let pQUEUE_WRITE = 0x9102
 ; apple pointer - where position of apple gets stored
-let pAPPLE = 0x9060
-
+let pAPPLE = 0x9104
 ; apple eaten pointer - is non-zero if apple was eaten, reset by display update
-let pAPPLE_WAS_EATEN = 0x9080
+let pAPPLE_WAS_EATEN = 0x9106
+
+; 8 bytes in size
+let pHEAD_DOWN = 0x9200
+let pHEAD_UP = pHEAD_DOWN + 8
+let pHEAD_LEFT = pHEAD_UP + 8
+let pHEAD_RIGHT = pHEAD_LEFT + 8
+
+let pLONG_DOWN = pHEAD_RIGHT + 8
+let pLONG_UP = pLONG_DOWN + 8
+let pLONG_LEFT = pLONG_UP + 8
+let pLONG_RIGHT = pLONG_LEFT + 8
+
+
+; snake character address scheme (msb to lsb):
+; [head/1bit][y_dir/2bits][x_dir/2bits][y position/3bits] -> 3*3*2 = 18 characters, 144 bytes
+; TODO: not program 18 different combinations manually lol
+
+
 
 let background_color = 0b11000100
 let main_color = 0b11000000
-
 
 ; TODO: add global symbols so they can be used in functions directly
 fn get_STACK_START(){
@@ -51,8 +65,97 @@ fn get_BASE_GAME_POSITION(){
 	return base_game_position
 }
 
+create_pixel_data {
+	fn save_value(addr: Address, offset: Address, value: u8){
+		return {
+			mv A, value
+			sw A, addr + offset, MAR
+		}
+	}
+
+	; head connections
+	save_value(pHEAD_DOWN, 0, 0b00011000)
+	save_value(pHEAD_DOWN, 1, 0b00011000)
+	save_value(pHEAD_DOWN, 2, 0b00011000)
+	save_value(pHEAD_DOWN, 3, 0b00011000)
+	save_value(pHEAD_DOWN, 4, 0b00111100)
+	save_value(pHEAD_DOWN, 5, 0b00111100)
+	save_value(pHEAD_DOWN, 6, 0b00111100)
+	save_value(pHEAD_DOWN, 7, 0b00011000)
+
+	save_value(pHEAD_UP, 0, 0b00011000)
+	save_value(pHEAD_UP, 1, 0b00111100)
+	save_value(pHEAD_UP, 2, 0b00111100)
+	save_value(pHEAD_UP, 3, 0b00111100)
+	save_value(pHEAD_UP, 4, 0b00011000)
+	save_value(pHEAD_UP, 5, 0b00011000)
+	save_value(pHEAD_UP, 6, 0b00011000)
+	save_value(pHEAD_UP, 7, 0b00011000)
+
+	save_value(pHEAD_LEFT, 0, 0b00000000)
+	save_value(pHEAD_LEFT, 1, 0b00000000)
+	save_value(pHEAD_LEFT, 2, 0b01110000)
+	save_value(pHEAD_LEFT, 3, 0b11111111)
+	save_value(pHEAD_LEFT, 4, 0b11111111)
+	save_value(pHEAD_LEFT, 5, 0b01110000)
+	save_value(pHEAD_LEFT, 6, 0b00000000)
+	save_value(pHEAD_LEFT, 7, 0b00000000)
+
+	save_value(pHEAD_RIGHT, 0, 0b00000000)
+	save_value(pHEAD_RIGHT, 1, 0b00000000)
+	save_value(pHEAD_RIGHT, 2, 0b00001110)
+	save_value(pHEAD_RIGHT, 3, 0b11111111)
+	save_value(pHEAD_RIGHT, 4, 0b11111111)
+	save_value(pHEAD_RIGHT, 5, 0b00001110)
+	save_value(pHEAD_RIGHT, 6, 0b00000000)
+	save_value(pHEAD_RIGHT, 7, 0b00000000)
+
+	; long connections
+	save_value(pLONG_DOWN, 0, 0b00011000)
+	save_value(pLONG_DOWN, 1, 0b00011000)
+	save_value(pLONG_DOWN, 2, 0b00011000)
+	save_value(pLONG_DOWN, 3, 0b00011000)
+	save_value(pLONG_DOWN, 4, 0b00011000)
+	save_value(pLONG_DOWN, 5, 0b00011000)
+	save_value(pLONG_DOWN, 6, 0b00011000)
+	save_value(pLONG_DOWN, 7, 0b00011000)
+
+	save_value(pLONG_UP, 0, 0b00011000)
+	save_value(pLONG_UP, 1, 0b00011000)
+	save_value(pLONG_UP, 2, 0b00011000)
+	save_value(pLONG_UP, 3, 0b00011000)
+	save_value(pLONG_UP, 4, 0b00011000)
+	save_value(pLONG_UP, 5, 0b00011000)
+	save_value(pLONG_UP, 6, 0b00011000)
+	save_value(pLONG_UP, 7, 0b00011000)
+
+	save_value(pLONG_LEFT, 0, 0b00000000)
+	save_value(pLONG_LEFT, 1, 0b00000000)
+	save_value(pLONG_LEFT, 2, 0b00000000)
+	save_value(pLONG_LEFT, 3, 0b11111111)
+	save_value(pLONG_LEFT, 4, 0b11111111)
+	save_value(pLONG_LEFT, 5, 0b00000000)
+	save_value(pLONG_LEFT, 6, 0b00000000)
+	save_value(pLONG_LEFT, 7, 0b00000000)
+
+	save_value(pLONG_RIGHT, 0, 0b00000000)
+	save_value(pLONG_RIGHT, 1, 0b00000000)
+	save_value(pLONG_RIGHT, 2, 0b00000000)
+	save_value(pLONG_RIGHT, 3, 0b11111111)
+	save_value(pLONG_RIGHT, 4, 0b11111111)
+	save_value(pLONG_RIGHT, 5, 0b00000000)
+	save_value(pLONG_RIGHT, 6, 0b00000000)
+	save_value(pLONG_RIGHT, 7, 0b00000000)
+
+	; return
+	pop MAR
+	jmp MAR
+}
+
 
 init_state {
+	jsr(create_pixel_data)
+
 	; start the queue state
 	; start with two in queue
 	mv A, 0
@@ -99,7 +202,7 @@ start {
 	; main loop
 	loop { 
 		; let speed_dial = 1
-		let speed_dial = 100
+		let speed_dial = 120
 
 		; delay since its too fast
 		; NOTE: Z not used in update_input loop, must keep that way!
@@ -477,9 +580,8 @@ update_screen {
 	; save stack ptr since it gets used here
 	save_stack_ptr()
 
-
 	; draws pixel with given character pattern at position stored in X
-	fn draw_big_pixel_helper(){
+	fn setup_vram_addr(){
 		return {
 			; copy value to Y as well
 			mv Y, X
@@ -543,18 +645,40 @@ update_screen {
 		}
 	}
 
-	fn draw_big_pixel(color: u8, character: u8){
+	fn draw_snake_pixel(color: u8, character_addr: Address){
 		return {
-			draw_big_pixel_helper()
-			mv X, character
+			setup_vram_addr()
+			; save SP to Y and Z, to save it only for the body below
+			mv Y, SpLo
+			mv Z, SpHi
+
+			lw X, character_addr, SP
 			sw_vram X, MAR
+			inc SP
+			lw X, SP
 			line_write(MarLo,MarHi,MAR) ; 2
+			inc SP
+			lw X, SP
 			line_write(MarLo,MarHi,MAR) ; 3
+			inc SP
+			lw X, SP
 			line_write(MarLo,MarHi,MAR) ; 4
+			inc SP
+			lw X, SP
 			line_write(MarLo,MarHi,MAR) ; 5
+			inc SP
+			lw X, SP
 			line_write(MarLo,MarHi,MAR) ; 6
+			inc SP
+			lw X, SP
 			line_write(MarLo,MarHi,MAR) ; 7
+			inc SP
+			lw X, SP
 			line_write(MarLo,MarHi,MAR) ; 8
+
+			; restore SP to Y and Z, to save it only for the body below
+			mv SpLo, Y
+			mv SpHi, Z
 
 			mv X, color
 			sw_vram X, SP
@@ -573,7 +697,7 @@ update_screen {
 	mv MarHi, high_byte(pQUEUE_BASE)
 	lw X, MAR
 	; main color, filled block
-	draw_big_pixel(main_color, 0xff)
+	draw_snake_pixel(main_color, pHEAD_DOWN)
 
 	; check if apple was eaten
 	lw X, pAPPLE_WAS_EATEN, MAR
@@ -585,7 +709,20 @@ update_screen {
 	mv MarHi, high_byte(pQUEUE_BASE)
 	lw X, MAR
 	; main color, empty block
-	draw_big_pixel(main_color, 0x00)
+	draw_snake_pixel(main_color, pLONG_DOWN)
+
+; aout value Some(41d) from PC
+; rom read: Some(f) from 41d
+; low to high clk
+; load f into IR2
+; high to low clk
+; opcode_addr: 52be
+; load e1 into OPCODE_LATCH1
+; load 8b into OPCODE_LATCH2
+; increment PC
+; aout value Some(a002) from SP
+; ram read None from 2002
+; low to high clk
 
 	; not eaten, pop previous after erasing it in display
 	lw A, pQUEUE_READ, MAR
@@ -599,7 +736,7 @@ update_screen {
 	; no matter what, draw apple
 	lw X, pAPPLE, MAR
 	; draw design for apple
-	draw_big_pixel_helper()
+	setup_vram_addr()
 	let apple0 = 0b000001000
 	let apple1 = 0b000010000
 	let apple2 = 0b000111000
