@@ -84,7 +84,7 @@ pub fn parse_source(source_str: &str, source: &mut ParseContext) -> Result<Ast> 
     let mut program = Ast::new();
 
     let pairs = AssemblyParser::parse(Rule::Program, source_str)
-        .map_err(|e| ParseError::from_pest(e, source.source))?;
+        .map_err(|e| ParseError::from_pest(e, source))?;
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {

@@ -25,10 +25,7 @@ pub struct NamedSourceFile {
 
 impl NamedSourceFile {
     pub fn new(source: String, file_name: String) -> Self {
-        Self {
-            source,
-            file_name,
-        }
+        Self { source, file_name }
     }
 
     pub fn source_str(&self) -> &str {
@@ -61,7 +58,7 @@ impl MultiFileSource {
     }
 
     // returns global (start, end)
-    fn to_global_span(
+    pub fn to_global_span(
         &self,
         local_start: usize,
         local_end: usize,
@@ -81,7 +78,7 @@ impl MultiFileSource {
     }
 
     // returns local source and local span (start, end)
-    fn get_local_source<'a>(
+    pub fn get_local_source<'a>(
         &'a self,
         span: &AstSpan,
     ) -> Result<(&'a String, (usize, usize)), MietteError> {
@@ -181,7 +178,6 @@ impl From<&AstSpan> for SourceSpan {
 impl Debug for AstSpan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AstSpan")
-            // .field("str", &self.get_str())
             .field("range", &format!("{}..{}", self.start, self.end))
             .finish()
     }
@@ -189,7 +185,6 @@ impl Debug for AstSpan {
 
 impl AstSpan {
     pub fn new(local_start: usize, local_end: usize, source: &ParseContext) -> Self {
-        // TODO: pass in source_idx
         let (start, end) = source
             .inner()
             .to_global_span(local_start, local_end, source.source_idx())
@@ -231,10 +226,6 @@ impl AstSpan {
         // already a global span
         SourceSpan::new(self.start().into(), self.len())
     }
-
-    // pub fn to_miette_source_code(&self) -> MultiFileSource {
-    //     // (*self.source).clone()
-    // }
 
     pub fn get_str<'a>(&self, source: &'a Source) -> &'a str {
         let (local_source, local_span) = source.get_local_source(self).unwrap();

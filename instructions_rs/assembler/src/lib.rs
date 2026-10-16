@@ -29,11 +29,9 @@ use crate::{
 
 pub fn parse_string(string_source: String) -> Result<AsmGenContext> {
     let file_path = "string".to_string();
-    let mut source =
-        MultiFileSource::new(vec![NamedSourceFile::new(string_source.clone(), file_path)]);
+    let source = MultiFileSource::new(vec![NamedSourceFile::new(string_source.clone(), file_path)]);
 
-    // TODO: change for source index to avoid copies
-    parse_source(&string_source, &mut source)
+    parse_source(&string_source, source)
 }
 
 pub fn parse_file(file_path_str: &str) -> Result<AsmGenContext> {
@@ -42,12 +40,12 @@ pub fn parse_file(file_path_str: &str) -> Result<AsmGenContext> {
         .into_diagnostic()
         .wrap_err("Failed reading file to parse")?;
 
-    let mut source = MultiFileSource::new(vec![NamedSourceFile::new(file.clone(), file_path)]);
-    parse_source(&file, &mut source)
+    let source = MultiFileSource::new(vec![NamedSourceFile::new(file.clone(), file_path)]);
+    parse_source(&file, source)
 }
 
-fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGenContext> {
-    let mut parse_ctx = ParseContext::new(source);
+fn parse_source(source_str: &str, mut source: MultiFileSource) -> Result<AsmGenContext> {
+    let mut parse_ctx = ParseContext::new(&mut source);
 
     let mut program = parser::parse_source(source_str, &mut parse_ctx)
         .map_err(|error| {
@@ -80,10 +78,7 @@ fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGen
 
     // println!("initial: {:#?}", program);
     types::typecheck(&mut program, &mut global_symbols)
-        .map_err(|error| {
-            // And this code provides the source code for inner error
-            error.with_source_code(source.clone())
-        })
+        .map_err(|error| error.with_source_code(source.clone()))
         .wrap_err("Typechecking failed.")?;
 
     let mut directives = HashSet::new();
@@ -114,23 +109,23 @@ fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGen
 
     // println!("before macro eval: {:#?}", program);
     eval::eval_program(&mut program, &mut valued_symbols)
-        .map_err(|error| {
-            // And this code provides the source code for inner error
-            error.with_source_code(source.clone())
-        })
+        .map_err(|error| error.with_source_code(source.clone()))
         .wrap_err("Failed to evaluate program")?;
     // println!("after macro eval: {:#?}", program);
 
     let all_istrs: Vec<Arc<Instruction>> =
         get_instruction_list().into_iter().map(Arc::new).collect();
+
     let istr_lookup = gen_instruction_lookup_table(&all_istrs)
         .wrap_err("Failed generating instruction lookup table")?;
 
     istr_resolver::resolve_instructions(&mut program, &istr_lookup)
+        .map_err(|error| error.with_source_code(source.clone()))
         .wrap_err("Failed to resolve instructions")?;
     // println!("after instructions: {:#?}", program);
 
     address_alloc::allocate_adresses(&mut program, &mut AllocationContext::new())
+        .map_err(|error| error.with_source_code(source.clone()))
         .wrap_err("Failed to allocate addresses")?;
     // println!("after addresses: {:#?}", program);
 
@@ -156,7 +151,9 @@ fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGen
     }
     // println!("{:#?}", program);
 
-    eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
+    eval::eval_program(&mut program, &mut valued_symbols)
+        .map_err(|error| error.with_source_code(source.clone()))
+        .wrap_err("Failed to evaluate program")?;
     // println!("after eval: {:#?}", program);
 
     // println!("{:#?}", program);
@@ -165,7 +162,8 @@ fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGen
 
     let mut asm_context = AsmGenContext::new(max_addr_size);
 
-    asm_gen::generate_asm(&program, &mut asm_context)?;
+    asm_gen::generate_asm(&program, &mut asm_context)
+        .map_err(|error| error.with_source_code(source.clone()))?;
 
     // println!("{:#?}", asm_context);
 

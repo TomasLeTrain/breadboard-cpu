@@ -8,16 +8,13 @@ use pest::RuleType;
 use pest::error::Error as PestParseError;
 use pest::error::ErrorVariant as PestParseErrorVariant;
 
-use crate::ast::MultiFileSource;
-use crate::ast::{AstSpan, Source};
+use crate::ast::AstSpan;
 use crate::parser::ParseContext;
 
 // TODO: make error code generic to distinguish grammar parsing vs. ast parsing
 #[derive(Debug, Diagnostic)]
 #[diagnostic(code(assembler::parse_error))]
 pub struct ParseError {
-    // #[source_code]
-    // pub source: Option<MultiFileSource>,
     #[label]
     pub snippet: Option<SourceSpan>,
     pub err_message: String,
@@ -44,7 +41,6 @@ impl ParseError {
             err_message: message.into(),
             snippet,
             help: None,
-            // source: span.to_miette_source_code(),
         }
     }
 
@@ -65,21 +61,26 @@ impl ParseError {
                 span.to_span(source.inner()),
             ),
             message,
-            // source,
+            source,
         )
     }
 
     pub fn from_pest_message<R: RuleType>(
         err: PestParseError<R>,
         err_message: impl Into<String>,
-        // source: &Source,
+        source: &ParseContext,
     ) -> ParseError {
         let help = Some(err.variant.message().to_string());
 
-        let span = match err.location {
+        let local_span = match err.location {
             pest::error::InputLocation::Pos(pos) => (pos, pos + 1),
             pest::error::InputLocation::Span((start, end)) => (start, end),
         };
+
+        let span = source
+            .inner()
+            .to_global_span(local_span.0, local_span.1, source.source_idx())
+            .unwrap();
 
         let snippet = Some(SourceSpan::new(span.0.into(), span.1 - span.0));
 
@@ -87,13 +88,11 @@ impl ParseError {
             err_message: err_message.into(),
             snippet,
             help,
-            // source: AstSpan::new(span.0, span.1, source).to_miette_source_code(),
         }
     }
 
-    pub fn from_pest<R: RuleType>(err: PestParseError<R>, source: &Source) -> ParseError {
+    pub fn from_pest<R: RuleType>(err: PestParseError<R>, source: &ParseContext) -> ParseError {
         let message = "Grammar parsing error".to_string();
-        // Self::from_pest_message(err, message, source)
-        Self::from_pest_message(err, message)
+        Self::from_pest_message(err, message, source)
     }
 }

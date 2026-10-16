@@ -1,4 +1,4 @@
 ; just a jmp instruction
 jmp SP
-let thing = 1
-
+//
+; let thing = 1
