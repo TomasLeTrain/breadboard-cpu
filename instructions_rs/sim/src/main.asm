@@ -776,3 +776,7 @@ update_screen {
 	pop MAR
 	jmp MAR
 }
+
+; char data spans 0x3000 - 0x3800
+#address 0x3000
+#data_file "../../vga_display_v1/charset.out"
