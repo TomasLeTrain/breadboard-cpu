@@ -1,3 +1,8 @@
+; char data spans 0x3000 - 0x3800
+let pCHAR_DATA = 0x3000
+#address pCHAR_DATA
+#data_file "../../vga_display_v1/charset.out"
+
 #address 0x0 ; ensures start is first symbol executed
 jmp start, MAR
 
@@ -17,6 +22,31 @@ let pDIR_Y = 0x9002
 ; game runs until == 0
 let pHALT = 0x9003
 
+; dir encoded with:
+; 0 -> 0
+; 1 -> 1
+; 2 -> -1
+; encoded as [0][x/2bits][y/2bits][000]
+fn get_pDIR_VECTOR() {
+	let pDIR_VECTOR = 0x9004
+	return pDIR_VECTOR
+}
+
+; dir vector that can directly address the char table
+fn get_pDIR_CHAR_IDX_LAST() {
+	let pDIR_CHAR_IDX = 0x9005
+	return pDIR_CHAR_IDX
+}
+
+; dir vector that can directly address the char table
+fn get_pDIR_CHAR_IDX_CURR() {
+	let pDIR_CHAR_IDX = 0x9006
+	return pDIR_CHAR_IDX
+}
+
+; gets set to 0 on draw_update, reset back to 1 input_update
+let pCHAR_DRAW = 0x9007
+
 ; upper byte of queue
 let pQUEUE_BASE = 0xA000
 
@@ -27,25 +57,11 @@ let pQUEUE_WRITE = 0x9102
 ; apple pointer - where position of apple gets stored
 let pAPPLE = 0x9104
 ; apple eaten pointer - is non-zero if apple was eaten, reset by display update
-let pAPPLE_WAS_EATEN = 0x9106
-
-; 8 bytes in size
-let pHEAD_DOWN = 0x9200
-let pHEAD_UP = pHEAD_DOWN + 8
-let pHEAD_LEFT = pHEAD_UP + 8
-let pHEAD_RIGHT = pHEAD_LEFT + 8
-
-let pLONG_DOWN = pHEAD_RIGHT + 8
-let pLONG_UP = pLONG_DOWN + 8
-let pLONG_LEFT = pLONG_UP + 8
-let pLONG_RIGHT = pLONG_LEFT + 8
-
+let pAPPLE_WAS_EATEN = 0x9105
 
 ; snake character address scheme (msb to lsb):
 ; [head/1bit][y_dir/2bits][x_dir/2bits][y position/3bits] -> 3*3*2 = 18 characters, 144 bytes
 ; TODO: not program 18 different combinations manually lol
-
-
 
 let background_color = 0b11000100
 let main_color = 0b11000000
@@ -67,97 +83,7 @@ fn get_BASE_GAME_POSITION(){
 	return base_game_position
 }
 
-create_pixel_data {
-	fn save_value(addr: Address, offset: Address, value: u8){
-		return {
-			mv A, value
-			sw A, addr + offset, MAR
-		}
-	}
-
-	; head connections
-	save_value(pHEAD_DOWN, 0, 0b00011000)
-	save_value(pHEAD_DOWN, 1, 0b00011000)
-	save_value(pHEAD_DOWN, 2, 0b00011000)
-	save_value(pHEAD_DOWN, 3, 0b00011000)
-	save_value(pHEAD_DOWN, 4, 0b00111100)
-	save_value(pHEAD_DOWN, 5, 0b00111100)
-	save_value(pHEAD_DOWN, 6, 0b00111100)
-	save_value(pHEAD_DOWN, 7, 0b00011000)
-
-	save_value(pHEAD_UP, 0, 0b00011000)
-	save_value(pHEAD_UP, 1, 0b00111100)
-	save_value(pHEAD_UP, 2, 0b00111100)
-	save_value(pHEAD_UP, 3, 0b00111100)
-	save_value(pHEAD_UP, 4, 0b00011000)
-	save_value(pHEAD_UP, 5, 0b00011000)
-	save_value(pHEAD_UP, 6, 0b00011000)
-	save_value(pHEAD_UP, 7, 0b00011000)
-
-	save_value(pHEAD_LEFT, 0, 0b00000000)
-	save_value(pHEAD_LEFT, 1, 0b00000000)
-	save_value(pHEAD_LEFT, 2, 0b01110000)
-	save_value(pHEAD_LEFT, 3, 0b11111111)
-	save_value(pHEAD_LEFT, 4, 0b11111111)
-	save_value(pHEAD_LEFT, 5, 0b01110000)
-	save_value(pHEAD_LEFT, 6, 0b00000000)
-	save_value(pHEAD_LEFT, 7, 0b00000000)
-
-	save_value(pHEAD_RIGHT, 0, 0b00000000)
-	save_value(pHEAD_RIGHT, 1, 0b00000000)
-	save_value(pHEAD_RIGHT, 2, 0b00001110)
-	save_value(pHEAD_RIGHT, 3, 0b11111111)
-	save_value(pHEAD_RIGHT, 4, 0b11111111)
-	save_value(pHEAD_RIGHT, 5, 0b00001110)
-	save_value(pHEAD_RIGHT, 6, 0b00000000)
-	save_value(pHEAD_RIGHT, 7, 0b00000000)
-
-	; long connections
-	save_value(pLONG_DOWN, 0, 0b00011000)
-	save_value(pLONG_DOWN, 1, 0b00011000)
-	save_value(pLONG_DOWN, 2, 0b00011000)
-	save_value(pLONG_DOWN, 3, 0b00011000)
-	save_value(pLONG_DOWN, 4, 0b00011000)
-	save_value(pLONG_DOWN, 5, 0b00011000)
-	save_value(pLONG_DOWN, 6, 0b00011000)
-	save_value(pLONG_DOWN, 7, 0b00011000)
-
-	save_value(pLONG_UP, 0, 0b00011000)
-	save_value(pLONG_UP, 1, 0b00011000)
-	save_value(pLONG_UP, 2, 0b00011000)
-	save_value(pLONG_UP, 3, 0b00011000)
-	save_value(pLONG_UP, 4, 0b00011000)
-	save_value(pLONG_UP, 5, 0b00011000)
-	save_value(pLONG_UP, 6, 0b00011000)
-	save_value(pLONG_UP, 7, 0b00011000)
-
-	save_value(pLONG_LEFT, 0, 0b00000000)
-	save_value(pLONG_LEFT, 1, 0b00000000)
-	save_value(pLONG_LEFT, 2, 0b00000000)
-	save_value(pLONG_LEFT, 3, 0b11111111)
-	save_value(pLONG_LEFT, 4, 0b11111111)
-	save_value(pLONG_LEFT, 5, 0b00000000)
-	save_value(pLONG_LEFT, 6, 0b00000000)
-	save_value(pLONG_LEFT, 7, 0b00000000)
-
-	save_value(pLONG_RIGHT, 0, 0b00000000)
-	save_value(pLONG_RIGHT, 1, 0b00000000)
-	save_value(pLONG_RIGHT, 2, 0b00000000)
-	save_value(pLONG_RIGHT, 3, 0b11111111)
-	save_value(pLONG_RIGHT, 4, 0b11111111)
-	save_value(pLONG_RIGHT, 5, 0b00000000)
-	save_value(pLONG_RIGHT, 6, 0b00000000)
-	save_value(pLONG_RIGHT, 7, 0b00000000)
-
-	; return
-	pop MAR
-	jmp MAR
-}
-
-
 init_state {
-	jsr(create_pixel_data)
-
 	; start the queue state
 	; start with two in queue
 	mv A, 0
@@ -188,6 +114,14 @@ init_state {
 	mv A, 0
 	sw A, pAPPLE_WAS_EATEN, MAR
 
+	mv A, 1
+	sw A, get_pDIR_CHAR_IDX_LAST(), MAR
+	mv A, 1
+	sw A, get_pDIR_VECTOR(), MAR
+
+	mv A, 0
+	sw A, pCHAR_DRAW, MAR
+
 	; clear screen
 	jsr(clear_screen)
 
@@ -204,7 +138,7 @@ start {
 	; main loop
 	loop { 
 		; let speed_dial = 1
-		let speed_dial = 120
+		let speed_dial = 255
 
 		; delay since its too fast
 		; NOTE: Z not used in update_input loop, must keep that way!
@@ -212,19 +146,6 @@ start {
 		nop_loop {
 			; keep updating input while waiting
 			; some inlined to multiply impact of speed dial
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
-			jsr(update_input)
 			jsr(update_input)
 			jsr(update_input)
 			jsr(update_input)
@@ -395,6 +316,18 @@ update_input {
 	let D_KEY = 100
 	let R_KEY = 114
 
+	fn save_dir_vector(x_dir: u8, y_dir: u8){
+		return {
+			mv A, (y_dir << 5) | (x_dir << 3)
+			; mv A, y_dir << 5
+			; mv A, (x_dir << 3)
+			sw A, get_pDIR_VECTOR(), MAR
+		}
+	}
+
+	; save prev vector
+	lw Y, get_pDIR_VECTOR(), MAR
+
 	; if left -> X -= 1
 	cmp X, A_KEY
 	jeq left_eq, MAR
@@ -405,6 +338,7 @@ update_input {
 	sw A, pDIR_X, MAR
 	mv A, 0
 	sw A, pDIR_Y, MAR
+	save_dir_vector(2, 0) ; (-1, 0)
 	left_ret:
 
 	; if right -> X += 1
@@ -416,6 +350,7 @@ update_input {
 	sw A, pDIR_X, MAR
 	mv A, 0
 	sw A, pDIR_Y, MAR
+	save_dir_vector(1, 0) ; (1, 0)
 	right_ret:
 
 	; if down -> Y += 1
@@ -427,6 +362,7 @@ update_input {
 	sw A, pDIR_Y, MAR
 	mv A, 0
 	sw A, pDIR_X, MAR
+	save_dir_vector(0, 2) ; (0, -1)
 	down_ret:
 
 	; if up -> Y -= 1
@@ -438,8 +374,8 @@ update_input {
 	sw A, pDIR_Y, MAR
 	mv A, 0
 	sw A, pDIR_X, MAR
+	save_dir_vector(0, 1) ; (0, -1)
 	up_ret:
-
 
 	; if r key -> init state
 	cmp X, R_KEY
@@ -448,6 +384,32 @@ update_input {
 	r_eq:
 	jsr(init_state)
 	r_ret:
+
+	; if direction changes in the same axis the game halts, so that case can be ignored
+	; so, or both dir vectors to get the character to draw
+
+	lw X, get_pDIR_VECTOR(), MAR
+
+	; no matter what, save to curr
+	sw X, get_pDIR_CHAR_IDX_CURR(), MAR
+
+	cmp Y, X
+	jeq bruh_eq, MAR
+	; update if input changed
+	or X, Y
+	sw X, get_pDIR_CHAR_IDX_LAST(), MAR
+	bruh_eq:
+
+	; also update if char_draw changed
+	lw A, pCHAR_DRAW, MAR
+	cmp A, 0
+	jnz char_draw_no_change, MAR
+	or X, Y
+	sw X, get_pDIR_CHAR_IDX_LAST(), MAR
+	char_draw_no_change:
+
+	mv A, 1
+	sw A, pCHAR_DRAW, MAR
 
 	pop MAR
 	jmp MAR
@@ -647,14 +609,19 @@ update_screen {
 		}
 	}
 
-	fn draw_snake_pixel(color: u8, character_addr: Address){
+	fn draw_snake_pixel(color: u8, character_addr: Address, char_low_addr_ptr: Address){
 		return {
 			setup_vram_addr()
 			; save SP to Y and Z, to save it only for the body below
 			mv Y, SpLo
 			mv Z, SpHi
 
-			lw X, character_addr, SP
+			; here, sp used to index character_addr
+			; NOTE: must use SP as scratch since mar has important value
+			lw SpLo, char_low_addr_ptr, SP
+			mv SpHi, high_byte(character_addr)
+
+			lw X, SP
 			sw_vram X, MAR
 			inc SP
 			lw X, SP
@@ -694,12 +661,43 @@ update_screen {
 		}
 	}
 
+	fn draw_fixed_pixel(color: u8, character: u8){
+		return {
+			setup_vram_addr()
+			mv X, character
+			sw_vram X, MAR
+			line_write(MarLo,MarHi,MAR) ; 2
+			line_write(MarLo,MarHi,MAR) ; 3
+			line_write(MarLo,MarHi,MAR) ; 4
+			line_write(MarLo,MarHi,MAR) ; 5
+			line_write(MarLo,MarHi,MAR) ; 6
+			line_write(MarLo,MarHi,MAR) ; 7
+			line_write(MarLo,MarHi,MAR) ; 8
+
+			mv X, color
+			sw_vram X, SP
+			line_write(SpLo,SpHi,SP) ; 2
+			line_write(SpLo,SpHi,SP) ; 3
+			line_write(SpLo,SpHi,SP) ; 4
+			line_write(SpLo,SpHi,SP) ; 5
+			line_write(SpLo,SpHi,SP) ; 6
+			line_write(SpLo,SpHi,SP) ; 7
+			line_write(SpLo,SpHi,SP) ; 8
+		}
+	}
+
 	; draw new position
 	lw MarLo, pQUEUE_WRITE, MAR
 	mv MarHi, high_byte(pQUEUE_BASE)
 	lw X, MAR
-	; main color, filled block
-	draw_snake_pixel(main_color, pHEAD_DOWN)
+	; draw head, filled block
+	draw_snake_pixel(main_color, pCHAR_DATA, get_pDIR_CHAR_IDX_CURR())
+	; re-draw last, filled block
+	lw SpLo, pQUEUE_WRITE, SP
+	mv SpHi, high_byte(pQUEUE_BASE)
+	sub SpLo, 1
+	lw X, SP
+	draw_snake_pixel(main_color, pCHAR_DATA, get_pDIR_CHAR_IDX_LAST())
 
 	; check if apple was eaten
 	lw X, pAPPLE_WAS_EATEN, MAR
@@ -711,7 +709,7 @@ update_screen {
 	mv MarHi, high_byte(pQUEUE_BASE)
 	lw X, MAR
 	; main color, empty block
-	draw_snake_pixel(main_color, pLONG_DOWN)
+	draw_fixed_pixel(main_color, 0)
 
 	; not eaten, pop previous after erasing it in display
 	lw A, pQUEUE_READ, MAR
@@ -770,13 +768,13 @@ update_screen {
 	mv A, 0
 	sw A, pAPPLE_WAS_EATEN, MAR
 
+	; reset char draw
+	mv A, 0
+	sw A, pCHAR_DRAW, MAR
+
 	; get stack pointer back
 	load_stack_ptr()
 
 	pop MAR
 	jmp MAR
 }
-
-; char data spans 0x3000 - 0x3800
-#address 0x3000
-#data_file "../../vga_display_v1/charset.out"
