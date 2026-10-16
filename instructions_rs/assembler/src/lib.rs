@@ -43,7 +43,7 @@ pub fn parse_file(file_path_str: &str) -> Result<AsmGenContext> {
 }
 
 fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
-    let mut program = parser::parse_file(source).wrap_err("Parsing file failed.")?;
+    let mut program = parser::parse_source(source).wrap_err("Parsing file failed.")?;
 
     // println!("initial: {:#?}", program);
 

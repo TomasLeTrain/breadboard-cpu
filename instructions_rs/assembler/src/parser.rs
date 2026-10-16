@@ -1,3 +1,4 @@
+use std::fs;
 use std::sync::{Arc, LazyLock};
 
 use crate::ast::*;
@@ -5,7 +6,7 @@ use crate::error::ParseError;
 use crate::eval::ExprValue;
 use crate::types::Type;
 
-use miette::Result;
+use miette::{Context, IntoDiagnostic, Result, miette};
 use pest::Parser;
 use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
@@ -36,8 +37,20 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
     // ! - ~ (unary)
 });
 
+// used by include directive to eval code from string path only
+fn parse_file(file_path: String, source: &Source) -> Result<Vec<StatementNode>> {
+    // TODO: change Source reflect different files
+
+    let file = fs::read_to_string(file_path.clone())
+        .into_diagnostic()
+        .wrap_err("Failed reading file to parse")?;
+
+    let source = Arc::new(NamedSourceFile::new(file, file_path));
+    parse_source(source)
+}
+
 /// parse a file
-pub fn parse_file(source: Source) -> Result<Ast> {
+pub fn parse_source(source: Source) -> Result<Ast> {
     let mut program = Ast::new();
 
     let pairs = AssemblyParser::parse(Rule::Program, source.source())
@@ -46,8 +59,12 @@ pub fn parse_file(source: Source) -> Result<Ast> {
     for pair in pairs.into_iter() {
         match pair.as_rule() {
             Rule::Statement => {
-                if let Some(statement) = parse_statement(pair, &source)? {
-                    program.push(statement);
+                if let Some(mut statement) = parse_statement(pair, &source)? {
+                    if let StatementKind::InlinedBlock(block) = statement.inner_mut().inner_mut() {
+                        program.append(block);
+                    } else {
+                        program.push(statement);
+                    }
                 }
             }
             Rule::COMMENT | Rule::EOI => (),
@@ -115,10 +132,27 @@ fn parse_directive_statement(pair: Pair<Rule>, source: &Source) -> Result<Statem
         };
     }
 
-    Ok(StatementNode::new(
-        Statement::new(StatementKind::Directive(Directive::new(name?, exprs))),
-        span,
-    ))
+    let name = name?;
+
+    // special case for include directive
+    if name == "include" {
+        let parsed_file = match &exprs.first().unwrap().inner.value {
+            ExprValue::String(string) => parse_file(string.clone(), source)?,
+            _ => {
+                Err(miette!("include directive's first argument not string!"))?;
+                unreachable!();
+            }
+        };
+        Ok(StatementNode::new(
+            Statement::new(StatementKind::InlinedBlock(parsed_file)),
+            span,
+        ))
+    } else {
+        Ok(StatementNode::new(
+            Statement::new(StatementKind::Directive(Directive::new(name, exprs))),
+            span,
+        ))
+    }
 }
 
 fn parse_variable_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {

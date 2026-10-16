@@ -76,3 +76,7 @@ fn jnz_end(reg: Register, addrReg: AddressRegister, addr: Address) {
 ; placing outside rom fails
 #address 0x7000
 jmp MAR
+
+let thing = 1
+#address 0x6060
+#include "src/other_program.asm"
