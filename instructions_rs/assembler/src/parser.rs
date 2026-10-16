@@ -69,6 +69,7 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
         Rule::LabelStatement => Ok(Some(parse_label(inner, source)?)),
         Rule::BlockLabel => Ok(Some(parse_block_label(inner, source)?)),
         Rule::Block => Ok(Some(parse_block_statement(inner, source)?)),
+        Rule::DirectiveStatement => Ok(Some(parse_directive_statement(inner, source)?)),
         Rule::VariableStatement => Ok(Some(parse_variable_statement(inner, source)?)),
         Rule::COMMENT => Ok(None),
         r => Err(ParseError::from_expected(
@@ -83,6 +84,41 @@ fn parse_statement(pair: Pair<Rule>, source: &Source) -> Result<Option<Statement
             &AstSpan::from_span(inner.as_span(), source),
         ))?,
     }
+}
+
+fn parse_directive_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {
+    let span = AstSpan::from_span(pair.as_span(), source);
+
+    let mut name: Result<String> = Err(ParseError::from_span(
+        "Instruction name not found".to_string(),
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
+
+    let mut exprs: Vec<AstNode<Expr>> = Vec::new();
+
+    for item in pair.into_inner() {
+        match item.as_rule() {
+            Rule::Identifier => {
+                name = Ok(item.to_string());
+            }
+            Rule::Expr => {
+                exprs.push(parse_expr(item.into_inner(), source)?);
+            }
+            Rule::COMMENT => (),
+            r => Err(ParseError::from_expected(
+                "Variable statement parsing error".to_string(),
+                vec![Rule::Identifier, Rule::Expr, Rule::COMMENT],
+                vec![r],
+                &AstSpan::from_span(item.as_span(), source),
+            ))?,
+        };
+    }
+
+    Ok(StatementNode::new(
+        Statement::new(StatementKind::Directive(Directive::new(name?, exprs))),
+        span,
+    ))
 }
 
 fn parse_variable_statement(pair: Pair<Rule>, source: &Source) -> Result<StatementNode> {

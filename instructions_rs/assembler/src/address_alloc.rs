@@ -22,9 +22,9 @@ impl AllocationContext {
         self.current_addr += n;
     }
 
-    // pub fn set_address(&mut self, n: u16) {
-    //     self.current_addr = n;
-    // }
+    pub fn set_address(&mut self, n: u16) {
+        self.current_addr = n;
+    }
 }
 
 pub fn allocate_adresses(
@@ -38,6 +38,14 @@ pub fn allocate_adresses(
             StatementKind::Label { .. } => {
                 // label does not advance address
             }
+            StatementKind::Directive(crate::ast::Directive { name, params }) => {
+                if name == "address" {
+                    // TODO: add errors, add checks that directive is of proper form
+                    let addr = params.first().unwrap().inner.value.as_int()?;
+                    ctx.set_address(addr as u16);
+                }
+            }
+
             StatementKind::BlockLabel { body, .. }
             | StatementKind::Block { body }
             | StatementKind::InlinedFunctionCall(InlinedFunctionCall { body, .. }) => {

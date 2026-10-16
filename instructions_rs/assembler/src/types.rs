@@ -1,8 +1,8 @@
 use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash, sync::Arc};
 
 use crate::ast::{
-    AstNode, AstSpan, BinaryOp, Expr, ExprKind, FunctionCall, ReturnKind, StatementKind,
-    StatementNode, UnaryOp, Variable, VariableExprKind,
+    AstInstruction, AstNode, AstSpan, BinaryOp, Directive, Expr, ExprKind, FunctionCall,
+    ReturnKind, StatementKind, StatementNode, UnaryOp, Variable, VariableExprKind,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
@@ -406,8 +406,9 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 ReturnKind::Expr(expr) => typecheck_expr(expr, ctx)?,
                 ReturnKind::Block(block) => typecheck(block, ctx)?,
             },
-            StatementKind::Instruction(instruction) => {
-                for param in instruction.params.iter_mut() {
+            StatementKind::Directive(Directive { params, .. })
+            | StatementKind::Instruction(AstInstruction { params, .. }) => {
+                for param in params.iter_mut() {
                     typecheck_expr(param, ctx)?;
                 }
             }

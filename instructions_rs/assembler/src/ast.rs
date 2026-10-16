@@ -238,6 +238,7 @@ pub enum ReturnKind {
 #[derive(Debug, Clone)]
 pub enum StatementKind {
     Function(Function),
+    Directive(Directive),
     Return(ReturnKind),
     // this kind of call is always a macro (not an expr) so not wrapped in type/value
     FunctionCall(FunctionCall),
@@ -289,6 +290,18 @@ impl InlinedFunctionCall {
             original_body,
             body,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Directive {
+    pub name: String,
+    pub params: Vec<AstNode<Expr>>,
+}
+
+impl Directive {
+    pub fn new(name: String, params: Vec<AstNode<Expr>>) -> Self {
+        Self { name, params }
     }
 }
 

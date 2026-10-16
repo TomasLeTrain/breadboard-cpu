@@ -29,7 +29,7 @@ pub enum ExprValue {
 }
 
 impl ExprValue {
-    fn as_int(&self) -> Result<i32> {
+    pub fn as_int(&self) -> Result<i32> {
         match self {
             ExprValue::Int(val) => Ok(*val),
             ExprValue::Addr(val) => Ok(*val as i32),

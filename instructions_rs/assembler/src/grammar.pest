@@ -14,7 +14,9 @@ Program = _{ SOI ~ (Statement)* ~ Newline* ~ EOI }
 Newline = _{ NEWLINE }
 
 // Statements
-Statement  = { Newline* ~ ((FunctionCall ~ Newline*) | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | VariableStatement | InstructionStatement) }
+Statement  = { Newline* ~ ((FunctionCall ~ Newline*) | DirectiveStatement | FunctionStatement | ReturnStatement | LabelStatement | BlockLabel | Block | VariableStatement | InstructionStatement) }
+
+DirectiveStatement = { "#" ~ Identifier ~ Expr? ~ ("," ~ Expr)* ~ Newline+ }
 
 VariableStatement = { "let" ~ Identifier ~ (":" ~ Type)? ~ "=" ~ VariableExpr ~ Newline+ }
 VariableExpr = _{ Block | Expr }

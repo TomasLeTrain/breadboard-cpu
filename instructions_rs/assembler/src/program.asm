@@ -70,3 +70,9 @@ fn jnz_end(reg: Register, addrReg: AddressRegister, addr: Address) {
 		jnz reg, addrReg
 	}
 }
+
+; placing outside rom fails
+; #address 0x8000
+; placing outside rom fails
+#address 0x7000
+jmp MAR

@@ -2,13 +2,14 @@ mod address_alloc;
 mod asm_gen;
 pub mod asm_output;
 mod ast;
+mod directive_checker;
 mod error;
 mod eval;
 mod istr_resolver;
 mod parser;
 mod types;
 
-use std::{fs, sync::Arc};
+use std::{collections::HashSet, fs, sync::Arc};
 
 use miette::{Context, IntoDiagnostic, Result};
 use opcode_gen::{
@@ -68,6 +69,11 @@ fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
 
     // println!("initial: {:#?}", program);
     types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
+
+    let mut directives = HashSet::new();
+    directives.insert("address".to_string());
+
+    directive_checker::check_directives(&mut program, &directives)?;
 
     // first eval stage, parts of the program will be unknown since labels don't have values yet
     let mut valued_symbols = EvalContext::new(true);
