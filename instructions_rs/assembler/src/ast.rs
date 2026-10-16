@@ -4,22 +4,24 @@ use std::sync::Arc;
 use crate::eval::ExprValue;
 use crate::types::{Address, Type};
 
-use miette::SourceSpan;
+use miette::{MietteError, MietteSpanContents, NamedSource, SourceCode, SourceSpan, SpanContents};
 use pest::{RuleType, Span, iterators::Pair};
 
 pub type Ast = Vec<StatementNode>;
 pub type StatementNode = AstNode<Statement>;
 
+/// cannot use NamedSource since it does not expose a &str, which is needed for converting span to pest (used for reusing pest errors)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NamedSourceFile {
-    source: Arc<str>,
+    source: String,
     file_name: String,
 }
 
 impl NamedSourceFile {
     pub fn new(source: String, file_name: String) -> Self {
         Self {
-            source: Arc::from(source),
+            // source: Arc::from(source),
+            source,
             file_name,
         }
     }
@@ -28,16 +30,113 @@ impl NamedSourceFile {
         &self.source
     }
 
-    pub fn source(&self) -> &Arc<str> {
-        &self.source
-    }
-
     pub fn file_name(&self) -> &str {
         &self.file_name
     }
+
+    fn inner(&self) -> &String {
+        &self.source
+    }
 }
 
-pub type Source = Arc<NamedSourceFile>;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MultiFileSource(Vec<NamedSourceFile>);
+
+impl MultiFileSource {
+    pub fn new(named_source_files: Vec<NamedSourceFile>) -> Self {
+        Self(named_source_files)
+    }
+
+    fn to_local_span<'a>(
+        &'a self,
+        span: &AstSpan,
+    ) -> Result<(&'a String, (usize, usize)), MietteError> {
+        let mut start = 0;
+        let span_range = span.start()..(span.start() + span.len());
+
+        for content in self.0.iter() {
+            let end = start + content.inner().len();
+
+            // Check if the span lands in this file's global range
+            if start <= span_range.start && span_range.end <= end {
+                let local_start = span.start() - start;
+                let local_end = local_start + span.len();
+                return Ok((content.inner(), (local_start, local_end)));
+            }
+
+            start = end;
+        }
+
+        Err(MietteError::OutOfBounds)
+    }
+
+    pub fn add_file(&mut self, source: String, file_name: String) {
+        self.0.push(NamedSourceFile::new(source, file_name));
+    }
+
+    // appends all sources into one string
+    // pub fn whole_source(&self) -> String {
+    //     let mut result = String::new();
+    //
+    //     for NamedSourceFile { source, .. } in &self.0 {
+    //         result.push_str(source);
+    //     }
+    //
+    //     result
+    // }
+}
+
+// part of impl from
+// https://github.com/zkat/miette/issues/193#issuecomment-4262812575
+impl SourceCode for MultiFileSource {
+    fn read_span<'a>(
+        &'a self,
+        span: &SourceSpan,
+        context_lines_before: usize,
+        context_lines_after: usize,
+    ) -> Result<Box<dyn SpanContents<'a> + 'a>, MietteError> {
+        let mut start = 0;
+        let span_range = span.offset()..(span.offset() + span.len());
+
+        for content in self.0.iter() {
+            let end = start + content.inner().len();
+
+            // Check if the span lands in this file's global range
+            if start <= span_range.start && span_range.end <= end {
+                // Map to local span
+                let local_span = SourceSpan::from((span.offset() - start, span.len()));
+                // Get span
+                let local_contents = content.inner().read_span(
+                    &local_span,
+                    context_lines_before,
+                    context_lines_after,
+                )?;
+
+                // Remap to global span
+                let global_span = SourceSpan::from((
+                    start + local_contents.span().offset(),
+                    local_contents.span().len(),
+                ));
+
+                return Ok(Box::new(MietteSpanContents::new_named(
+                    local_contents.name().unwrap_or_default().to_string(),
+                    local_contents.data(),
+                    global_span,
+                    local_contents.line(),
+                    local_contents.column(),
+                    local_contents.line_count(),
+                )));
+            }
+
+            start = end;
+        }
+
+        Err(MietteError::OutOfBounds)
+    }
+}
+
+// pub type Source = Arc<MultiFileSource>;
+pub type Source = MultiFileSource;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct AstSpan {
@@ -76,7 +175,7 @@ impl AstSpan {
         Self {
             start: span.start(),
             end: span.end(),
-            source: Arc::clone(source),
+            source: source.clone(),
         }
     }
 
@@ -92,36 +191,37 @@ impl AstSpan {
         self.end
     }
 
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
     pub fn set_span(&mut self, start: usize, end: usize) {
         self.start = start;
         self.end = end;
     }
 
-    pub fn source(&self) -> &Arc<NamedSourceFile> {
-        &self.source
-    }
-
-    pub fn source_ref(&self) -> &NamedSourceFile {
+    pub fn source(&self) -> &Source {
         &self.source
     }
 
     pub fn to_span<'a>(&'a self) -> Span<'a> {
-        Span::new(self.source().source(), self.start(), self.end()).unwrap()
+        let (local_source, local_span) = self.source.to_local_span(self).unwrap();
+
+        Span::new(local_source, local_span.0, local_span.1).unwrap()
     }
 
     pub fn to_miette_span(&self) -> SourceSpan {
-        SourceSpan::new(self.start().into(), self.end() - self.start())
+        SourceSpan::new(self.start().into(), self.len())
     }
 
-    pub fn to_miette_source_code(&self) -> miette::NamedSource<Arc<str>> {
-        miette::NamedSource::new(
-            self.source().file_name(),
-            Arc::clone(self.source().source()),
-        )
+    pub fn to_miette_source_code(&self) -> MultiFileSource {
+        // (*self.source).clone()
+        self.source().clone()
     }
 
     pub fn get_str(&self) -> &str {
-        &self.source.source()[self.start..self.end]
+        let (local_source, local_span) = self.source.to_local_span(self).unwrap();
+        &local_source[local_span.0..local_span.1]
     }
 
     pub fn get_line_str(&self) -> &str {

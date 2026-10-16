@@ -3,21 +3,22 @@ use std::fmt;
 use std::fmt::Display;
 use std::sync::Arc;
 
+use miette::SourceCode;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use pest::RuleType;
 
 use pest::error::Error as PestParseError;
 use pest::error::ErrorVariant as PestParseErrorVariant;
 
-use crate::ast::AstSpan;
-use crate::ast::Source;
+use crate::ast::{AstSpan, Source};
+use crate::ast::MultiFileSource;
 
 // TODO: make error code generic to distinguish grammar parsing vs. ast parsing
 #[derive(Debug, Diagnostic)]
 #[diagnostic(code(assembler::parse_error))]
 pub struct ParseError {
     #[source_code]
-    pub source: NamedSource<Arc<str>>,
+    pub source: MultiFileSource,
     #[label]
     pub snippet: Option<SourceSpan>,
     pub err_message: String,
@@ -86,7 +87,8 @@ impl ParseError {
             err_message: err_message.into(),
             snippet,
             help,
-            source: AstSpan::new(span.0, span.1, Arc::clone(source)).to_miette_source_code(),
+            // source: AstSpan::new(span.0, span.1, Arc::clone(source)).to_miette_source_code(),
+            source: AstSpan::new(span.0, span.1, source.clone()).to_miette_source_code(),
         }
     }
 

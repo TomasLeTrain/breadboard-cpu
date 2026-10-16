@@ -5,9 +5,7 @@ use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
     ast::{
-        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, InlinedFunctionCall,
-        ReturnKind, Statement, StatementKind, StatementNode, TypedParameter, UnaryOp, Variable,
-        VariableExprKind,
+        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, InlinedFunctionCall, MultiFileSource, ReturnKind, Statement, StatementKind, StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind
     },
     types::{Address, Type},
 };
@@ -916,7 +914,7 @@ pub struct DuplicateSymbolError {
     name: String,
 
     #[source_code]
-    source: Option<NamedSource<Arc<str>>>,
+    source: Option<MultiFileSource>,
 
     #[label(collection, "Defined here")]
     spans: Vec<LabeledSpan>,
@@ -989,7 +987,7 @@ impl EvalExprErrorKind {
         }
     }
 
-    fn get_source(&self) -> Option<NamedSource<Arc<str>>> {
+    fn get_source(&self) -> Option<MultiFileSource> {
         match self {
             EvalExprErrorKind::SymbolNotFound(symbol) => {
                 symbol.span.as_ref().map(AstSpan::to_miette_source_code)
@@ -1011,7 +1009,7 @@ impl Display for EvalExprErrorKind {
 #[derive(Diagnostic, Debug)]
 pub struct EvalExprError {
     #[source_code]
-    source: Option<NamedSource<Arc<str>>>,
+    source: Option<MultiFileSource>,
     kind: EvalExprErrorKind,
 
     #[label(collection, "Defined here")]

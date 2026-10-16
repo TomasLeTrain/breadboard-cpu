@@ -20,16 +20,19 @@ use opcode_gen::{
 use crate::{
     address_alloc::AllocationContext,
     asm_gen::AsmGenContext,
-    ast::NamedSourceFile,
+    ast::{MultiFileSource, NamedSourceFile},
     eval::{EvalContext, EvalSymbol, ExprValue},
     istr_resolver::gen_instruction_lookup_table,
     types::{Symbol, Type},
 };
 
-pub fn parse_string(source: String) -> Result<AsmGenContext> {
+pub fn parse_string(string_source: String) -> Result<AsmGenContext> {
     let file_path = "string".to_string();
-    let source = Arc::new(NamedSourceFile::new(source, file_path));
-    parse_source(source)
+    let mut source =
+        MultiFileSource::new(vec![NamedSourceFile::new(string_source.clone(), file_path)]);
+
+    // TODO: change for source index to avoid copies
+    parse_source(&string_source, &mut source)
 }
 
 pub fn parse_file(file_path_str: &str) -> Result<AsmGenContext> {
@@ -38,12 +41,12 @@ pub fn parse_file(file_path_str: &str) -> Result<AsmGenContext> {
         .into_diagnostic()
         .wrap_err("Failed reading file to parse")?;
 
-    let source = Arc::new(NamedSourceFile::new(file, file_path));
-    parse_source(source)
+    let mut source = MultiFileSource::new(vec![NamedSourceFile::new(file.clone(), file_path)]);
+    parse_source(&file, &mut source)
 }
 
-fn parse_source(source: Arc<NamedSourceFile>) -> Result<AsmGenContext> {
-    let mut program = parser::parse_source(source).wrap_err("Parsing file failed.")?;
+fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGenContext> {
+    let mut program = parser::parse_source(source_str, source).wrap_err("Parsing file failed.")?;
 
     // println!("initial: {:#?}", program);
 

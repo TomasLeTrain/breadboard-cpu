@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash, sync::Ar
 
 use crate::ast::{
     AstInstruction, AstNode, AstSpan, BinaryOp, Directive, Expr, ExprKind, FunctionCall,
-    ReturnKind, StatementKind, StatementNode, UnaryOp, Variable, VariableExprKind,
+    MultiFileSource, ReturnKind, StatementKind, StatementNode, UnaryOp, Variable, VariableExprKind,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
 
@@ -707,7 +707,7 @@ pub struct DuplicateSymbolError {
     name: String,
 
     #[source_code]
-    source: Option<NamedSource<Arc<str>>>,
+    source: Option<MultiFileSource>,
 
     #[label(collection, "Defined here")]
     spans: Vec<LabeledSpan>,
@@ -831,7 +831,7 @@ impl TypecheckExprErrorKind {
         }
     }
 
-    fn get_source(&self) -> Option<NamedSource<Arc<str>>> {
+    fn get_source(&self) -> Option<MultiFileSource> {
         match self {
             TypecheckExprErrorKind::FunctionSignatureMismatch((ast_span, _), _, _)
             | TypecheckExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
@@ -891,7 +891,7 @@ impl Display for TypecheckExprErrorKind {
 #[derive(Diagnostic, Debug)]
 pub struct TypecheckExprError {
     #[source_code]
-    source: Option<NamedSource<Arc<str>>>,
+    source: Option<MultiFileSource>,
     kind: TypecheckExprErrorKind,
 
     #[label(collection, "Defined here")]
