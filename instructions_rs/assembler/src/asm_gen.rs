@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs::File, io::Read};
 
 use owo_colors::{
     OwoColorize,
@@ -325,10 +325,16 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                         // get data from file
                         match &expr_value {
                             ExprValue::String(file_path) => {
-                                let file = fs::read_to_string(file_path.clone())
+                                let mut data = Vec::new();
+                                let mut f = File::open(file_path)
                                     .into_diagnostic()
-                                    .wrap_err("Failed reading file for data")?;
-                                Vec::from(file.as_bytes())
+                                    .wrap_err("Failed opening data file")?;
+
+                                f.read_to_end(&mut data)
+                                    .into_diagnostic()
+                                    .wrap_err("Failed reading data file")?;
+
+                                data
                             }
                             _ => Err(miette!("data_file directive does not have path"))?,
                         }

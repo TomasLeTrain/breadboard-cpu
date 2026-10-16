@@ -1,7 +1,8 @@
 ; char data spans 0x3000 - 0x3800
 let pCHAR_DATA = 0x3000
 #address pCHAR_DATA
-#data_file "../../vga_display_v1/charset.out"
+; #data_file "../../vga_display_v1/charset.out"
+#data_file "../../vga_display_v1/snake_charsv2.out"
 
 #address 0x0 ; ensures start is first symbol executed
 jmp start, MAR
@@ -114,8 +115,10 @@ init_state {
 	mv A, 0
 	sw A, pAPPLE_WAS_EATEN, MAR
 
-	mv A, 1
+	mv A, (0b1010) << 3
 	sw A, get_pDIR_CHAR_IDX_LAST(), MAR
+	mv A, (0b1010) << 3
+	sw A, get_pDIR_CHAR_IDX_CURR(), MAR
 	mv A, 1
 	sw A, get_pDIR_VECTOR(), MAR
 
@@ -316,9 +319,9 @@ update_input {
 	let D_KEY = 100
 	let R_KEY = 114
 
-	fn save_dir_vector(x_dir: u8, y_dir: u8){
+	fn save_dir_vector(data: u8){
 		return {
-			mv A, (y_dir << 5) | (x_dir << 3)
+			mv A, (data << 3)
 			; mv A, y_dir << 5
 			; mv A, (x_dir << 3)
 			sw A, get_pDIR_VECTOR(), MAR
@@ -338,7 +341,7 @@ update_input {
 	sw A, pDIR_X, MAR
 	mv A, 0
 	sw A, pDIR_Y, MAR
-	save_dir_vector(2, 0) ; (-1, 0)
+	save_dir_vector(0) ; (-1, 0)
 	left_ret:
 
 	; if right -> X += 1
@@ -350,7 +353,7 @@ update_input {
 	sw A, pDIR_X, MAR
 	mv A, 0
 	sw A, pDIR_Y, MAR
-	save_dir_vector(1, 0) ; (1, 0)
+	save_dir_vector(1) ; (1, 0)
 	right_ret:
 
 	; if down -> Y += 1
@@ -362,7 +365,7 @@ update_input {
 	sw A, pDIR_Y, MAR
 	mv A, 0
 	sw A, pDIR_X, MAR
-	save_dir_vector(0, 2) ; (0, -1)
+	save_dir_vector(2) ; (0, -1)
 	down_ret:
 
 	; if up -> Y -= 1
@@ -374,7 +377,7 @@ update_input {
 	sw A, pDIR_Y, MAR
 	mv A, 0
 	sw A, pDIR_X, MAR
-	save_dir_vector(0, 1) ; (0, -1)
+	save_dir_vector(3) ; (0, -1)
 	up_ret:
 
 	; if r key -> init state
@@ -387,26 +390,31 @@ update_input {
 
 	; if direction changes in the same axis the game halts, so that case can be ignored
 	; so, or both dir vectors to get the character to draw
+	lw X, get_pDIR_VECTOR(), MAR
+	shl X
+	shl X
+	lw A, get_pDIR_VECTOR(), MAR
+	or A, X
+	; no matter what, save to curr
+	sw A, get_pDIR_CHAR_IDX_CURR(), MAR
 
 	lw X, get_pDIR_VECTOR(), MAR
-
-	; no matter what, save to curr
-	sw X, get_pDIR_CHAR_IDX_CURR(), MAR
-
 	cmp Y, X
-	jeq bruh_eq, MAR
+	jeq input_change_eq, MAR
+	doing_update:
 	; update if input changed
+	shl Y
+	shl Y
 	or X, Y
 	sw X, get_pDIR_CHAR_IDX_LAST(), MAR
-	bruh_eq:
+	jmp update_end, MAR
+	input_change_eq:
 
 	; also update if char_draw changed
 	lw A, pCHAR_DRAW, MAR
 	cmp A, 0
-	jnz char_draw_no_change, MAR
-	or X, Y
-	sw X, get_pDIR_CHAR_IDX_LAST(), MAR
-	char_draw_no_change:
+	jeq doing_update, MAR
+	update_end:
 
 	mv A, 1
 	sw A, pCHAR_DRAW, MAR
@@ -609,7 +617,7 @@ update_screen {
 		}
 	}
 
-	fn draw_snake_pixel(color: u8, character_addr: Address, char_low_addr_ptr: Address){
+	fn draw_snake_pixel(color: u8, character_addr: Address, char_low_addr_ptr: Address, low_addr_mask: u8){
 		return {
 			setup_vram_addr()
 			; save SP to Y and Z, to save it only for the body below
@@ -620,6 +628,9 @@ update_screen {
 			; NOTE: must use SP as scratch since mar has important value
 			lw SpLo, char_low_addr_ptr, SP
 			mv SpHi, high_byte(character_addr)
+
+			; in case its head
+			or SpLo, low_addr_mask
 
 			lw X, SP
 			sw_vram X, MAR
@@ -690,14 +701,16 @@ update_screen {
 	lw MarLo, pQUEUE_WRITE, MAR
 	mv MarHi, high_byte(pQUEUE_BASE)
 	lw X, MAR
+
 	; draw head, filled block
-	draw_snake_pixel(main_color, pCHAR_DATA, get_pDIR_CHAR_IDX_CURR())
+	draw_snake_pixel(main_color, pCHAR_DATA, get_pDIR_CHAR_IDX_CURR(),0b10000000)
+
 	; re-draw last, filled block
 	lw SpLo, pQUEUE_WRITE, SP
 	mv SpHi, high_byte(pQUEUE_BASE)
 	sub SpLo, 1
 	lw X, SP
-	draw_snake_pixel(main_color, pCHAR_DATA, get_pDIR_CHAR_IDX_LAST())
+	draw_snake_pixel(main_color, pCHAR_DATA, get_pDIR_CHAR_IDX_LAST(),0b00000000)
 
 	; check if apple was eaten
 	lw X, pAPPLE_WAS_EATEN, MAR
