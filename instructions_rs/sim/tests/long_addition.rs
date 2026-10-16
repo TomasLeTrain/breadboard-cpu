@@ -10,7 +10,6 @@ fn run_program(source: String) -> Result<CpuState, String> {
     let asm_context = parse_string(source);
 
     if let Ok(asm_context) = asm_context {
-        println!("{}", asm_context.format_pretty());
         state.load_program(asm_context.assembly().clone());
     } else {
         eprintln!("Error parsing file:");

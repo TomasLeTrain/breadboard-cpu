@@ -59,7 +59,6 @@ impl BoolVec {
 #[derive(Debug, Clone)]
 enum AsmSpanKind {
     String(String),
-    Span(AstSpan),
     Instruction(AstSpan),
 }
 
@@ -67,7 +66,6 @@ impl AsmSpanKind {
     fn prettify(&self, source: &Source) -> String {
         match self {
             AsmSpanKind::String(string) => string.clone(),
-            AsmSpanKind::Span(ast_span) => ast_span.get_line_str(source).to_string(),
             AsmSpanKind::Instruction(ast_span) => {
                 prettify_instruction(ast_span.get_line_str(source).to_string())
             }

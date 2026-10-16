@@ -830,10 +830,6 @@ impl TypecheckExprErrorKind {
             }
         }
     }
-
-    fn get_source(&self) -> Option<MultiFileSource> {
-        None
-    }
 }
 
 impl Display for TypecheckExprErrorKind {
@@ -878,8 +874,6 @@ impl Display for TypecheckExprErrorKind {
 
 #[derive(Diagnostic, Debug)]
 pub struct TypecheckExprError {
-    #[source_code]
-    source: Option<MultiFileSource>,
     kind: TypecheckExprErrorKind,
 
     #[label(collection, "Defined here")]
@@ -897,12 +891,7 @@ impl Display for TypecheckExprError {
 impl TypecheckExprError {
     fn new(kind: TypecheckExprErrorKind) -> Self {
         let spans = kind.get_spans();
-        let source = kind.get_source();
 
-        TypecheckExprError {
-            spans,
-            source,
-            kind,
-        }
+        TypecheckExprError { spans, kind }
     }
 }

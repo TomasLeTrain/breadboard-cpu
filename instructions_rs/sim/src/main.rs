@@ -7,12 +7,11 @@ use std::hint::spin_loop;
 
 use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
-use sdl3::pixels::{Color, Palette, PixelFormat};
+use sdl3::pixels::PixelFormat;
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 use std::sync::mpsc::{self, TryRecvError};
-use std::thread;
 use std::time::Duration;
 
 enum CpuMessage {
@@ -44,7 +43,7 @@ fn main() {
     let asm_context = parse_file("src/test_program.asm");
 
     if let Ok(asm_context) = asm_context {
-        println!("{}", asm_context.format_pretty());
+        println!("{}", asm_context.format_pretty().unwrap());
         state.load_program(asm_context.assembly().clone());
     } else {
         eprintln!("Error parsing file:");
