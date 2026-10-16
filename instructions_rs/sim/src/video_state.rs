@@ -1,10 +1,6 @@
 //! Simulates physical video card
 
-use sdl3::{
-    gpu::Texture,
-    pixels::{Color, Palette, PixelFormat},
-    surface::Surface,
-};
+use sdl3::pixels::{Color, PixelFormat};
 
 pub struct VideoState {
     state: Vec<Option<u8>>,

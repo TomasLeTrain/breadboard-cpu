@@ -1,5 +1,7 @@
-; actual start, jumps to wherever the start symbol is
+#address 0x0 ; ensures start is first symbol executed
 jmp start, MAR
+
+#include "src/utils.asm"
 
 ; snake program
 
@@ -711,19 +713,6 @@ update_screen {
 	; main color, empty block
 	draw_snake_pixel(main_color, pLONG_DOWN)
 
-; aout value Some(41d) from PC
-; rom read: Some(f) from 41d
-; low to high clk
-; load f into IR2
-; high to low clk
-; opcode_addr: 52be
-; load e1 into OPCODE_LATCH1
-; load 8b into OPCODE_LATCH2
-; increment PC
-; aout value Some(a002) from SP
-; ram read None from 2002
-; low to high clk
-
 	; not eaten, pop previous after erasing it in display
 	lw A, pQUEUE_READ, MAR
 	add A, 1
@@ -786,18 +775,4 @@ update_screen {
 
 	pop MAR
 	jmp MAR
-}
-
-
-fn jsr(addr: Address) {
-	return {
-		pusha return_addr
-		jmp addr, MAR
-		return_addr:
-	}
-}
-
-fn high_byte(x: u16) {
-	let high_byte: u8 = (x >> 8) & 0xff
-	return high_byte
 }

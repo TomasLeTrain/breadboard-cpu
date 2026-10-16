@@ -40,7 +40,7 @@ fn main() {
 
     video.write().unwrap().load_image(video_rom);
 
-    let asm_context = parse_file("src/test_program.asm");
+    let asm_context = parse_file("src/main.asm");
 
     if let Ok(asm_context) = asm_context {
         println!("{}", asm_context.format_pretty().unwrap());
