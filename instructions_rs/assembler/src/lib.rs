@@ -165,6 +165,8 @@ fn parse_source(source_str: &str, mut source: MultiFileSource) -> Result<AsmGenC
     asm_gen::generate_asm(&program, &mut asm_context)
         .map_err(|error| error.with_source_code(source.clone()))?;
 
+    asm_context.render_pretty(&source);
+
     // println!("{:#?}", asm_context);
 
     // println!("Annotated rogram:");

@@ -4,7 +4,7 @@ use owo_colors::{
 };
 
 use crate::{
-    ast::{InlinedFunctionCall, StatementKind, StatementNode},
+    ast::{AstSpan, InlinedFunctionCall, Source, StatementKind, StatementNode},
     types::Address,
 };
 use miette::{Result, miette};
@@ -57,10 +57,28 @@ impl BoolVec {
 }
 
 #[derive(Debug, Clone)]
+enum AsmSpanKind {
+    String(String),
+    Span(AstSpan),
+    Instruction(AstSpan),
+}
+
+impl AsmSpanKind {
+    fn prettify(&self, source: &Source) -> String {
+        match self {
+            AsmSpanKind::String(string) => string.clone(),
+            AsmSpanKind::Span(ast_span) => ast_span.get_line_str(source).to_string(),
+            AsmSpanKind::Instruction(ast_span) => {
+                prettify_instruction(ast_span.get_line_str(source).to_string())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 struct AsmSpan {
-    // statement: StatementNode,
-    src_line: String,
-    span: (u16, u16),
+    kind: AsmSpanKind,
+    byte_span: (u16, u16),
 }
 
 // TODO: keep track of used spaces to catch conflicts or perform that later?
@@ -69,6 +87,7 @@ pub struct AsmGenContext {
     assembly: Vec<u8>,
     addr_occupied: BoolVec,
     istr_slices: Vec<AsmSpan>,
+    pretty_print: Option<String>,
 }
 
 impl AsmGenContext {
@@ -77,6 +96,7 @@ impl AsmGenContext {
             assembly: vec![0; max_addr_size as usize],
             addr_occupied: BoolVec::new(max_addr_size as usize),
             istr_slices: Vec::new(),
+            pretty_print: None,
         }
     }
 
@@ -109,14 +129,14 @@ impl AsmGenContext {
         Ok(())
     }
 
-    fn place_statement(&mut self, src_line: String, addr: Address, bytes: &[u8]) -> Result<()> {
+    fn place_statement(&mut self, kind: AsmSpanKind, addr: Address, bytes: &[u8]) -> Result<()> {
         if !bytes.is_empty() {
             self.place_bytes(addr, bytes)?;
         }
         let end_addr = addr + (bytes.len() as u16);
         self.istr_slices.push(AsmSpan {
-            src_line,
-            span: (addr, end_addr),
+            kind,
+            byte_span: (addr, end_addr),
         });
         Ok(())
     }
@@ -127,15 +147,20 @@ impl AsmGenContext {
 
     fn get_sorted_spans(&self) -> Vec<AsmSpan> {
         let mut res = self.istr_slices.clone();
-        res.sort_by_key(|a| a.span);
+        res.sort_by_key(|a| a.byte_span);
         res
     }
 
     fn get_bytes_from_span(&self, span: &AsmSpan) -> &[u8] {
-        &self.assembly[(span.span.0 as usize)..(span.span.1 as usize)]
+        &self.assembly[(span.byte_span.0 as usize)..(span.byte_span.1 as usize)]
     }
 
-    pub fn format_pretty(&self) -> String {
+    pub fn format_pretty(&self) -> Option<&str> {
+        self.pretty_print.as_deref()
+    }
+
+    // creates the pretty print of the program. Requires source to resolve spans into strings
+    pub fn render_pretty(&mut self, source: &Source) {
         let mut result = String::new();
 
         let spans = self.get_sorted_spans();
@@ -148,7 +173,7 @@ impl AsmGenContext {
             // addr  | bytes | program
             line.push_str(&format!(
                 "{:>4} | ",
-                format!("{:X}", span.span.0).fg::<colors::xterm::DarkTachaOrange>()
+                format!("{:X}", span.byte_span.0).fg::<colors::xterm::DarkTachaOrange>()
             ));
 
             let str_bytes: Vec<_> = self
@@ -162,13 +187,13 @@ impl AsmGenContext {
                 str_bytes.join(" ").fg::<colors::Green>()
             ));
 
-            line.push_str(&span.src_line);
+            line.push_str(&span.kind.prettify(source));
             line.push('\n');
 
             result.push_str(&line);
         }
 
-        result
+        self.pretty_print = Some(result);
     }
 }
 
@@ -217,14 +242,14 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
         match statement.inner().inner() {
             StatementKind::Label { name } => {
                 ctx.place_statement(
-                    format!("{}:", name.dimmed()),
+                    AsmSpanKind::String(format!("{}:", name.dimmed())),
                     statement.inner().address().unwrap(),
                     &[],
                 )?;
             }
             StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, body, .. }) => {
                 ctx.place_statement(
-                    format!("fn {} {{", name.dimmed()),
+                    AsmSpanKind::String(format!("fn {} {{", name.dimmed())),
                     statement.inner().address().unwrap(),
                     &[],
                 )?;
@@ -233,14 +258,18 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
 
             StatementKind::BlockLabel { body, name } => {
                 ctx.place_statement(
-                    format!("{} {{", name.dimmed()),
+                    AsmSpanKind::String(format!("{} {{", name.dimmed())),
                     statement.inner().address().unwrap(),
                     &[],
                 )?;
                 generate_asm(body, ctx)?;
             }
             StatementKind::Block { body } => {
-                ctx.place_statement("{".to_string(), statement.inner().address().unwrap(), &[])?;
+                ctx.place_statement(
+                    AsmSpanKind::String("{".to_string()),
+                    statement.inner().address().unwrap(),
+                    &[],
+                )?;
                 generate_asm(body, ctx)?;
             }
             StatementKind::Instruction(ast_instruction) => {
@@ -257,8 +286,7 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     .get_asm_bytes(arg_values);
 
                 ctx.place_statement(
-                    // prettify_instruction(statement.span.get_line_str().to_string()),
-                    "todo".to_string(),
+                    AsmSpanKind::Instruction(statement.span().clone()),
                     statement.inner().address().unwrap(),
                     &istr_bytes,
                 )?;

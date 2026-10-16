@@ -6,8 +6,7 @@ use crate::parser::ParseContext;
 use crate::types::{Address, Type};
 
 use miette::{
-    MietteError, MietteSpanContents, NamedSource, Result, SourceCode, SourceSpan, SpanContents,
-    miette,
+    MietteError, MietteSpanContents, Result, SourceCode, SourceSpan, SpanContents, miette,
 };
 use pest::{RuleType, Span, iterators::Pair};
 
@@ -208,6 +207,7 @@ impl AstSpan {
         self.end
     }
 
+    // TODO: off by one errors somewhere?
     pub fn len(&self) -> usize {
         self.end - self.start
     }
@@ -253,10 +253,6 @@ impl<T> AstNode<T> {
         Self::new(inner, AstSpan::from_pair(pair, source))
     }
 
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
-
     pub fn inner(&self) -> &T {
         &self.inner
     }
@@ -298,10 +294,6 @@ impl Statement {
 
     pub fn inner_mut(&mut self) -> &mut StatementKind {
         &mut self.statement
-    }
-
-    pub fn into_inner(self) -> StatementKind {
-        self.statement
     }
 }
 

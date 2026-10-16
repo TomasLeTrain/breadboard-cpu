@@ -561,30 +561,15 @@ fn parse_instruction(pair: Pair<Rule>, source: &ParseContext) -> Result<Statemen
 
     let mut params: Vec<AstNode<Expr>> = Vec::new();
 
-    let mut span = AstSpan::new(
-        pair.as_span().start(),
-        pair.as_span().start() + 1,
-        // Arc::clone(source),
-        source,
-    );
-
-    // used to merge spans, even if non contiguous
-    let mut merge = |start: usize, end: usize| -> () {
-        span.set_span(
-            core::cmp::min(span.start(), start),
-            core::cmp::max(span.end(), end),
-        );
-    };
+    let span = AstSpan::from_span(pair.as_span(), source);
 
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::InstructionLabel => {
                 // merge span covering label in case no params
-                merge(item.as_span().start(), item.as_span().end());
                 name = Ok(item.to_string());
             }
             Rule::ExprParameters => {
-                merge(item.as_span().start(), item.as_span().end());
                 params = parse_expr_parameters(item, source)?;
             }
             Rule::COMMENT => (),

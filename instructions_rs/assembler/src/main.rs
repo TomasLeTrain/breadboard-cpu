@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     let asm = parse_file(file_path_str)?;
 
     println!("assembled!");
-    println!("{}", asm.format_pretty());
+    println!("{}", asm.format_pretty().unwrap());
 
     LogisimOutput::new("asm_logisim.img")?.generate_output(asm.assembly())?;
     BinaryOutput::new("asm_bin.bin", rom_size)?.generate_output(asm.assembly())?;

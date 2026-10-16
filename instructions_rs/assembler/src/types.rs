@@ -1,10 +1,10 @@
-use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash, sync::Arc};
+use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash};
 
 use crate::ast::{
     AstInstruction, AstNode, AstSpan, BinaryOp, Directive, Expr, ExprKind, FunctionCall,
     MultiFileSource, ReturnKind, StatementKind, StatementNode, UnaryOp, Variable, VariableExprKind,
 };
-use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
+use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, Result, miette};
 
 pub type Address = u16;
 
@@ -832,21 +832,7 @@ impl TypecheckExprErrorKind {
     }
 
     fn get_source(&self) -> Option<MultiFileSource> {
-        match self {
-            TypecheckExprErrorKind::FunctionSignatureMismatch((ast_span, _), _, _)
-            | TypecheckExprErrorKind::InvalidBinaryOpTypes((ast_span, _), _, _)
-            | TypecheckExprErrorKind::InvalidComparisonTypes((ast_span, _), _)
-            | TypecheckExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
-            | TypecheckExprErrorKind::InvalidUnaryOpType((ast_span, _), _)
-            | TypecheckExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => {
-                // Some(ast_span.to_miette_source_code())
-                None
-            }
-            TypecheckExprErrorKind::SymbolNotFound(symbol) => {
-                // symbol.span.as_ref().map(AstSpan::to_miette_source_code)
-                None
-            }
-        }
+        None
     }
 }
 
