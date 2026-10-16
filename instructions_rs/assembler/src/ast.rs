@@ -2,15 +2,21 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::eval::ExprValue;
+use crate::parser::ParseContext;
 use crate::types::{Address, Type};
 
-use miette::{MietteError, MietteSpanContents, NamedSource, SourceCode, SourceSpan, SpanContents};
+use miette::{
+    MietteError, MietteSpanContents, NamedSource, Result, SourceCode, SourceSpan, SpanContents,
+    miette,
+};
 use pest::{RuleType, Span, iterators::Pair};
 
 pub type Ast = Vec<StatementNode>;
 pub type StatementNode = AstNode<Statement>;
 
-/// cannot use NamedSource since it does not expose a &str, which is needed for converting span to pest (used for reusing pest errors)
+// each span holds source index, can be converted to global easily, can get source/name easily, easy
+// to store
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NamedSourceFile {
     source: String,
@@ -20,7 +26,6 @@ pub struct NamedSourceFile {
 impl NamedSourceFile {
     pub fn new(source: String, file_name: String) -> Self {
         Self {
-            // source: Arc::from(source),
             source,
             file_name,
         }
@@ -40,28 +45,56 @@ impl NamedSourceFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MultiFileSource(Vec<NamedSourceFile>);
+pub struct MultiFileSource {
+    inner: Vec<NamedSourceFile>,
+}
 
 impl MultiFileSource {
     pub fn new(named_source_files: Vec<NamedSourceFile>) -> Self {
-        Self(named_source_files)
+        Self {
+            inner: named_source_files,
+        }
     }
 
-    fn to_local_span<'a>(
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    // returns global (start, end)
+    fn to_global_span(
+        &self,
+        local_start: usize,
+        local_end: usize,
+        source_idx: usize,
+    ) -> Result<(usize, usize)> {
+        if source_idx >= self.inner.len() {
+            Err(miette!("source_idx out of bounds"))?;
+        }
+        let source_offset: usize = self
+            .inner
+            .iter()
+            .map(|e| e.inner().len())
+            .take(source_idx)
+            .sum();
+
+        Ok((source_offset + local_start, source_offset + local_end))
+    }
+
+    // returns local source and local span (start, end)
+    fn get_local_source<'a>(
         &'a self,
         span: &AstSpan,
     ) -> Result<(&'a String, (usize, usize)), MietteError> {
         let mut start = 0;
         let span_range = span.start()..(span.start() + span.len());
 
-        for content in self.0.iter() {
+        for content in self.inner.iter() {
             let end = start + content.inner().len();
 
             // Check if the span lands in this file's global range
             if start <= span_range.start && span_range.end <= end {
-                let local_start = span.start() - start;
-                let local_end = local_start + span.len();
-                return Ok((content.inner(), (local_start, local_end)));
+                // Map to local span
+                return Ok((content.inner(), (span.start() - start, span.end() - start)));
             }
 
             start = end;
@@ -71,19 +104,8 @@ impl MultiFileSource {
     }
 
     pub fn add_file(&mut self, source: String, file_name: String) {
-        self.0.push(NamedSourceFile::new(source, file_name));
+        self.inner.push(NamedSourceFile::new(source, file_name));
     }
-
-    // appends all sources into one string
-    // pub fn whole_source(&self) -> String {
-    //     let mut result = String::new();
-    //
-    //     for NamedSourceFile { source, .. } in &self.0 {
-    //         result.push_str(source);
-    //     }
-    //
-    //     result
-    // }
 }
 
 // part of impl from
@@ -98,7 +120,7 @@ impl SourceCode for MultiFileSource {
         let mut start = 0;
         let span_range = span.offset()..(span.offset() + span.len());
 
-        for content in self.0.iter() {
+        for content in self.inner.iter() {
             let end = start + content.inner().len();
 
             // Check if the span lands in this file's global range
@@ -119,7 +141,7 @@ impl SourceCode for MultiFileSource {
                 ));
 
                 return Ok(Box::new(MietteSpanContents::new_named(
-                    local_contents.name().unwrap_or_default().to_string(),
+                    content.file_name.clone(),
                     local_contents.data(),
                     global_span,
                     local_contents.line(),
@@ -135,14 +157,13 @@ impl SourceCode for MultiFileSource {
     }
 }
 
-// pub type Source = Arc<MultiFileSource>;
 pub type Source = MultiFileSource;
 
+// stores global span, indicates its source with source_idx
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct AstSpan {
     start: usize,
     end: usize,
-    source: Source,
 }
 
 impl From<AstSpan> for SourceSpan {
@@ -160,26 +181,27 @@ impl From<&AstSpan> for SourceSpan {
 impl Debug for AstSpan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AstSpan")
-            .field("str", &self.get_str())
+            // .field("str", &self.get_str())
             .field("range", &format!("{}..{}", self.start, self.end))
             .finish()
     }
 }
 
 impl AstSpan {
-    pub fn new(start: usize, end: usize, source: Source) -> Self {
-        Self { start, end, source }
+    pub fn new(local_start: usize, local_end: usize, source: &ParseContext) -> Self {
+        // TODO: pass in source_idx
+        let (start, end) = source
+            .inner()
+            .to_global_span(local_start, local_end, source.source_idx())
+            .unwrap();
+        Self { start, end }
     }
 
-    pub fn from_span<'a>(span: Span<'a>, source: &Source) -> Self {
-        Self {
-            start: span.start(),
-            end: span.end(),
-            source: source.clone(),
-        }
+    pub fn from_span<'a>(span: Span<'a>, source: &ParseContext) -> Self {
+        Self::new(span.start(), span.end(), source)
     }
 
-    pub fn from_pair<R: RuleType>(pair: Pair<R>, source: &Source) -> Self {
+    pub fn from_pair<R: RuleType>(pair: Pair<R>, source: &ParseContext) -> Self {
         Self::from_span(pair.as_span(), source)
     }
 
@@ -200,32 +222,27 @@ impl AstSpan {
         self.end = end;
     }
 
-    pub fn source(&self) -> &Source {
-        &self.source
-    }
-
-    pub fn to_span<'a>(&'a self) -> Span<'a> {
-        let (local_source, local_span) = self.source.to_local_span(self).unwrap();
-
+    pub fn to_span<'a>(&'a self, source: &'a Source) -> Span<'a> {
+        let (local_source, local_span) = source.get_local_source(self).unwrap();
         Span::new(local_source, local_span.0, local_span.1).unwrap()
     }
 
     pub fn to_miette_span(&self) -> SourceSpan {
+        // already a global span
         SourceSpan::new(self.start().into(), self.len())
     }
 
-    pub fn to_miette_source_code(&self) -> MultiFileSource {
-        // (*self.source).clone()
-        self.source().clone()
-    }
+    // pub fn to_miette_source_code(&self) -> MultiFileSource {
+    //     // (*self.source).clone()
+    // }
 
-    pub fn get_str(&self) -> &str {
-        let (local_source, local_span) = self.source.to_local_span(self).unwrap();
+    pub fn get_str<'a>(&self, source: &'a Source) -> &'a str {
+        let (local_source, local_span) = source.get_local_source(self).unwrap();
         &local_source[local_span.0..local_span.1]
     }
 
-    pub fn get_line_str(&self) -> &str {
-        self.get_str().lines().next().unwrap()
+    pub fn get_line_str<'a>(&self, source: &'a Source) -> &'a str {
+        self.get_str(source).lines().next().unwrap()
     }
 }
 
@@ -241,7 +258,7 @@ impl<T> AstNode<T> {
         Self { inner, span }
     }
 
-    pub fn from_pair<R: RuleType>(inner: T, pair: Pair<R>, source: &Source) -> Self {
+    pub fn from_pair<R: RuleType>(inner: T, pair: Pair<R>, source: &ParseContext) -> Self {
         Self::new(inner, AstSpan::from_pair(pair, source))
     }
 

@@ -1,11 +1,13 @@
-use std::{collections::HashMap, error::Error, fmt::Display, sync::Arc};
+use std::{collections::HashMap, error::Error, fmt::Display};
 
-use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Result, miette};
+use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, Result, miette};
 use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
     ast::{
-        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, InlinedFunctionCall, MultiFileSource, ReturnKind, Statement, StatementKind, StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind
+        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, InlinedFunctionCall,
+        MultiFileSource, ReturnKind, Statement, StatementKind, StatementNode, TypedParameter,
+        UnaryOp, Variable, VariableExprKind,
     },
     types::{Address, Type},
 };
@@ -452,7 +454,7 @@ impl EvalContext {
 
         if let Some(other) = push_result {
             let mut spans = Vec::new();
-            let source = function.span.as_ref().map(|e| e.to_miette_source_code());
+            // let source = function.span.as_ref().map(|e| e.to_miette_source_code());
 
             for ast_span in [function.span.as_ref(), other.span.as_ref()]
                 .into_iter()
@@ -471,7 +473,7 @@ impl EvalContext {
 
             Err(DuplicateSymbolError {
                 name: function.name,
-                source,
+                source: None,
                 spans,
             })?
         } else {
@@ -924,7 +926,7 @@ impl DuplicateSymbolError {
     fn from_symbols(symbol: EvalSymbol, other: EvalSymbol) -> Result<()> {
         let mut spans = Vec::new();
 
-        let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
+        // let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
 
         for ast_span in [symbol.span.as_ref(), other.span.as_ref()]
             .into_iter()
@@ -941,7 +943,7 @@ impl DuplicateSymbolError {
 
         Err(DuplicateSymbolError {
             name: symbol.name,
-            source,
+            source: None,
             spans,
         })?
     }
@@ -988,11 +990,12 @@ impl EvalExprErrorKind {
     }
 
     fn get_source(&self) -> Option<MultiFileSource> {
-        match self {
-            EvalExprErrorKind::SymbolNotFound(symbol) => {
-                symbol.span.as_ref().map(AstSpan::to_miette_source_code)
-            }
-        }
+        None
+        // match self {
+        //     EvalExprErrorKind::SymbolNotFound(symbol) => {
+        //         symbol.span.as_ref().map(AstSpan::to_miette_source_code)
+        //     }
+        // }
     }
 }
 

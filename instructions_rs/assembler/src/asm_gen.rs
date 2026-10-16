@@ -257,7 +257,8 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     .get_asm_bytes(arg_values);
 
                 ctx.place_statement(
-                    prettify_instruction(statement.span.get_line_str().to_string()),
+                    // prettify_instruction(statement.span.get_line_str().to_string()),
+                    "todo".to_string(),
                     statement.inner().address().unwrap(),
                     &istr_bytes,
                 )?;

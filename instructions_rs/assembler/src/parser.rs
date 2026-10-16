@@ -1,5 +1,5 @@
 use std::fs;
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 use crate::ast::*;
 use crate::error::ParseError;
@@ -37,25 +37,54 @@ pub static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
     // ! - ~ (unary)
 });
 
-// used by include directive to eval code from string path only
-fn parse_file(file_path: String, source: &mut Source) -> Result<Vec<StatementNode>> {
-    // TODO: change Source reflect different files
+pub struct ParseContext<'a> {
+    source: &'a mut Source,
+    source_idx: usize,
+}
 
+impl<'a> ParseContext<'a> {
+    pub fn new(source: &'a mut Source) -> Self {
+        Self {
+            source,
+            source_idx: 0,
+        }
+    }
+
+    pub fn inner(&'a self) -> &'a Source {
+        self.source
+    }
+
+    pub fn source_idx(&self) -> usize {
+        self.source_idx
+    }
+}
+
+// used by include directive to eval code from string path only
+fn parse_file(file_path: String, source: &mut ParseContext) -> Result<Vec<StatementNode>> {
     let file = fs::read_to_string(file_path.clone())
         .into_diagnostic()
         .wrap_err("Failed reading file to parse")?;
 
-    source.add_file(file.clone(), file_path.clone());
+    let curr_source_idx = source.source_idx;
 
-    parse_source(&file, source)
+    // update source_idx
+    source.source.add_file(file.clone(), file_path.clone());
+    source.source_idx = source.source.len() - 1;
+
+    let result = parse_source(&file, source);
+
+    // set source idx back
+    source.source_idx = curr_source_idx;
+
+    result
 }
 
 /// parse a file
-pub fn parse_source(source_str: &str, source: &mut Source) -> Result<Ast> {
+pub fn parse_source(source_str: &str, source: &mut ParseContext) -> Result<Ast> {
     let mut program = Ast::new();
 
     let pairs = AssemblyParser::parse(Rule::Program, source_str)
-        .map_err(|e| ParseError::from_pest(e, source))?;
+        .map_err(|e| ParseError::from_pest(e, source.source))?;
 
     for pair in pairs.into_iter() {
         match pair.as_rule() {
@@ -76,7 +105,7 @@ pub fn parse_source(source_str: &str, source: &mut Source) -> Result<Ast> {
     Ok(program)
 }
 
-fn parse_statement(pair: Pair<Rule>, source: &mut Source) -> Result<Option<StatementNode>> {
+fn parse_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result<Option<StatementNode>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -100,11 +129,12 @@ fn parse_statement(pair: Pair<Rule>, source: &mut Source) -> Result<Option<State
             ],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
+            source,
         ))?,
     }
 }
 
-fn parse_directive_statement(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_directive_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result<StatementNode> {
     let span = AstSpan::from_span(pair.as_span(), source);
 
     let mut name: Result<String> = Err(ParseError::from_span(
@@ -129,6 +159,7 @@ fn parse_directive_statement(pair: Pair<Rule>, source: &mut Source) -> Result<St
                 vec![Rule::Identifier, Rule::Expr, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -156,7 +187,7 @@ fn parse_directive_statement(pair: Pair<Rule>, source: &mut Source) -> Result<St
     }
 }
 
-fn parse_variable_statement(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_variable_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result<StatementNode> {
     let span = AstSpan::from_span(pair.as_span(), source);
 
     let mut name: Result<String> = Err(ParseError::from_span(
@@ -197,6 +228,7 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut Source) -> Result<Sta
                 vec![Rule::Identifier, Rule::VariableExpr, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -207,7 +239,7 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut Source) -> Result<Sta
     ))
 }
 
-fn parse_return_statement(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_return_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result<StatementNode> {
     let span = AstSpan::from_span(pair.as_span(), source);
     let inner = pair.into_inner().next().unwrap();
 
@@ -223,7 +255,7 @@ fn parse_return_statement(pair: Pair<Rule>, source: &mut Source) -> Result<State
     ))
 }
 
-fn parse_block_statement(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_block_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result<StatementNode> {
     let span = AstSpan::from_span(pair.as_span(), source);
     let body = parse_block(pair, source)?;
 
@@ -233,7 +265,7 @@ fn parse_block_statement(pair: Pair<Rule>, source: &mut Source) -> Result<Statem
     ))
 }
 
-fn parse_function_call_statement(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_function_call_statement(pair: Pair<Rule>, source: &ParseContext) -> Result<StatementNode> {
     let span = AstSpan::from_span(pair.as_span(), source);
     Ok(AstNode::new(
         Statement::new(StatementKind::FunctionCall(parse_function_call(
@@ -243,7 +275,7 @@ fn parse_function_call_statement(pair: Pair<Rule>, source: &mut Source) -> Resul
     ))
 }
 
-fn parse_function_call(pair: Pair<Rule>, source: &Source) -> Result<FunctionCall> {
+fn parse_function_call(pair: Pair<Rule>, source: &ParseContext) -> Result<FunctionCall> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Function call name not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -267,6 +299,7 @@ fn parse_function_call(pair: Pair<Rule>, source: &Source) -> Result<FunctionCall
                 vec![Rule::FunctionCallName, Rule::ExprParameters, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -274,7 +307,7 @@ fn parse_function_call(pair: Pair<Rule>, source: &Source) -> Result<FunctionCall
     Ok(FunctionCall::new(name?, params))
 }
 
-fn parse_function(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_function(pair: Pair<Rule>, source: &mut ParseContext) -> Result<StatementNode> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Instruction name not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -293,7 +326,7 @@ fn parse_function(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode
         pair.as_span().start(),
         pair.as_span().start() + 1,
         // Arc::clone(source),
-        source.clone(),
+        source,
     );
 
     // used to merge spans, even if non contiguous
@@ -330,6 +363,7 @@ fn parse_function(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode
                 ],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -343,7 +377,7 @@ fn parse_function(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode
 }
 fn parse_function_parameters(
     pair: Pair<Rule>,
-    source: &mut Source,
+    source: &ParseContext,
 ) -> Result<Vec<AstNode<TypedParameter>>> {
     let mut params = Vec::new();
 
@@ -356,6 +390,7 @@ fn parse_function_parameters(
                 vec![Rule::Expr, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -363,7 +398,7 @@ fn parse_function_parameters(
     Ok(params)
 }
 
-fn parse_typed_param(pair: Pair<Rule>, source: &mut Source) -> Result<AstNode<TypedParameter>> {
+fn parse_typed_param(pair: Pair<Rule>, source: &ParseContext) -> Result<AstNode<TypedParameter>> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Parameter name not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -393,6 +428,7 @@ fn parse_typed_param(pair: Pair<Rule>, source: &mut Source) -> Result<AstNode<Ty
                 vec![Rule::Identifier, Rule::Type, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -400,7 +436,7 @@ fn parse_typed_param(pair: Pair<Rule>, source: &mut Source) -> Result<AstNode<Ty
     Ok(AstNode::new(TypedParameter::new(name?, ty?), span))
 }
 
-fn parse_type(pair: Pair<Rule>, source: &mut Source) -> Result<Type> {
+fn parse_type(pair: Pair<Rule>, source: &ParseContext) -> Result<Type> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -430,11 +466,12 @@ fn parse_type(pair: Pair<Rule>, source: &mut Source) -> Result<Type> {
             ],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
+            source,
         ))?,
     }
 }
 
-fn parse_label(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_label(pair: Pair<Rule>, source: &ParseContext) -> Result<StatementNode> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::LabelIdentifier => Ok(AstNode::from_pair(
@@ -449,11 +486,12 @@ fn parse_label(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
             vec![Rule::LabelIdentifier],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
+            source,
         ))?,
     }
 }
 
-fn parse_block_label(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_block_label(pair: Pair<Rule>, source: &mut ParseContext) -> Result<StatementNode> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Block label name not found",
         &AstSpan::from_span(pair.as_span(), source),
@@ -477,6 +515,7 @@ fn parse_block_label(pair: Pair<Rule>, source: &mut Source) -> Result<StatementN
                 vec![Rule::LabelIdentifier, Rule::Block, Rule::COMMENT],
                 vec![r],
                 &span,
+                source,
             ))?,
         }
     }
@@ -490,7 +529,7 @@ fn parse_block_label(pair: Pair<Rule>, source: &mut Source) -> Result<StatementN
     ))
 }
 
-fn parse_block(pair: Pair<Rule>, source: &mut Source) -> Result<Vec<StatementNode>> {
+fn parse_block(pair: Pair<Rule>, source: &mut ParseContext) -> Result<Vec<StatementNode>> {
     let mut statements = Vec::new();
     for item in pair.into_inner() {
         match item.as_rule() {
@@ -505,6 +544,7 @@ fn parse_block(pair: Pair<Rule>, source: &mut Source) -> Result<Vec<StatementNod
                 vec![Rule::Statement, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         }
     }
@@ -512,7 +552,7 @@ fn parse_block(pair: Pair<Rule>, source: &mut Source) -> Result<Vec<StatementNod
     Ok(statements)
 }
 
-fn parse_instruction(pair: Pair<Rule>, source: &mut Source) -> Result<StatementNode> {
+fn parse_instruction(pair: Pair<Rule>, source: &ParseContext) -> Result<StatementNode> {
     let mut name: Result<String> = Err(ParseError::from_span(
         "Instruction name not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -525,7 +565,7 @@ fn parse_instruction(pair: Pair<Rule>, source: &mut Source) -> Result<StatementN
         pair.as_span().start(),
         pair.as_span().start() + 1,
         // Arc::clone(source),
-        source.clone(),
+        source,
     );
 
     // used to merge spans, even if non contiguous
@@ -553,6 +593,7 @@ fn parse_instruction(pair: Pair<Rule>, source: &mut Source) -> Result<StatementN
                 vec![Rule::InstructionLabel, Rule::ExprParameters, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -565,7 +606,7 @@ fn parse_instruction(pair: Pair<Rule>, source: &mut Source) -> Result<StatementN
     ))
 }
 
-fn parse_expr_parameters(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNode<Expr>>> {
+fn parse_expr_parameters(pair: Pair<Rule>, source: &ParseContext) -> Result<Vec<AstNode<Expr>>> {
     let mut params = Vec::new();
 
     for item in pair.into_inner() {
@@ -577,6 +618,7 @@ fn parse_expr_parameters(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNod
                 vec![Rule::Expr, Rule::COMMENT],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
+                source,
             ))?,
         };
     }
@@ -584,7 +626,7 @@ fn parse_expr_parameters(pair: Pair<Rule>, source: &Source) -> Result<Vec<AstNod
     Ok(params)
 }
 
-fn parse_function_call_expr(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
+fn parse_function_call_expr(pair: Pair<Rule>, source: &ParseContext) -> Result<AstNode<Expr>> {
     let span = AstSpan::from_span(pair.as_span(), source);
 
     Ok(AstNode::new(
@@ -595,7 +637,7 @@ fn parse_function_call_expr(pair: Pair<Rule>, source: &Source) -> Result<AstNode
 
 fn parse_expr<'a>(
     pairs: impl Iterator<Item = pest::iterators::Pair<'a, Rule>>,
-    source: &Source,
+    source: &ParseContext,
 ) -> Result<AstNode<Expr>> {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
@@ -626,6 +668,7 @@ fn parse_expr<'a>(
                 ],
                 vec![r],
                 &AstSpan::from_span(primary.as_span(), source),
+                source,
             ))?,
         })
         .map_infix(|lhs, op, rhs| {
@@ -679,6 +722,7 @@ fn parse_expr<'a>(
                     ],
                     vec![r],
                     &AstSpan::from_span(op.as_span(), source),
+                    source,
                 ))?,
             };
             Ok(AstNode::from_pair(
@@ -702,6 +746,7 @@ fn parse_expr<'a>(
                     vec![Rule::subtract, Rule::logical_not, Rule::bit_negation],
                     vec![r],
                     &AstSpan::from_span(op.as_span(), source),
+                    source,
                 ))?,
             };
 
@@ -717,7 +762,7 @@ fn parse_expr<'a>(
         .parse(pairs.filter(|x| !matches!(x.as_rule(), Rule::COMMENT)))
 }
 
-fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
+fn parse_literal(pair: Pair<Rule>, source: &ParseContext) -> Result<AstNode<Expr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -775,11 +820,12 @@ fn parse_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
             ],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
+            source,
         ))?,
     }
 }
 
-fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
+fn parse_hexadecimal(pair: Pair<Rule>, source: &ParseContext) -> Result<AstNode<Expr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -797,11 +843,12 @@ fn parse_hexadecimal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>>
             vec![Rule::Int],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
+            source,
         ))?,
     }
 }
 
-fn parse_binary_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Expr>> {
+fn parse_binary_literal(pair: Pair<Rule>, source: &ParseContext) -> Result<AstNode<Expr>> {
     let inner = pair.into_inner().next().unwrap();
 
     match inner.as_rule() {
@@ -819,6 +866,7 @@ fn parse_binary_literal(pair: Pair<Rule>, source: &Source) -> Result<AstNode<Exp
             vec![Rule::Int],
             vec![r],
             &AstSpan::from_span(inner.as_span(), source),
+            source,
         ))?,
     }
 }

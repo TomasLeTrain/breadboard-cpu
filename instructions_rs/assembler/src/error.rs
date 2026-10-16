@@ -1,24 +1,23 @@
 use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
-use std::sync::Arc;
 
-use miette::SourceCode;
-use miette::{Diagnostic, NamedSource, SourceSpan};
+use miette::{Diagnostic, SourceSpan};
 use pest::RuleType;
 
 use pest::error::Error as PestParseError;
 use pest::error::ErrorVariant as PestParseErrorVariant;
 
-use crate::ast::{AstSpan, Source};
 use crate::ast::MultiFileSource;
+use crate::ast::{AstSpan, Source};
+use crate::parser::ParseContext;
 
 // TODO: make error code generic to distinguish grammar parsing vs. ast parsing
 #[derive(Debug, Diagnostic)]
 #[diagnostic(code(assembler::parse_error))]
 pub struct ParseError {
-    #[source_code]
-    pub source: MultiFileSource,
+    // #[source_code]
+    // pub source: Option<MultiFileSource>,
     #[label]
     pub snippet: Option<SourceSpan>,
     pub err_message: String,
@@ -45,7 +44,7 @@ impl ParseError {
             err_message: message.into(),
             snippet,
             help: None,
-            source: span.to_miette_source_code(),
+            // source: span.to_miette_source_code(),
         }
     }
 
@@ -55,6 +54,7 @@ impl ParseError {
         expected: Vec<R>,
         unexpected: Vec<R>,
         span: &AstSpan,
+        source: &ParseContext,
     ) -> Self {
         Self::from_pest_message(
             PestParseError::new_from_span(
@@ -62,17 +62,17 @@ impl ParseError {
                     positives: expected,
                     negatives: unexpected,
                 },
-                span.to_span(),
+                span.to_span(source.inner()),
             ),
             message,
-            span.source(),
+            // source,
         )
     }
 
     pub fn from_pest_message<R: RuleType>(
         err: PestParseError<R>,
         err_message: impl Into<String>,
-        source: &Source,
+        // source: &Source,
     ) -> ParseError {
         let help = Some(err.variant.message().to_string());
 
@@ -87,13 +87,13 @@ impl ParseError {
             err_message: err_message.into(),
             snippet,
             help,
-            // source: AstSpan::new(span.0, span.1, Arc::clone(source)).to_miette_source_code(),
-            source: AstSpan::new(span.0, span.1, source.clone()).to_miette_source_code(),
+            // source: AstSpan::new(span.0, span.1, source).to_miette_source_code(),
         }
     }
 
     pub fn from_pest<R: RuleType>(err: PestParseError<R>, source: &Source) -> ParseError {
         let message = "Grammar parsing error".to_string();
-        Self::from_pest_message(err, message, source)
+        // Self::from_pest_message(err, message, source)
+        Self::from_pest_message(err, message)
     }
 }

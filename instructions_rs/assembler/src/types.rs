@@ -725,7 +725,7 @@ impl DuplicateSymbolError {
     fn from_symbols(symbol: Symbol, other: Symbol) -> Result<()> {
         let mut spans = Vec::new();
 
-        let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
+        // let source = symbol.span.as_ref().map(|e| e.to_miette_source_code());
 
         if let Some(ast_span) = symbol.span.as_ref() {
             spans.push(LabeledSpan::new_with_span(
@@ -743,7 +743,7 @@ impl DuplicateSymbolError {
 
         Err(DuplicateSymbolError {
             name: symbol.name,
-            source,
+            source: None,
             spans,
         })?
     }
@@ -839,10 +839,12 @@ impl TypecheckExprErrorKind {
             | TypecheckExprErrorKind::InvalidEqualityTypes((ast_span, _), _)
             | TypecheckExprErrorKind::InvalidUnaryOpType((ast_span, _), _)
             | TypecheckExprErrorKind::IdentityAlreadyTyped((ast_span, _)) => {
-                Some(ast_span.to_miette_source_code())
+                // Some(ast_span.to_miette_source_code())
+                None
             }
             TypecheckExprErrorKind::SymbolNotFound(symbol) => {
-                symbol.span.as_ref().map(AstSpan::to_miette_source_code)
+                // symbol.span.as_ref().map(AstSpan::to_miette_source_code)
+                None
             }
         }
     }

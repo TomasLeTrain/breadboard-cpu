@@ -23,6 +23,7 @@ use crate::{
     ast::{MultiFileSource, NamedSourceFile},
     eval::{EvalContext, EvalSymbol, ExprValue},
     istr_resolver::gen_instruction_lookup_table,
+    parser::ParseContext,
     types::{Symbol, Type},
 };
 
@@ -46,7 +47,14 @@ pub fn parse_file(file_path_str: &str) -> Result<AsmGenContext> {
 }
 
 fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGenContext> {
-    let mut program = parser::parse_source(source_str, source).wrap_err("Parsing file failed.")?;
+    let mut parse_ctx = ParseContext::new(source);
+
+    let mut program = parser::parse_source(source_str, &mut parse_ctx)
+        .map_err(|error| {
+            // And this code provides the source code for inner error
+            error.with_source_code(source.clone())
+        })
+        .wrap_err("Parsing file failed.")?;
 
     // println!("initial: {:#?}", program);
 
@@ -71,7 +79,12 @@ fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGen
     }
 
     // println!("initial: {:#?}", program);
-    types::typecheck(&mut program, &mut global_symbols).wrap_err("Typechecking failed.")?;
+    types::typecheck(&mut program, &mut global_symbols)
+        .map_err(|error| {
+            // And this code provides the source code for inner error
+            error.with_source_code(source.clone())
+        })
+        .wrap_err("Typechecking failed.")?;
 
     let mut directives = HashSet::new();
     directives.insert("address".to_string());
@@ -100,7 +113,12 @@ fn parse_source(source_str: &str, source: &mut MultiFileSource) -> Result<AsmGen
     }
 
     // println!("before macro eval: {:#?}", program);
-    eval::eval_program(&mut program, &mut valued_symbols).wrap_err("Failed to evaluate program")?;
+    eval::eval_program(&mut program, &mut valued_symbols)
+        .map_err(|error| {
+            // And this code provides the source code for inner error
+            error.with_source_code(source.clone())
+        })
+        .wrap_err("Failed to evaluate program")?;
     // println!("after macro eval: {:#?}", program);
 
     let all_istrs: Vec<Arc<Instruction>> =
