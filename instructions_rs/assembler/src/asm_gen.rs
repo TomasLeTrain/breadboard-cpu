@@ -1,13 +1,16 @@
+use std::fs;
+
 use owo_colors::{
     OwoColorize,
     colors::{self},
 };
 
 use crate::{
-    ast::{AstSpan, InlinedFunctionCall, Source, StatementKind, StatementNode},
+    ast::{AstSpan, Directive, InlinedFunctionCall, Source, StatementKind, StatementNode},
+    eval::ExprValue,
     types::Address,
 };
-use miette::{Result, miette};
+use miette::{Context, IntoDiagnostic, Result, miette};
 use opcode_gen::instructions::ArgumentValue;
 
 /// simple vector of bools implemented as packed bytes
@@ -32,7 +35,9 @@ impl BoolVec {
     }
 
     fn set(&mut self, i: usize) -> Result<()> {
-        assert!(!self.get(i)?);
+        if self.get(i)? {
+            Err(miette!("bool at index already set!"))?;
+        }
 
         let value = self
             .vec
@@ -60,6 +65,7 @@ impl BoolVec {
 enum AsmSpanKind {
     String(String),
     Instruction(AstSpan),
+    Directive(AstSpan),
 }
 
 impl AsmSpanKind {
@@ -68,6 +74,10 @@ impl AsmSpanKind {
             AsmSpanKind::String(string) => string.clone(),
             AsmSpanKind::Instruction(ast_span) => {
                 prettify_instruction(ast_span.get_line_str(source).to_string())
+            }
+            AsmSpanKind::Directive(ast_span) => {
+                // TODO: prettify
+                ast_span.get_line_str(source).to_string()
             }
         }
     }
@@ -98,13 +108,6 @@ impl AsmGenContext {
         }
     }
 
-    // fn get_byte(&self, addr: Address) -> Result<u8> {
-    //     Ok(*self
-    //         .assembly
-    //         .get(addr as usize)
-    //         .ok_or(miette!("couldn't get byte"))?)
-    // }
-
     fn place_byte(&mut self, addr: Address, byte: u8) -> Result<()> {
         let asm_byte = self
             .assembly
@@ -113,7 +116,9 @@ impl AsmGenContext {
 
         *asm_byte = byte;
 
-        self.addr_occupied.set(addr as usize)?;
+        self.addr_occupied
+            .set(addr as usize)
+            .wrap_err("placing byte")?;
         Ok(())
     }
 
@@ -121,17 +126,29 @@ impl AsmGenContext {
         let end_addr = addr + bytes.len() as u16;
 
         for (&byte, i) in bytes.iter().zip(addr..end_addr) {
-            self.place_byte(i, byte)?;
+            self.place_byte(i, byte).wrap_err("placing bytes")?;
         }
 
         Ok(())
     }
 
-    fn place_statement(&mut self, kind: AsmSpanKind, addr: Address, bytes: &[u8]) -> Result<()> {
+    fn place_statement(
+        &mut self,
+        kind: AsmSpanKind,
+        addr: Address,
+        bytes: &[u8],
+        display_bytes: bool,
+    ) -> Result<()> {
         if !bytes.is_empty() {
-            self.place_bytes(addr, bytes)?;
+            self.place_bytes(addr, bytes)
+                .wrap_err("placing statement's bytes")?;
         }
-        let end_addr = addr + (bytes.len() as u16);
+
+        let end_addr = if display_bytes {
+            addr + (bytes.len() as u16)
+        } else {
+            addr
+        };
         self.istr_slices.push(AsmSpan {
             kind,
             byte_span: (addr, end_addr),
@@ -163,7 +180,7 @@ impl AsmGenContext {
 
         let spans = self.get_sorted_spans();
 
-        result.push_str(&format!("Addr | {:^10} | Text Assembly\n", "Bytes"));
+        result.push_str(&format!("Addr | {:^11} | Text Assembly\n", "Bytes"));
         result.push('\n');
 
         for span in spans.iter() {
@@ -181,7 +198,7 @@ impl AsmGenContext {
                 .collect();
 
             line.push_str(&format!(
-                "{:<10} | ",
+                "{:<11} | ",
                 str_bytes.join(" ").fg::<colors::Green>()
             ));
 
@@ -243,14 +260,18 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     AsmSpanKind::String(format!("{}:", name.dimmed())),
                     statement.inner().address().unwrap(),
                     &[],
-                )?;
+                    false,
+                )
+                .wrap_err(format!("placing label \"{name}\""))?;
             }
             StatementKind::InlinedFunctionCall(InlinedFunctionCall { name, body, .. }) => {
                 ctx.place_statement(
                     AsmSpanKind::String(format!("fn {} {{", name.dimmed())),
                     statement.inner().address().unwrap(),
                     &[],
-                )?;
+                    false,
+                )
+                .wrap_err(format!("placing inlined function call \"{name}\""))?;
                 generate_asm(body, ctx)?;
             }
 
@@ -259,7 +280,9 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     AsmSpanKind::String(format!("{} {{", name.dimmed())),
                     statement.inner().address().unwrap(),
                     &[],
-                )?;
+                    false,
+                )
+                .wrap_err(format!("placing block label \"{name}\""))?;
                 generate_asm(body, ctx)?;
             }
             StatementKind::Block { body } => {
@@ -267,7 +290,9 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     AsmSpanKind::String("{".to_string()),
                     statement.inner().address().unwrap(),
                     &[],
-                )?;
+                    false,
+                )
+                .wrap_err("placing block".to_string())?;
                 generate_asm(body, ctx)?;
             }
             StatementKind::Instruction(ast_instruction) => {
@@ -287,7 +312,48 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     AsmSpanKind::Instruction(statement.span().clone()),
                     statement.inner().address().unwrap(),
                     &istr_bytes,
-                )?;
+                    true,
+                )
+                .wrap_err("placing instruction".to_string())?;
+            }
+
+            StatementKind::Directive(Directive { name, params }) => {
+                if name == "data" || name == "data_file" {
+                    let expr_value = &params.first().unwrap().inner().value;
+
+                    let data = if name == "data_file" {
+                        // get data from file
+                        match &expr_value {
+                            ExprValue::String(file_path) => {
+                                let file = fs::read_to_string(file_path.clone())
+                                    .into_diagnostic()
+                                    .wrap_err("Failed reading file for data")?;
+                                Vec::from(file.as_bytes())
+                            }
+                            _ => Err(miette!("data_file directive does not have path"))?,
+                        }
+                    } else {
+                        // data stays as data, but must convert to byte representation
+                        expr_value.as_bytes()?
+                    };
+
+                    ctx.place_statement(
+                        AsmSpanKind::Directive(statement.span().clone()),
+                        statement.inner().address().unwrap(),
+                        &data,
+                        data.len() <= 4,
+                    )
+                    .wrap_err(format!("placing directive \"{name}\""))?;
+                } else {
+                    // print all other directives
+                    ctx.place_statement(
+                        AsmSpanKind::Directive(statement.span().clone()),
+                        statement.inner().address().unwrap(),
+                        &[],
+                        false,
+                    )
+                    .wrap_err(format!("placing directive \"{name}\""))?;
+                }
             }
             // nothing else emmits asm
             _ => (),

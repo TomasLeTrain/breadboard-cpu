@@ -5,9 +5,9 @@ use opcode_gen::instructions::{AddressRegister, ArgumentValue, Register};
 
 use crate::{
     ast::{
-        AstNode, AstSpan, BinaryOp, Expr, ExprKind, Function, FunctionCall, InlinedFunctionCall,
-        MultiFileSource, ReturnKind, Statement, StatementKind, StatementNode, TypedParameter,
-        UnaryOp, Variable, VariableExprKind,
+        AstInstruction, AstNode, AstSpan, BinaryOp, Directive, Expr, ExprKind, Function,
+        FunctionCall, InlinedFunctionCall, MultiFileSource, ReturnKind, Statement, StatementKind,
+        StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind,
     },
     types::{Address, Type},
 };
@@ -29,6 +29,25 @@ pub enum ExprValue {
 }
 
 impl ExprValue {
+    pub fn as_bytes(&self) -> Result<Vec<u8>> {
+        match self {
+            ExprValue::Int(val) => Ok(vec![
+                (val & 0xff) as u8,
+                ((val >> 8) & 0xff) as u8,
+                ((val >> 16) & 0xff) as u8,
+                ((val >> 24) & 0xff) as u8,
+            ]),
+            ExprValue::Addr(val) => Ok(vec![(val & 0xff) as u8, ((val >> 8) & 0xff) as u8]),
+            ExprValue::Byte(val) => Ok(vec![*val]),
+            ExprValue::Bool(val) => Ok(vec![if *val { 1 } else { 0 }]),
+            ExprValue::String(string) => Ok(Vec::from(string.as_bytes())),
+            ExprValue::Register(_)
+            | ExprValue::AddressRegister(_)
+            | ExprValue::Unknown
+            | ExprValue::Block(_) => Err(miette!("not emmitable as bytes!")),
+        }
+    }
+
     pub fn as_int(&self) -> Result<i32> {
         match self {
             ExprValue::Int(val) => Ok(*val),
@@ -669,9 +688,9 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 eval_program(body, ctx)?;
             }
-            // instructions not evaled on macro
-            StatementKind::Instruction(instruction) => {
-                for param in instruction.params.iter_mut() {
+            StatementKind::Directive(Directive { params, .. })
+            | StatementKind::Instruction(AstInstruction { params, .. }) => {
+                for param in params.iter_mut() {
                     eval_expr(param, ctx)?;
                 }
             }

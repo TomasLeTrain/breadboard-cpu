@@ -83,6 +83,8 @@ fn parse_source(source_str: &str, mut source: MultiFileSource) -> Result<AsmGenC
 
     let mut directives = HashSet::new();
     directives.insert("address".to_string());
+    directives.insert("data".to_string());
+    directives.insert("data_file".to_string());
 
     directive_checker::check_directives(&mut program, &directives)?;
 
