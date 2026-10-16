@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use miette::{Result, miette};
 use opcode_gen::instructions::{
-    AddressRegister, ArgumentType, Instruction, InstructionSignature, Register,
+    ArgumentType, Instruction, InstructionSignature,
 };
 
 use crate::{

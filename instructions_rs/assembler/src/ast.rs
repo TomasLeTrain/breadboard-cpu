@@ -395,16 +395,6 @@ pub enum ExprKind {
     },
 }
 
-impl ExprKind {
-    pub fn as_identity(&self) -> Option<String> {
-        if let ExprKind::Identity(name) = self {
-            Some(name.clone())
-        } else {
-            None
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Neg,         // -

@@ -329,14 +329,6 @@ impl FunctionEvalSymbol {
     pub fn inner(&self) -> &EvalFunctionKind {
         &self.inner
     }
-
-    pub fn into_inner(&self) -> &EvalFunctionKind {
-        &self.inner
-    }
-
-    pub fn inner_mut(&mut self) -> &mut EvalFunctionKind {
-        &mut self.inner
-    }
 }
 
 // keeps track of symbols by keeping track of their scope as well

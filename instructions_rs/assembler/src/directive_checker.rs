@@ -1,22 +1,9 @@
 //! Errors if directive is unkown. Directives can apply at various stages, so any such errors are
 //! catched here.
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-
+use std::collections::HashSet;
 use miette::{Result, miette};
-use opcode_gen::instructions::{
-    AddressRegister, ArgumentType, Instruction, InstructionSignature, Register,
-};
-
-use crate::{
-    ast::{AstNode, Directive, Expr, InlinedFunctionCall, StatementKind, StatementNode},
-    error::ParseError,
-    eval::ExprValue,
-    types::Type,
-};
+use crate::ast::{Directive, InlinedFunctionCall, StatementKind, StatementNode};
 
 // TODO: ensure directive has correct types here?
 
