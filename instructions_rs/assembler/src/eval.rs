@@ -7,7 +7,7 @@ use crate::{
     ast::{
         AstInstruction, AstNode, AstSpan, BinaryOp, Directive, Expr, ExprKind, Function,
         FunctionCall, InlinedFunctionCall, MultiFileSource, ReturnKind, Statement, StatementKind,
-        StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind,
+        StatementNode, TypedParameter, UnaryOp, Variable, VariableExprKind, VariableVisibilityKind,
     },
     types::{Address, Type},
 };
@@ -454,6 +454,10 @@ impl EvalContext {
         self.local_ctx.pop()
     }
 
+    fn pop_global(&mut self) -> Result<EvalSymbol> {
+        self.global_ctx.pop()
+    }
+
     fn get(&self, name: &String) -> Option<&EvalSymbol> {
         self.local_ctx.get(name).or(self.global_ctx.get(name))
     }
@@ -528,6 +532,7 @@ impl EvalContext {
 
 pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> Result<ExprValue> {
     let mut local_symbols = Vec::new();
+    let mut global_symbols = Vec::new();
     let mut function_symbols = Vec::new();
 
     let mut return_value = ExprValue::Unknown;
@@ -579,6 +584,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 name,
                 expr_kind,
                 ty,
+                visibility,
             }) => {
                 let value = match expr_kind {
                     VariableExprKind::Expr(expr) => {
@@ -588,17 +594,34 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     VariableExprKind::Block(block) => ExprValue::Block(block.clone()),
                 };
 
-                // push into local scope
-                let curr_symbol = EvalSymbol {
-                    name: name.clone(),
-                    ty: ty.clone(),
-                    value,
-                    span: Some(statement.span().clone()),
-                };
+                match visibility {
+                    VariableVisibilityKind::Global => {
+                        // push into local scope
+                        let curr_symbol = EvalSymbol {
+                            name: name.clone(),
+                            ty: ty.clone(),
+                            value,
+                            span: Some(statement.span().clone()),
+                        };
 
-                ctx.push_local(curr_symbol.clone())
-                    .wrap_err("Pushing local variable symbol failed.")?;
-                local_symbols.push(curr_symbol);
+                        ctx.push_global(curr_symbol.clone())
+                            .wrap_err("Pushing global variable symbol failed.")?;
+                        global_symbols.push(curr_symbol);
+                    }
+                    VariableVisibilityKind::Local => {
+                        // push into local scope
+                        let curr_symbol = EvalSymbol {
+                            name: name.clone(),
+                            ty: ty.clone(),
+                            value,
+                            span: Some(statement.span().clone()),
+                        };
+
+                        ctx.push_local(curr_symbol.clone())
+                            .wrap_err("Pushing local variable symbol failed.")?;
+                        local_symbols.push(curr_symbol);
+                    }
+                }
             }
             StatementKind::Return(return_kind) => {
                 match return_kind {
@@ -737,9 +760,6 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     })
                     .collect();
 
-                // evaluate function
-                // let eval_value = function_symbol.inner().eval(valued_params, ctx)?;
-
                 // evaluate function, only for collecting context
                 if let EvalFunctionKind::Function(function) = function_symbol.inner() {
                     let mut curr_func = function.clone();
@@ -810,7 +830,20 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
         let curr = ctx.pop_local()?;
         if label.name != curr.name {
             return Err(miette!(
-                "Popped symbol does not match - original: {:?}, got: {:?}",
+                "Popped local symbol does not match - original: {:?}, got: {:?}",
+                label,
+                curr,
+            ));
+        }
+    }
+
+    // checks that all returned symbols match what was pushed in
+    // goes in reverse since pop starts from the last added element
+    for label in global_symbols.into_iter().rev() {
+        let curr = ctx.pop_global()?;
+        if label.name != curr.name {
+            return Err(miette!(
+                "Popped global symbol does not match - original: {:?}, got: {:?}",
                 label,
                 curr,
             ));

@@ -196,6 +196,12 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Resu
     )
     .into());
 
+    let mut visibility: Result<VariableVisibilityKind> = Err(ParseError::from_span(
+        "Definition attribute not found".to_string(),
+        &AstSpan::from_span(pair.as_span(), source),
+    )
+    .into());
+
     let mut expr: Result<VariableExprKind> = Err(ParseError::from_span(
         "Function Block not found".to_string(),
         &AstSpan::from_span(pair.as_span(), source),
@@ -206,6 +212,13 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Resu
 
     for item in pair.into_inner() {
         match item.as_rule() {
+            Rule::VariableDefinitionAttribute => {
+                visibility = match item.to_string().as_str() {
+                    "let" => Ok(VariableVisibilityKind::Local),
+                    "global" => Ok(VariableVisibilityKind::Global),
+                    e => Err(miette!("Unknown visibility attribute: {e}")),
+                };
+            }
             Rule::Identifier => {
                 // merge span covering label in case no params
                 name = Ok(item.to_string());
@@ -225,7 +238,12 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Resu
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Variable statement parsing error".to_string(),
-                vec![Rule::Identifier, Rule::VariableExpr, Rule::COMMENT],
+                vec![
+                    Rule::VariableDefinitionAttribute,
+                    Rule::Identifier,
+                    Rule::VariableExpr,
+                    Rule::COMMENT,
+                ],
                 vec![r],
                 &AstSpan::from_span(item.as_span(), source),
                 source,
@@ -234,7 +252,12 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Resu
     }
 
     Ok(StatementNode::new(
-        Statement::new(StatementKind::Variable(Variable::new(name?, expr?, ty))),
+        Statement::new(StatementKind::Variable(Variable::new(
+            name?,
+            visibility?,
+            expr?,
+            ty,
+        ))),
         span,
     ))
 }

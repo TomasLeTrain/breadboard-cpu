@@ -315,16 +315,29 @@ impl AstInstruction {
 }
 
 #[derive(Debug, Clone)]
+pub enum VariableVisibilityKind {
+    Global,
+    Local,
+}
+
+#[derive(Debug, Clone)]
 pub struct Variable {
     pub name: String,
+    pub visibility: VariableVisibilityKind,
     pub expr_kind: VariableExprKind,
     pub ty: Type,
 }
 
 impl Variable {
-    pub fn new(name: String, expr_kind: VariableExprKind, ty: Type) -> Self {
+    pub fn new(
+        name: String,
+        visibility: VariableVisibilityKind,
+        expr_kind: VariableExprKind,
+        ty: Type,
+    ) -> Self {
         Self {
             name,
+            visibility,
             expr_kind,
             ty,
         }

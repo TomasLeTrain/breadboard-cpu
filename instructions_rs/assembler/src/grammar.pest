@@ -18,7 +18,8 @@ Statement  = { Newline* ~ ((FunctionCall ~ Newline*) | DirectiveStatement | Func
 
 DirectiveStatement = { "#" ~ Identifier ~ Expr? ~ ("," ~ Expr)* ~ Newline+ }
 
-VariableStatement = { "let" ~ Identifier ~ (":" ~ Type)? ~ "=" ~ VariableExpr ~ Newline+ }
+VariableStatement = { VariableDefinitionAttribute ~ Identifier ~ (":" ~ Type)? ~ "=" ~ VariableExpr ~ Newline+ }
+VariableDefinitionAttribute = { "global" | "let" }
 VariableExpr = _{ Block | Expr }
 
 ExprParameters = { ExprParameter ~ ("," ~ ExprParameter)* }

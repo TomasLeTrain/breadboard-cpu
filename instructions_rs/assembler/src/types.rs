@@ -3,6 +3,7 @@ use std::{collections::HashMap, error::Error, fmt::Display, hash::Hash};
 use crate::ast::{
     AstInstruction, AstNode, AstSpan, BinaryOp, Directive, Expr, ExprKind, FunctionCall,
     MultiFileSource, ReturnKind, StatementKind, StatementNode, UnaryOp, Variable, VariableExprKind,
+    VariableVisibilityKind,
 };
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, Result, miette};
 
@@ -249,10 +250,85 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
     let mut pushed_locals = Vec::new();
     let mut pushed_globals = Vec::new();
 
+    // first find all labels and functions in the current scope (accessible from anywhere in scope)
+    for statement in statements.iter() {
+        match statement.inner().inner() {
+            StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } => {
+                // push into local scope
+                let curr_symbol = Symbol {
+                    name: name.clone(),
+                    span: Some(statement.span().clone()),
+                    ty: Type::Label,
+                };
+
+                ctx.push_local(curr_symbol.clone())
+                    .wrap_err("Pushing local label symbol failed.")?;
+
+                pushed_locals.push(curr_symbol);
+            }
+            _ => (),
+        }
+    }
+
     // must first typecheck functions to get their return type if not specified
     // only then can its symbol be constructed
     for statement in statements.iter_mut() {
         let statement_span = statement.span().clone();
+
+        if let StatementKind::Variable(Variable {
+            name,
+            expr_kind,
+            ty,
+            visibility,
+        }) = statement.inner_mut().inner_mut()
+        {
+            // typecheck inner expr
+            match expr_kind {
+                VariableExprKind::Expr(expr) => typecheck_expr(expr, ctx)?,
+                VariableExprKind::Block(block) => typecheck(block, ctx)?,
+            };
+            let expr_ty = match expr_kind {
+                VariableExprKind::Expr(expr) => expr.inner.ty.clone(),
+                VariableExprKind::Block(_) => Type::Block,
+            };
+
+            // check it matches current ty, if its set
+            if matches!(ty, Type::Unknown) {
+                *ty = expr_ty;
+            } else {
+                if ty.unify(&expr_ty).is_none() {
+                    // TODO: detailed error
+                    Err(miette!("derived type is incompatible with typed type!"))?;
+                }
+            }
+
+            match visibility {
+                VariableVisibilityKind::Global => {
+                    // push global symbol to context
+                    let curr_symbol = Symbol {
+                        name: name.clone(),
+                        ty: ty.clone(),
+                        span: Some(statement.span().clone()),
+                    };
+                    ctx.push_global(curr_symbol.clone())
+                        .wrap_err("Pushing global variable symbol failed.")?;
+                    pushed_globals.push(curr_symbol);
+                }
+                VariableVisibilityKind::Local => {
+                    // push local symbol to context
+                    let curr_symbol = Symbol {
+                        name: name.clone(),
+                        ty: ty.clone(),
+                        span: Some(statement.span().clone()),
+                    };
+
+                    ctx.push_local(curr_symbol.clone())
+                        .wrap_err("Pushing local variable symbol failed.")?;
+                    pushed_locals.push(curr_symbol);
+                }
+            }
+        }
+
         if let StatementKind::Function(function) = statement.inner_mut().inner_mut() {
             // only copies function context - no access to outer labels
             let mut function_ctx = ctx.clone_non_local_only();
@@ -340,65 +416,9 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
         }
     }
 
-    // first find all labels and functions in the current scope (accessible from anywhere in scope)
-    for statement in statements.iter() {
-        match statement.inner().inner() {
-            StatementKind::Label { name } | StatementKind::BlockLabel { name, .. } => {
-                // push into local scope
-                let curr_symbol = Symbol {
-                    name: name.clone(),
-                    span: Some(statement.span().clone()),
-                    ty: Type::Label,
-                };
-
-                ctx.push_local(curr_symbol.clone())
-                    .wrap_err("Pushing local label symbol failed.")?;
-
-                pushed_locals.push(curr_symbol);
-            }
-            _ => (),
-        }
-    }
-
     for statement in statements.iter_mut() {
         // NOTE: functions were already typechecked
         match statement.inner_mut().inner_mut() {
-            StatementKind::Variable(Variable {
-                name,
-                expr_kind,
-                ty,
-            }) => {
-                // typecheck inner expr
-                match expr_kind {
-                    VariableExprKind::Expr(expr) => typecheck_expr(expr, ctx)?,
-                    VariableExprKind::Block(block) => typecheck(block, ctx)?,
-                };
-                let expr_ty = match expr_kind {
-                    VariableExprKind::Expr(expr) => expr.inner.ty.clone(),
-                    VariableExprKind::Block(_) => Type::Block,
-                };
-
-                // check it matches current ty, if its set
-                if matches!(ty, Type::Unknown) {
-                    *ty = expr_ty;
-                } else {
-                    if ty.unify(&expr_ty).is_none() {
-                        // TODO: detailed error
-                        Err(miette!("derived type is incompatible with typed type!"))?;
-                    }
-                }
-
-                // push symbol to context
-                let curr_symbol = Symbol {
-                    name: name.clone(),
-                    ty: ty.clone(),
-                    span: Some(statement.span().clone()),
-                };
-
-                ctx.push_local(curr_symbol.clone())
-                    .wrap_err("Pushing variable symbol failed.")?;
-                pushed_locals.push(curr_symbol);
-            }
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
                 typecheck(body, ctx)?;
             }
