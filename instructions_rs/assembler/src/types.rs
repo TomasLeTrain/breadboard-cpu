@@ -513,9 +513,12 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                             ))?;
                         }
 
-                        if !matches!(return_ty.as_ref(), Type::Block) {
+                        if !matches!(return_ty.as_ref().as_simple(), Type::Block) {
                             // TODO: make detailed error
-                            Err(miette!("expected function to return block, instead ..."))?;
+                            Err(miette!(
+                                "expected function to return block, instead {:?}",
+                                return_ty
+                            ))?;
                         }
                     } else {
                         // TODO: make detailed error

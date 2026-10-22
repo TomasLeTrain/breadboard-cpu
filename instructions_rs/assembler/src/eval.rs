@@ -586,7 +586,6 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 VariableVisibilityKind::Global | VariableVisibilityKind::Local
             )
         {
-            println!("evaling global/local variable {name}");
             let value = match expr_kind {
                 VariableExprKind::Expr(expr) => {
                     eval_expr(expr, ctx)?;
@@ -641,7 +640,6 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                 ty,
                 visibility: VariableVisibilityKind::Let,
             }) => {
-                println!("evaling local variable {name}");
                 let value = match expr_kind {
                     VariableExprKind::Expr(expr) => {
                         eval_expr(expr, ctx)?;
@@ -699,7 +697,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
                 if !ctx.contains_function(name) {
                     // TODO: detailed error
-                    Err(miette!("function from function call not found"))?;
+                    Err(miette!("function from function call not found: \"{name}\""))?;
                 }
 
                 // eval all params
@@ -780,7 +778,7 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
 
                 if !ctx.contains_function(name) {
                     // TODO: detailed error
-                    Err(miette!("function from function call not found"))?;
+                    Err(miette!("function from function call not found: \"{name}\""))?;
                 }
 
                 // eval all params
@@ -926,7 +924,7 @@ fn eval_expr(typed_expr: &mut AstNode<Expr>, ctx: &mut EvalContext) -> Result<()
         ExprKind::FunctionCall(FunctionCall { name, params }) => {
             if !ctx.contains_function(name) {
                 // TODO: detailed error
-                Err(miette!("function from function call not found"))?;
+                Err(miette!("function from function call not found: \"{name}\""))?;
             }
 
             // eval all params

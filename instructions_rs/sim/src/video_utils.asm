@@ -1,26 +1,26 @@
 ; clears 240 * 40 pixels with given value, at given addr
 ; NOTE: SP pointer gets used, must save before calling!
 fn clear_range_vram(clear_val: u8, start_addr: Address, num_lines: u8){
-	fn clear_2_pixels(){
-		return {
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-		}
-	}
-
-	fn clear_10_pixels(){
-		return {
-			clear_2_pixels()
-			clear_2_pixels()
-			clear_2_pixels()
-			clear_2_pixels()
-			clear_2_pixels()
-		}
-	}
-
 	return {
+		fn clear_2_pixels(){
+			return {
+				sw_vram Z, SP
+				inc SP
+				sw_vram Z, SP
+				inc SP
+			}
+		}
+
+		fn clear_10_pixels(){
+			return {
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+				clear_2_pixels()
+			}
+		}
+
 		; value that gets loaded as character everywhere
 		mv Z, clear_val
 
