@@ -1,69 +1,23 @@
 ; char data spans 0x3000 - 0x3800
 let pCHAR_DATA = 0x3000
 #address pCHAR_DATA
-; #data_file "../../vga_display_v1/charset.out"
-#data_file "../../vga_display_v1/snake_charsv2.out"
+#data_file "../../vga_display_v1/charset.out"
 
 #address 0x0 ; ensures start is first symbol executed
 jmp start, MAR
 
 #include "src/utils.asm"
 
-; snake program
+; terminal program
 
 ; Goals:
-; - have circular queue of positions, can represent 16x16 in one byte
-; - draw on screen
-; - player input
+; prompt input from keyboard
+; interpret commands and execute them (what format?)
 
-; where the current x direction gets stored
-let pDIR_X = 0x9001
-; where the current y direction gets stored
-let pDIR_Y = 0x9002
-; game runs until == 0
-let pHALT = 0x9003
 
-; dir encoded with:
-; 0 -> 0
-; 1 -> 1
-; 2 -> -1
-; encoded as [0][x/2bits][y/2bits][000]
-fn get_pDIR_VECTOR() {
-	let pDIR_VECTOR = 0x9004
-	return pDIR_VECTOR
-}
 
-; dir vector that can directly address the char table
-fn get_pDIR_CHAR_IDX_LAST() {
-	let pDIR_CHAR_IDX = 0x9005
-	return pDIR_CHAR_IDX
-}
-
-; dir vector that can directly address the char table
-fn get_pDIR_CHAR_IDX_CURR() {
-	let pDIR_CHAR_IDX = 0x9006
-	return pDIR_CHAR_IDX
-}
-
-; gets set to 0 on draw_update, reset back to 1 input_update
-let pCHAR_DRAW = 0x9007
-
-; upper byte of queue
-let pQUEUE_BASE = 0xA000
-
-; read pointer - lower byte of whole addr
-let pQUEUE_READ = 0x9100
-; write pointer - lower byte of whole addr
-let pQUEUE_WRITE = 0x9102
-; apple pointer - where position of apple gets stored
-let pAPPLE = 0x9104
-; apple eaten pointer - is non-zero if apple was eaten, reset by display update
-let pAPPLE_WAS_EATEN = 0x9105
-
-; snake character address scheme (msb to lsb):
-; [head/1bit][y_dir/2bits][x_dir/2bits][y position/3bits] -> 3*3*2 = 18 characters, 144 bytes
-; TODO: not program 18 different combinations manually lol
-
+; input buffer start
+; input buffer end ptr
 let background_color = 0b11000100
 let main_color = 0b11000000
 
@@ -141,7 +95,7 @@ start {
 	; main loop
 	loop { 
 		; let speed_dial = 1
-		let speed_dial = 255
+		let speed_dial = 150
 
 		; delay since its too fast
 		; NOTE: Z not used in update_input loop, must keep that way!
