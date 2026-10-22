@@ -214,8 +214,9 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Resu
         match item.as_rule() {
             Rule::VariableDefinitionAttribute => {
                 visibility = match item.to_string().as_str() {
-                    "let" => Ok(VariableVisibilityKind::Local),
+                    "let" => Ok(VariableVisibilityKind::Let),
                     "global" => Ok(VariableVisibilityKind::Global),
+                    "local" => Ok(VariableVisibilityKind::Local),
                     e => Err(miette!("Unknown visibility attribute: {e}")),
                 };
             }

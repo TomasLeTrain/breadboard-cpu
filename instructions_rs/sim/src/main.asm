@@ -1,8 +1,3 @@
-; char data spans 0x3000 - 0x3800
-let pCHAR_DATA = 0x3000
-#address pCHAR_DATA
-#data_file "../../vga_display_v1/charset.out"
-
 #address 0x0 ; ensures start is first symbol executed
 jmp start, MAR
 
@@ -745,3 +740,8 @@ update_screen {
 	pop MAR
 	jmp MAR
 }
+
+; char data spans 0x3000 - 0x3800
+let pCHAR_DATA = 0x3000
+#address pCHAR_DATA
+#data_file "../../vga_display_v1/charset.out"

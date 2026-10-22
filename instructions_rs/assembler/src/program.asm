@@ -1,11 +1,11 @@
-global thing : u8 = 1
+; fn global_test(){
+; 	return thing
+; }
 
-fn global_test(){
-	return thing
-}
-
-mv A, global_test()
+; mv A, global_test()
 mv A, thing
+
+local thing : u8 = 1
 ; start:
 ; 	; initialize stack
 ; 	lda SP, 0xffe0 ; lda sp, sp_start_addr

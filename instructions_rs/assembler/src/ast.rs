@@ -318,6 +318,7 @@ impl AstInstruction {
 pub enum VariableVisibilityKind {
     Global,
     Local,
+    Let,
 }
 
 #[derive(Debug, Clone)]

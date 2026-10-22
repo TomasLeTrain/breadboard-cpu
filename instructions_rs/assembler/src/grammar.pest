@@ -5,7 +5,7 @@ COMMENT    = _{ Newline* ~ ";" ~ (!NEWLINE ~ ANY)* }
 
 
 KEYWORD = @{
-    "fn" | "true" | "false" | "int" | "bool" | "return" | "let"
+    "fn" | "true" | "false" | "int" | "bool" | "return" | "let" | "global" | "local"
 }
 
 // Program is a sequence of statements/expressions
@@ -19,7 +19,7 @@ Statement  = { Newline* ~ ((FunctionCall ~ Newline*) | DirectiveStatement | Func
 DirectiveStatement = { "#" ~ Identifier ~ Expr? ~ ("," ~ Expr)* ~ Newline+ }
 
 VariableStatement = { VariableDefinitionAttribute ~ Identifier ~ (":" ~ Type)? ~ "=" ~ VariableExpr ~ Newline+ }
-VariableDefinitionAttribute = { "global" | "let" }
+VariableDefinitionAttribute = { "global" | "let" | "local" }
 VariableExpr = _{ Block | Expr }
 
 ExprParameters = { ExprParameter ~ ("," ~ ExprParameter)* }

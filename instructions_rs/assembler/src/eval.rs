@@ -573,6 +573,55 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
         }
     }
 
+    // must eval variables available anywhere in the scope before everything else
+    for statement in statements.iter_mut() {
+        if let StatementKind::Variable(Variable {
+            name,
+            expr_kind,
+            ty,
+            visibility,
+        }) = statement.inner_mut().inner_mut()
+        {
+            let value = match expr_kind {
+                VariableExprKind::Expr(expr) => {
+                    eval_expr(expr, ctx)?;
+                    expr.inner.value.clone()
+                }
+                VariableExprKind::Block(block) => ExprValue::Block(block.clone()),
+            };
+
+            match visibility {
+                VariableVisibilityKind::Global => {
+                    // push into local scope
+                    let curr_symbol = EvalSymbol {
+                        name: name.clone(),
+                        ty: ty.clone(),
+                        value,
+                        span: Some(statement.span().clone()),
+                    };
+
+                    ctx.push_global(curr_symbol.clone())
+                        .wrap_err("Pushing global variable symbol failed.")?;
+                    global_symbols.push(curr_symbol);
+                }
+                VariableVisibilityKind::Local => {
+                    // push into local scope
+                    let curr_symbol = EvalSymbol {
+                        name: name.clone(),
+                        ty: ty.clone(),
+                        value,
+                        span: Some(statement.span().clone()),
+                    };
+
+                    ctx.push_local(curr_symbol.clone())
+                        .wrap_err("Pushing local variable symbol failed.")?;
+                    local_symbols.push(curr_symbol);
+                }
+                _ => (),
+            }
+        }
+    }
+
     // then eval everything else
     for statement in statements.iter_mut() {
         // TODO: should already be caught by typecheck
@@ -594,35 +643,21 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     VariableExprKind::Block(block) => ExprValue::Block(block.clone()),
                 };
 
-                match visibility {
-                    VariableVisibilityKind::Global => {
-                        // push into local scope
-                        let curr_symbol = EvalSymbol {
-                            name: name.clone(),
-                            ty: ty.clone(),
-                            value,
-                            span: Some(statement.span().clone()),
-                        };
+                if let VariableVisibilityKind::Let = visibility {
+                    // push into local scope
+                    let curr_symbol = EvalSymbol {
+                        name: name.clone(),
+                        ty: ty.clone(),
+                        value,
+                        span: Some(statement.span().clone()),
+                    };
 
-                        ctx.push_global(curr_symbol.clone())
-                            .wrap_err("Pushing global variable symbol failed.")?;
-                        global_symbols.push(curr_symbol);
-                    }
-                    VariableVisibilityKind::Local => {
-                        // push into local scope
-                        let curr_symbol = EvalSymbol {
-                            name: name.clone(),
-                            ty: ty.clone(),
-                            value,
-                            span: Some(statement.span().clone()),
-                        };
-
-                        ctx.push_local(curr_symbol.clone())
-                            .wrap_err("Pushing local variable symbol failed.")?;
-                        local_symbols.push(curr_symbol);
-                    }
+                    ctx.push_local(curr_symbol.clone())
+                        .wrap_err("Pushing local variable symbol failed.")?;
+                    local_symbols.push(curr_symbol);
                 }
             }
+
             StatementKind::Return(return_kind) => {
                 match return_kind {
                     ReturnKind::Expr(expr) => {
