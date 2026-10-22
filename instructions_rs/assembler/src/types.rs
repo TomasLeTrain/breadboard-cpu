@@ -278,6 +278,10 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
             ty,
             visibility,
         }) = statement.inner_mut().inner_mut()
+            && matches!(
+                visibility,
+                VariableVisibilityKind::Global | VariableVisibilityKind::Local
+            )
         {
             // typecheck inner expr
             match expr_kind {
@@ -426,7 +430,7 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 name,
                 expr_kind,
                 ty,
-                visibility,
+                visibility: VariableVisibilityKind::Let,
             }) => {
                 // typecheck inner expr
                 match expr_kind {
@@ -448,18 +452,16 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                     }
                 }
 
-                if let VariableVisibilityKind::Let = visibility {
-                    // push local symbol to context, but only after its defined
-                    let curr_symbol = Symbol {
-                        name: name.clone(),
-                        ty: ty.clone(),
-                        span: Some(statement.span().clone()),
-                    };
+                // push local symbol to context, but only after its defined
+                let curr_symbol = Symbol {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    span: Some(statement.span().clone()),
+                };
 
-                    ctx.push_local(curr_symbol.clone())
-                        .wrap_err("Pushing local variable symbol failed.")?;
-                    pushed_locals.push(curr_symbol);
-                }
+                ctx.push_local(curr_symbol.clone())
+                    .wrap_err("Pushing local variable symbol failed.")?;
+                pushed_locals.push(curr_symbol);
             }
 
             StatementKind::BlockLabel { body, .. } | StatementKind::Block { body } => {
@@ -522,9 +524,10 @@ pub fn typecheck(statements: &mut [StatementNode], ctx: &mut TypecheckContext) -
                 } else {
                     // TODO: make detailed error
                     Err(miette!(
-                        "function of name \"{}\" not found {:#?}",
+                        // "function of name \"{}\" not found {:#?}",
+                        "function of name \"{}\" not found",
                         name,
-                        ctx
+                        // ctx
                     ))?;
                 }
             }

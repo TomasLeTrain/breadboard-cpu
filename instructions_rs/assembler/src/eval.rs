@@ -581,7 +581,12 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             ty,
             visibility,
         }) = statement.inner_mut().inner_mut()
+            && matches!(
+                visibility,
+                VariableVisibilityKind::Global | VariableVisibilityKind::Local
+            )
         {
+            println!("evaling global/local variable {name}");
             let value = match expr_kind {
                 VariableExprKind::Expr(expr) => {
                     eval_expr(expr, ctx)?;
@@ -629,12 +634,14 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
             Err(miette!("unreachable code after return statement!"))?;
         }
         match statement.inner_mut().inner_mut() {
+            // only match with let statements to avoid evaling twice
             StatementKind::Variable(Variable {
                 name,
                 expr_kind,
                 ty,
-                visibility,
+                visibility: VariableVisibilityKind::Let,
             }) => {
+                println!("evaling local variable {name}");
                 let value = match expr_kind {
                     VariableExprKind::Expr(expr) => {
                         eval_expr(expr, ctx)?;
@@ -643,20 +650,24 @@ pub fn eval_program(statements: &mut [StatementNode], ctx: &mut EvalContext) -> 
                     VariableExprKind::Block(block) => ExprValue::Block(block.clone()),
                 };
 
-                if let VariableVisibilityKind::Let = visibility {
-                    // push into local scope
-                    let curr_symbol = EvalSymbol {
-                        name: name.clone(),
-                        ty: ty.clone(),
-                        value,
-                        span: Some(statement.span().clone()),
-                    };
+                // push into local scope
+                let curr_symbol = EvalSymbol {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    value,
+                    span: Some(statement.span().clone()),
+                };
 
-                    ctx.push_local(curr_symbol.clone())
-                        .wrap_err("Pushing local variable symbol failed.")?;
-                    local_symbols.push(curr_symbol);
-                }
+                ctx.push_local(curr_symbol.clone())
+                    .wrap_err("Pushing local variable symbol failed.")?;
+                local_symbols.push(curr_symbol);
             }
+            StatementKind::Variable(Variable {
+                name,
+                expr_kind,
+                ty,
+                visibility,
+            }) => {}
 
             StatementKind::Return(return_kind) => {
                 match return_kind {
