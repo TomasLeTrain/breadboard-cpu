@@ -10,18 +10,24 @@ jmp start, MAR
 ; prompt input from keyboard
 ; interpret commands and execute them (what format?)
 
-; TODO: have input only add to input circular buffer, have update state process the new input into (x,y) positions on screen and interpreting commands
+; TODO: have backspace change input buffer write ptr
+; TODO: keep track of command ptr
 
+
+global CMD_BUFFER_PAGE = 0x8800
 ; input buffer start
 global INPUT_BUFFER_PAGE = 0x9000
 
 ; input buffer end ptr
+; non-inclusive
 global INPUT_BUFFER_WRITE_PTR = 0x9100
 
 ; pointer in buffer from last processed inputs from update_state
+; inclusive
 global INPUT_BUFFER_READ_PTR = INPUT_BUFFER_WRITE_PTR + 1
-; pointer to where the current command starts - start of line
-global INPUT_BUFFER_COMMAND_PTR = INPUT_BUFFER_READ_PTR + 1
+
+; pointer in the cmd buffer page - non-inclusive, one after where command ends
+global CMD_BUFFER_COMMAND_PTR = INPUT_BUFFER_READ_PTR + 1
 
 ; variables defining the state
 global PROMPT_X_PTR = 0x9200
@@ -86,12 +92,15 @@ init_state {
 
 	mv A, 0
 	sw A, INPUT_BUFFER_READ_PTR, MAR
-	mv A, 0
-	sw A, INPUT_BUFFER_COMMAND_PTR, MAR
-	mv A, 0
+	mv A, 1
 	sw A, INPUT_BUFFER_WRITE_PTR, MAR
 	mv A, 13
 	sw A, INPUT_BUFFER_PAGE, MAR
+
+	mv A, 0
+	sw A, CMD_BUFFER_COMMAND_PTR, MAR
+	mv A, 0
+	sw A, CMD_BUFFER_PAGE, MAR
 
 	mv A, 0
 	sw A, PROMPT_X_PTR, MAR
@@ -105,8 +114,7 @@ init_state {
 
 	load_stack_ptr()
 
-	pop MAR
-	jmp MAR
+	ret(MAR)
 }
 
 update_input {
@@ -115,6 +123,7 @@ update_input {
 
 	; get input and last input
 	mv X, Keyb
+	sub MarLo, 1
 	lw Y, MAR
 
 	; check if new input and relevant input
@@ -122,38 +131,25 @@ update_input {
 
 	; equal, no new input
 	jeq eq_end, MAR
-	
-	; else, check if not actual input but blank input
-	; cmp X, 0
-	; jeq eq_end, MAR
 
 	; new character, increase buffer
 	load_mar_page_ptr(INPUT_BUFFER_PAGE, INPUT_BUFFER_WRITE_PTR)
-
-	; here MarLo = tmp_write_ptr = write_ptr
-	; tmp_write_ptr++
-	add MarLo, 1
-	; buffer[tmp_write_ptr] = curr_char
 	sw X, MAR
 
-	; write_ptr = tmp_write_ptr
-	; TODO: the instrution
-	; sw MarLo, INPUT_BUFFER_WRITE_PTR, MAR
-	; seems to not work, debug instruction def
+	; increase ptr
 	mv A, MarLo
+	add A, 1
 	sw A, INPUT_BUFFER_WRITE_PTR, MAR
 
 	eq_end:
 
-	pop MAR
-	jmp MAR
+	ret(MAR)
 }
 
 
 update_state {
 	; Z = write_ptr
 	lw Z, INPUT_BUFFER_WRITE_PTR, MAR
-	add Z, 1
 
 	loop {
 		; check if read_ptr == write_ptr, in which case we are done
@@ -199,8 +195,18 @@ update_state {
 			sw A, PROMPT_Y_PTR, MAR
 			mv A, 0
 			sw A, PROMPT_X_PTR, MAR
-			
 
+			; now, run command from buffer
+
+			; Z only register that matters after calling
+			push Z
+			jsr(run_command)
+			pop Z
+
+			; reset command ptr back to zero
+			mv A, 0
+			sw A, CMD_BUFFER_COMMAND_PTR, MAR
+			
 			jmp all_end, MAR
 		}
 		enter_case_false {
@@ -210,6 +216,12 @@ update_state {
 			jmp bs_case_false, MAR
 
 			bs_case_true {
+				; only enable erase if not at beginning of line
+				lw A, CMD_BUFFER_COMMAND_PTR, MAR
+				cmp A, 0
+				; jump to end if at start of line
+				jeq all_end, MAR
+
 				; erase cursor at position after current
 				; temporarily increase x
 				lw A, PROMPT_X_PTR, MAR
@@ -230,6 +242,11 @@ update_state {
 				sub A, 2
 				sw A, PROMPT_X_PTR, MAR
 
+				; move back buffer ptr one as well
+				lw A, CMD_BUFFER_COMMAND_PTR, MAR
+				sub A, 1
+				sw A, CMD_BUFFER_COMMAND_PTR, MAR
+
 				jmp cursor_draw, MAR
 			}
 			bs_case_false {
@@ -237,6 +254,17 @@ update_state {
 				lw A, PROMPT_X_PTR, MAR
 				add A, 1
 				sw A, PROMPT_X_PTR, MAR
+
+				; also increase command buffer and copy character to it
+				load_mar_page_ptr(CMD_BUFFER_PAGE, CMD_BUFFER_COMMAND_PTR)
+				; copy character to cmd buffer
+				; NOTE: assumes X has not been overriden in a subrountine call
+				sw X, MAR
+
+				; increase command buffer ptr
+				lw A, CMD_BUFFER_COMMAND_PTR, MAR
+				add A, 1
+				sw A, CMD_BUFFER_COMMAND_PTR, MAR
 			}
 		}
 
@@ -290,9 +318,7 @@ update_state {
 		loop_end:
 	}
 
-
-	pop MAR
-	jmp MAR
+	ret(MAR)
 }
 
 draw_read_ptr_char {
@@ -408,8 +434,19 @@ draw_read_ptr_char {
 	; get stack pointer back
 	load_stack_ptr()
 
-	pop MAR
-	jmp MAR
+	ret(MAR)
+}
+
+; runs command in buffer[command_ptr..write_ptr]
+run_command {
+	lw Y, CMD_BUFFER_COMMAND_PTR, MAR
+	cmp Y, 0
+	; jump if no command
+	jeq end, MAR
+	; must interpret command by going through all characters!
+
+	end:
+	ret(MAR)
 }
 
 ; char data spans 0x3000 - 0x3800

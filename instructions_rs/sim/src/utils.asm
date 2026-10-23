@@ -31,5 +31,12 @@ fn load_stack_ptr(){
 	}
 }
 
+fn ret(addr_reg: AddressRegister) {
+	return {
+		pop addr_reg
+		jmp addr_reg
+	}
+}
+
 ; some other common utils
 #include "src/video_utils.asm"
