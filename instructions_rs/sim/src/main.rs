@@ -83,6 +83,7 @@ fn main() {
                 let keycode = Keycode::from_scancode(scancode, SDL_Keymod::NONE, false).unwrap();
                 if keycode.to_ll().0 <= 255 {
                     let code = keycode.to_ll().0 as u8;
+                    // println!("sending {code}");
                     let _ = video_send.send(VideoMessage::KeyboardUpdate(code));
                     some_keyboard = true;
                 }

@@ -57,7 +57,7 @@ fn load_sp_page_ptr(page_start: Address, ptr: Address){
 ; global BASE_CHAR_POSITION = gen_BASE_CHAR_POSITION()
 global BASE_CHAR_POSITION = (5) | (5 << 6)
 
-global background_color = 0b11000100
+global background_color = 0b00000000
 global main_color = 0b11000000
 
 start {
@@ -69,6 +69,9 @@ start {
 	loop {
 		; input adds to the input buffer, input looks at new inputs and also keeps track of where new commands start, also issues video commands to avoid adding more complexity
 		jsr(update_input)
+		jsr(update_input)
+		jsr(update_input)
+
 		jsr(update_state)
 
 		jmp loop, MAR
@@ -173,29 +176,108 @@ update_state {
 		jeq enter_case_true, MAR
 		jmp enter_case_false, MAR
 
-		enter_case_true:
-		; increase line, reset x position
-		lw A, PROMPT_Y_PTR, MAR
-		add A, 1
-		sw A, PROMPT_Y_PTR, MAR
-		mv A, 0
-		sw A, PROMPT_X_PTR, MAR
+		enter_case_true {
+			; must erase previous cursor before going to next line
+			; erase cursor at position after current
+			; temporarily increase x
+			lw A, PROMPT_X_PTR, MAR
+			add A, 1
+			sw A, PROMPT_X_PTR, MAR
 
-		jmp enter_case_end, MAR
+			mv A, 8
+			sw A, CURR_CHAR_DRAW_PTR, MAR
 
-		enter_case_false:
-		; increase X only
+			; Z gets used in subroutine
+			push Z
+			; draw new character to screen
+			jsr(draw_read_ptr_char)
+			pop Z
+
+			; increase line, reset x position
+			lw A, PROMPT_Y_PTR, MAR
+			add A, 1
+			sw A, PROMPT_Y_PTR, MAR
+			mv A, 0
+			sw A, PROMPT_X_PTR, MAR
+			
+
+			jmp all_end, MAR
+		}
+		enter_case_false {
+			; check if backspace
+			cmp X, 8
+			jeq bs_case_true, MAR
+			jmp bs_case_false, MAR
+
+			bs_case_true {
+				; erase cursor at position after current
+				; temporarily increase x
+				lw A, PROMPT_X_PTR, MAR
+				add A, 1
+				sw A, PROMPT_X_PTR, MAR
+
+				mv A, 8
+				sw A, CURR_CHAR_DRAW_PTR, MAR
+
+				; Z gets used in subroutine
+				push Z
+				; draw new character to screen
+				jsr(draw_read_ptr_char)
+				pop Z
+
+				; decrease X twice (one from temporary, one from backspace)
+				lw A, PROMPT_X_PTR, MAR
+				sub A, 2
+				sw A, PROMPT_X_PTR, MAR
+
+				jmp cursor_draw, MAR
+			}
+			bs_case_false {
+				; increase X only
+				lw A, PROMPT_X_PTR, MAR
+				add A, 1
+				sw A, PROMPT_X_PTR, MAR
+			}
+		}
+
+		all_end:
+		
+		; setup char draw ptr
+		load_mar_page_ptr(INPUT_BUFFER_PAGE, INPUT_BUFFER_READ_PTR)
+		; y now holds the character at write_ptr
+		lw A, MAR
+		; store Y to the current char draw ptr used while drawing character
+		sw A, CURR_CHAR_DRAW_PTR, MAR
+
+		; Z gets used in subroutine
+		push Z
+		; draw new character to screen
+
+		jsr(draw_read_ptr_char)
+		pop Z
+		
+		; also, draw cursor at current position
+		
+		cursor_draw:
+		; temporarily increase x
 		lw A, PROMPT_X_PTR, MAR
 		add A, 1
 		sw A, PROMPT_X_PTR, MAR
 
-		enter_case_end:
-		
+		mv A, '_'
+		sw A, CURR_CHAR_DRAW_PTR, MAR
+
 		; Z gets used in subroutine
 		push Z
 		; draw new character to screen
+
 		jsr(draw_read_ptr_char)
 		pop Z
+
+		; decrease X again
+		lw A, PROMPT_X_PTR, MAR
+		sub A, 1
+		sw A, PROMPT_X_PTR, MAR
 
 		loop_increase:
 	
@@ -260,7 +342,21 @@ draw_read_ptr_char {
 
 			; here, sp used to index character_addr
 			; NOTE: must use SP as scratch since mar has important value
-			load_sp_page_ptr(character_addr_offset, char_low_addr_ptr)
+			lw SpLo, char_low_addr_ptr, SP
+			mv SpHi, 0
+
+			; shift left 3 times
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			; add char offset
+			add SpHi, high_byte(character_addr_offset)
 
 			lw X, SP
 			sw_vram X, MAR
@@ -302,18 +398,6 @@ draw_read_ptr_char {
 		}
 	}
 
-	load_mar_page_ptr(INPUT_BUFFER_PAGE, INPUT_BUFFER_READ_PTR)
-	; y now holds the character at write_ptr
-	lw Y, MAR
-
-	; shift for mask
-	shl Y
-	shl Y
-	shl Y
-
-	; store Y to the current char draw ptr used while drawing character
-	sw Y, CURR_CHAR_DRAW_PTR, MAR
-
 	; load coordinate of character
 	lw X, PROMPT_X_PTR, MAR
 	lw Y, PROMPT_Y_PTR, MAR
@@ -331,4 +415,4 @@ draw_read_ptr_char {
 ; char data spans 0x3000 - 0x3800
 global pCHAR_DATA = 0x3000
 #address pCHAR_DATA
-#data_file "../../vga_display_v1/charset.out"
+#data_file "../../vga_display_v1/ascii_chars.out"
