@@ -13,14 +13,41 @@ jmp start, MAR
 ; TODO: have input only add to input circular buffer, have update state process the new input into (x,y) positions on screen and interpreting commands
 
 ; input buffer start
-global INPUT_BUFFER_START = 0x9000
+global INPUT_BUFFER_PAGE = 0x9000
 
 ; input buffer end ptr
-global INPUT_BUFFER_END_PTR = 0x9100
+global INPUT_BUFFER_WRITE_PTR = 0x9100
 
-global PROMPT_LINE_PTR = 0x9200
-global CURR_CHAR_DRAW_PTR = 0x9201
+; pointer in buffer from last processed inputs from update_state
+global INPUT_BUFFER_READ_PTR = INPUT_BUFFER_WRITE_PTR + 1
+; pointer to where the current command starts - start of line
+global INPUT_BUFFER_COMMAND_PTR = INPUT_BUFFER_READ_PTR + 1
 
+; variables defining the state
+global PROMPT_X_PTR = 0x9200
+global PROMPT_Y_PTR = PROMPT_X_PTR+1
+
+global CURR_CHAR_DRAW_PTR = PROMPT_Y_PTR + 1
+
+; loads MAR with the address in memory corresponding to where the ptr points in the page
+fn load_mar_page_ptr(page_start: Address, ptr: Address){
+	return {
+		; load buffer end pointer into MAR
+		lw MarLo, ptr, MAR
+		mv MarHi, high_byte(page_start)
+	}
+}
+
+; loads SP with the address in memory corresponding to where the ptr points in the page
+fn load_sp_page_ptr(page_start: Address, ptr: Address){
+	return {
+		; load buffer end pointer into MAR
+		lw SpLo, ptr, SP
+		mv SpHi, high_byte(page_start)
+	}
+}
+
+; TODO: be able to use functions in global vars, would need defining function prototypes/return types?
 ; fn gen_BASE_CHAR_POSITION() {
 ; 	let base_char_position_x = 5
 ; 	let base_char_position_y = 5
@@ -40,9 +67,9 @@ start {
 	jsr(init_state)
 
 	loop {
+		; input adds to the input buffer, input looks at new inputs and also keeps track of where new commands start, also issues video commands to avoid adding more complexity
 		jsr(update_input)
 		jsr(update_state)
-		jsr(update_screen)
 
 		jmp loop, MAR
 	}
@@ -55,16 +82,20 @@ init_state {
 	save_stack_ptr()
 
 	mv A, 0
-	sw A, INPUT_BUFFER_END_PTR, MAR
+	sw A, INPUT_BUFFER_READ_PTR, MAR
 	mv A, 0
-	sw A, INPUT_BUFFER_START, MAR
+	sw A, INPUT_BUFFER_COMMAND_PTR, MAR
+	mv A, 0
+	sw A, INPUT_BUFFER_WRITE_PTR, MAR
+	mv A, 13
+	sw A, INPUT_BUFFER_PAGE, MAR
 
 	mv A, 0
-	sw A, PROMPT_LINE_PTR, MAR
+	sw A, PROMPT_X_PTR, MAR
+	sw A, PROMPT_Y_PTR, MAR
 
 	mv A, 0
 	sw A, CURR_CHAR_DRAW_PTR, MAR
-
 
 	clear_screen_colors(background_color)
 	clear_screen_characters(0)
@@ -77,8 +108,7 @@ init_state {
 
 update_input {
 	; load buffer end pointer into MAR
-	lw MarLo, INPUT_BUFFER_END_PTR, MAR
-	mv MarHi, high_byte(INPUT_BUFFER_START)
+	load_mar_page_ptr(INPUT_BUFFER_PAGE, INPUT_BUFFER_WRITE_PTR)
 
 	; get input and last input
 	mv X, Keyb
@@ -91,33 +121,24 @@ update_input {
 	jeq eq_end, MAR
 	
 	; else, check if not actual input but blank input
-	cmp X, 0
-	jeq eq_end, MAR
+	; cmp X, 0
+	; jeq eq_end, MAR
 
 	; new character, increase buffer
-	lw MarLo, INPUT_BUFFER_END_PTR, MAR
-	mv MarHi, high_byte(INPUT_BUFFER_START)
+	load_mar_page_ptr(INPUT_BUFFER_PAGE, INPUT_BUFFER_WRITE_PTR)
 
+	; here MarLo = tmp_write_ptr = write_ptr
+	; tmp_write_ptr++
 	add MarLo, 1
-	; Store the character
+	; buffer[tmp_write_ptr] = curr_char
 	sw X, MAR
 
+	; write_ptr = tmp_write_ptr
+	; TODO: the instrution
+	; sw MarLo, INPUT_BUFFER_WRITE_PTR, MAR
+	; seems to not work, debug instruction def
 	mv A, MarLo
-	sw A, INPUT_BUFFER_END_PTR, MAR
-
-	cmp X, 13
-	jeq enter_case, MAR
-	jmp eq_end, MAR
-
-	enter_case:
-	; ; restore the buffer pointer
-	; mv A, 0
-	; sw A, INPUT_BUFFER_END_PTR, MAR
-
-	; increase line by one
-	lw A, PROMPT_LINE_PTR, MAR
-	add A, 1
-	sw A, PROMPT_LINE_PTR, MAR
+	sw A, INPUT_BUFFER_WRITE_PTR, MAR
 
 	eq_end:
 
@@ -127,12 +148,72 @@ update_input {
 
 
 update_state {
+	; Z = write_ptr
+	lw Z, INPUT_BUFFER_WRITE_PTR, MAR
+	add Z, 1
+
+	loop {
+		; check if read_ptr == write_ptr, in which case we are done
+		lw A, INPUT_BUFFER_READ_PTR, MAR
+		cmp A, Z
+		jeq loop_end, MAR
+
+		; MAR = &buffer[read_ptr]
+		load_mar_page_ptr(INPUT_BUFFER_PAGE, INPUT_BUFFER_READ_PTR)
+
+		; otherwise, process current input
+		; X = buffer[read_ptr]
+		lw X, MAR
+
+		; zero is no character, just skip
+		cmp X, 0
+		jeq loop_increase, MAR
+
+		cmp X, 13
+		jeq enter_case_true, MAR
+		jmp enter_case_false, MAR
+
+		enter_case_true:
+		; increase line, reset x position
+		lw A, PROMPT_Y_PTR, MAR
+		add A, 1
+		sw A, PROMPT_Y_PTR, MAR
+		mv A, 0
+		sw A, PROMPT_X_PTR, MAR
+
+		jmp enter_case_end, MAR
+
+		enter_case_false:
+		; increase X only
+		lw A, PROMPT_X_PTR, MAR
+		add A, 1
+		sw A, PROMPT_X_PTR, MAR
+
+		enter_case_end:
+		
+		; Z gets used in subroutine
+		push Z
+		; draw new character to screen
+		jsr(draw_read_ptr_char)
+		pop Z
+
+		loop_increase:
+	
+		; read_ptr = read_ptr + 1
+		lw A, INPUT_BUFFER_READ_PTR, MAR
+		add A, 1
+		sw A, INPUT_BUFFER_READ_PTR, MAR
+		
+		jmp loop, MAR
+		loop_end:
+	}
+
 
 	pop MAR
 	jmp MAR
 }
 
-update_screen {
+draw_read_ptr_char {
 	; save stack ptr since it gets used here
 	save_stack_ptr()
 
@@ -179,8 +260,7 @@ update_screen {
 
 			; here, sp used to index character_addr
 			; NOTE: must use SP as scratch since mar has important value
-			lw SpLo, char_low_addr_ptr, SP
-			mv SpHi, high_byte(character_addr_offset)
+			load_sp_page_ptr(character_addr_offset, char_low_addr_ptr)
 
 			lw X, SP
 			sw_vram X, MAR
@@ -222,18 +302,21 @@ update_screen {
 		}
 	}
 
-	lw MarLo, INPUT_BUFFER_END_PTR, MAR
-	mv MarHi, high_byte(INPUT_BUFFER_START)
+	load_mar_page_ptr(INPUT_BUFFER_PAGE, INPUT_BUFFER_READ_PTR)
+	; y now holds the character at write_ptr
 	lw Y, MAR
 
+	; shift for mask
 	shl Y
 	shl Y
 	shl Y
 
-	mv X, MarLo
+	; store Y to the current char draw ptr used while drawing character
 	sw Y, CURR_CHAR_DRAW_PTR, MAR
 
-	lw Y, PROMPT_LINE_PTR, MAR
+	; load coordinate of character
+	lw X, PROMPT_X_PTR, MAR
+	lw Y, PROMPT_Y_PTR, MAR
 
 	; draw head, filled block
 	draw_character(main_color, pCHAR_DATA, CURR_CHAR_DRAW_PTR)
