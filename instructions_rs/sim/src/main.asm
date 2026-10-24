@@ -481,7 +481,39 @@ run_command {
 		add Z, 1
 
 		; now, parse addr from input
+		pusha parse_addr_return
+
+		mv MarLo, Z
+		mv MarHi, high_byte(CMD_BUFFER_PAGE)
 		
+		; NOTE: assumes there are at least 4 characters defined after run
+		; TODO: make sure Z + 4 <= cmd_ptr before continuing
+		lw A, MAR
+		push A
+
+		inc MAR
+		lw A, MAR
+		push A
+
+		inc MAR
+		lw A, MAR
+		push A
+
+		inc MAR
+		lw A, MAR
+		push A
+
+		jmp parse_addr, MAR
+		parse_addr_return:
+
+		; here, result will be in stack
+		pop MarLo
+		pop MarHi
+		
+		; now, executes code at address
+		pusha return_addr
+		jmp MAR
+		return_addr:
 
 		jmp run_end, MAR
 	}
@@ -493,6 +525,110 @@ run_command {
 	run_end:
 	end:
 	ret(MAR)
+}
+
+
+; gets characters from stack
+; puts result addr into stack
+parse_addr {
+	; pop into X, keep track of result in SP
+	let low = Y
+	let high = Z
+	mv low, 0
+	mv high, 0
+
+	fourth_char {
+		pop A
+		cmp A, '9'
+		jc jc_true, MAR
+		jmp jc_false, MAR
+		jc_true:
+		; A <= 9
+		sub A, '0'
+		jmp jc_end, MAR
+		jc_false:
+		; A > 9
+		; A - 'a' + 10 = A - ('a' - 10)
+		sub A, 'a' - 10
+		jc_end:
+		; can save value now - bottom half of first byte
+		; TODO: or Y, A does not work currently
+		mv B, A
+		or Y, B
+	}
+
+	third_char {
+		pop A
+		cmp A, '9'
+		jc jc_true, MAR
+		jmp jc_false, MAR
+		jc_true:
+		; A <= 9
+		sub A, '0'
+		jmp jc_end, MAR
+		jc_false:
+		; A > 9
+		; A - 'a' + 10 = A - ('a' - 10)
+		sub A, 'a' - 10
+		jc_end:
+		; can save value now - top half of first byte
+		mv X, A
+		shl X
+		shl X
+		shl X
+		shl X
+		or low, X
+	}
+
+	second_char {
+		pop A
+		cmp A, '9'
+		jc jc_true, MAR
+		jmp jc_false, MAR
+		jc_true:
+		; A <= 9
+		sub A, '0'
+		jmp jc_end, MAR
+		jc_false:
+		; A > 9
+		; A - 'a' + 10 = A - ('a' - 10)
+		sub A, 'a' - 10
+		jc_end:
+		; can save value now - bottom half of second byte
+		mv B, A
+		or high, B
+	}
+
+	first_char {
+		pop A
+		cmp A, '9'
+		jc jc_true, MAR
+		jmp jc_false, MAR
+		jc_true:
+		; A <= 9
+		sub A, '0'
+		jmp jc_end, MAR
+		jc_false:
+		; A > 9
+		; A - 'a' + 10 = A - ('a' - 10)
+		sub A, 'a' - 10
+		jc_end:
+		; can save value now - bottom half of second byte
+		mv X, A
+		shl X
+		shl X
+		shl X
+		shl X
+		or high, X
+	}
+
+	; pop before pushing to stack
+	pop MAR
+
+	push high
+	push low
+
+	jmp MAR
 }
 
 ; char data spans 0x3000 - 0x3800
