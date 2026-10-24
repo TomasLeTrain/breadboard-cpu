@@ -516,8 +516,10 @@ run_command {
 		pusha return_addr
 		jmp MAR
 		return_addr:
-
-		jmp run_end, MAR
+	
+		; at this point all state might be corrupted, must restart from the beginning
+		jmp start_jumptable, MAR
+		; jmp run_end, MAR
 	}
 
 	run_false {

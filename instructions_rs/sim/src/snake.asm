@@ -32,6 +32,9 @@ global pDIR_CHAR_IDX_CURR = 0x9006
 ; gets set to 0 on draw_update, reset back to 1 input_update
 let pCHAR_DRAW = 0x9007
 
+; pHALT but for real
+let pHALT_ACTUAL = 0x9008
+
 ; upper byte of queue
 let pQUEUE_BASE = 0xA000
 
@@ -74,6 +77,9 @@ init_state {
 
 	mv A, 1
 	sw A, pHALT, MAR
+
+	mv A, 1
+	sw A, pHALT_ACTUAL, MAR
 
 	mv A, 1
 	sw A, pDIR_X, MAR
@@ -149,11 +155,10 @@ start {
 		jsr(init_state)
 		skip_state_update_end:
 
-		jmp loop, MAR
-		; lw A, pHALT, MAR
-		; cmp A, 0
-		; lda MAR, loop
-		; jnz MAR
+		; jmp loop, MAR
+		lw A, pHALT_ACTUAL, MAR
+		cmp A, 0
+		jnz loop, MAR
 	}
 
 	; instead of halting just loop forever forever:
@@ -169,58 +174,17 @@ clear_screen {
 	; sp ptr gets used as general pointer here, must save beforehand
 	save_stack_ptr()
 
-	fn clear_2_pixels(){
-		return {
-			sw_vram Z, SP
-			inc SP
-			sw_vram Z, SP
-			inc SP
-		}
-	}
-
-	fn clear_10_pixels(){
-		return {
-			clear_2_pixels()
-			clear_2_pixels()
-			clear_2_pixels()
-			clear_2_pixels()
-			clear_2_pixels()
-		}
-	}
-
-	; clears 240 * 40 pixels with given value, at given addr
-	fn clear_range_vram(clear_val: u8, start_addr: Address, num_lines: u8){
-		return {
-			; value that gets loaded as character everywhere
-			mv Z, clear_val
-
-			mv Y, num_lines
-
-			lda SP, start_addr+1
-
-			; addr = (x + 1) | (y << 6)
-
-			y_loop {
-				; clear line
-				; TODO: make the number of cleared pixels adjustable
-				clear_10_pixels()
-				clear_10_pixels()
-				clear_10_pixels()
-				clear_10_pixels()
-
-				; must add offset to SP to get to next line
-				add SpLo, ((1<<6) + 1) - (40+1)
-				adc SpHi, 0
-
-				sub Y, 1
-				lda MAR, y_loop
-				jnz MAR
-			}
-		}
-	}
-
 	fn clear_range_vram_16x(clear_val: u8, start_addr: Address, num_lines: u8){
 		return {
+			fn clear_2_pixels(){
+				return {
+					sw_vram Z, SP
+					inc SP
+					sw_vram Z, SP
+					inc SP
+				}
+			}
+
 			; value that gets loaded as character everywhere
 			mv Z, clear_val
 
@@ -252,9 +216,11 @@ clear_screen {
 	}
 
 	; clear all colors
-	clear_range_vram(background_color, 0, 240)
+	; clear_range_vram(background_color, 0, 240)
+	clear_screen_colors(background_color)
+
 	; clear all characters
-	clear_range_vram(0b00000000, 1 << 14, 240)
+	clear_screen_characters(0b00000000)
 
 	; make valid snake positions a different color
 	clear_range_vram_16x(main_color, get_BASE_GAME_POSITION(), 8 * 16 - 1)
@@ -342,7 +308,11 @@ update_input {
 	jeq r_eq, MAR
 	jmp r_ret, MAR
 	r_eq:
-	jsr(init_state)
+	; exit game
+	mv A, 0
+	sw A, pHALT_ACTUAL, MAR
+	; 
+	; jsr(init_state)
 	r_ret:
 
 	; if direction changes in the same axis the game halts, so that case can be ignored

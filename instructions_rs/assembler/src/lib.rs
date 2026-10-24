@@ -158,7 +158,7 @@ fn parse_source(source_str: &str, mut source: MultiFileSource) -> Result<AsmGenC
         .wrap_err("Failed to evaluate program")?;
     // println!("after eval: {:#?}", program);
 
-    println!("{:#?}", program);
+    // println!("{:#?}", program);
 
     let max_addr_size = 1 << 15;
 
