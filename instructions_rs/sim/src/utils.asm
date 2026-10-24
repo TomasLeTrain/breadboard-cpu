@@ -1,5 +1,6 @@
 global STACK_START: Address = 0xffe0
 global STACK_SAVE_ADDR: Address = 0xffe2
+global STACK_SAVE_ADDR_2: Address = 0xffe4
 
 fn jsr(addr: Address) {
 	return {
@@ -7,6 +8,11 @@ fn jsr(addr: Address) {
 		jmp addr, MAR
 		return_addr:
 	}
+}
+
+fn low_byte(x: u16) {
+	let high_byte: u8 = x & 0xff
+	return high_byte
 }
 
 fn high_byte(x: u16) {
@@ -28,6 +34,23 @@ fn load_stack_ptr(){
 	return {
 		lw SpLo, STACK_SAVE_ADDR, MAR
 		lw SpHi, STACK_SAVE_ADDR+1, MAR
+	}
+}
+
+
+; saves to tmp save addr
+fn save_stack_ptr_2(){
+	return {
+		sw SpLo, STACK_SAVE_ADDR_2, MAR
+		sw SpHi, STACK_SAVE_ADDR_2+1, MAR
+	}
+}
+
+; loads from tmp save addr
+fn load_stack_ptr_2(){
+	return {
+		lw SpLo, STACK_SAVE_ADDR_2, MAR
+		lw SpHi, STACK_SAVE_ADDR_2+1, MAR
 	}
 }
 

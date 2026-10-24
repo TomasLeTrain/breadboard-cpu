@@ -12,6 +12,13 @@ jmp start, MAR
 ; prompt input from keyboard
 ; interpret commands and execute them (what format?)
 
+; where screen state gets stored
+; SCREEN_STATE[(y << 6) | x] = character
+; should be from 0x8000 - 0x87A8
+global SCREEN_STATE = 0x8000
+
+global SHOULD_INIT = 0x8800
+
 global CMD_BUFFER_PAGE = 0x9100
 ; input buffer start
 global INPUT_BUFFER_PAGE = 0x9200
@@ -29,10 +36,18 @@ global INPUT_BUFFER_READ_PTR = INPUT_BUFFER_WRITE_PTR + 1
 global CMD_BUFFER_COMMAND_PTR = INPUT_BUFFER_READ_PTR + 1
 
 ; variables defining the state
-global PROMPT_X_PTR = CMD_BUFFER_COMMAND_PTR + 1
+; global PROMPT_X_PTR = CMD_BUFFER_COMMAND_PTR + 1
+; global PROMPT_Y_PTR = PROMPT_X_PTR + 1
+
+; put outside of state that gets erased to work between other program runs
+global PROMPT_X_PTR = 0xc000 + 1
 global PROMPT_Y_PTR = PROMPT_X_PTR + 1
 
 global CURR_CHAR_DRAW_PTR = PROMPT_Y_PTR + 1
+
+; used to save ptr when drawing at arbitrary spots
+global PROMPT_X_PTR_SAVE = CURR_CHAR_DRAW_PTR + 1
+global PROMPT_Y_PTR_SAVE = PROMPT_X_PTR_SAVE + 1
 
 ; loads MAR with the address in memory corresponding to where the ptr points in the page
 fn load_mar_page_ptr(page_start: Address, ptr: Address){
@@ -65,10 +80,19 @@ global BASE_CHAR_POSITION = (5) | (5 << 6)
 global background_color = 0b00000000
 global main_color = 0b11000000
 
+; only gets run on first boot, sets up stack
+; TODO: stack init should get moved to prelude code
 start {
 	; initialize stack
 	lda SP, STACK_START
 
+	mv A, 0
+	sw A, SHOULD_INIT, MAR
+
+	jmp main, MAR
+}
+
+main {
 	jsr(init_state)
 
 	loop {
@@ -89,11 +113,18 @@ init_state {
 	; init any memory here
 	save_stack_ptr()
 
+	; check if its first time or just restarting state
+	lw A, SHOULD_INIT, MAR
+	cmp A, 0
+	jnz restart_init, MAR 
+
+	first_init:
 	mv A, 0
 	sw A, INPUT_BUFFER_READ_PTR, MAR
 	mv A, 1
 	sw A, INPUT_BUFFER_WRITE_PTR, MAR
 	mv A, 13
+
 	sw A, INPUT_BUFFER_PAGE, MAR
 
 	mv A, 0
@@ -109,9 +140,195 @@ init_state {
 	sw A, CURR_CHAR_DRAW_PTR, MAR
 
 	clear_screen_colors(background_color)
-	clear_screen_characters(0)
+
+	let default_character = 0
+
+	clear_screen_characters(default_character)
+
+	; clear screen state
+	lda SP, SCREEN_STATE
+	mv X, default_character
+
+	mv Z, 30
+
+	loop {
+		fn update_2_characters(){
+			return {
+				sw X, SP
+				inc SP
+				sw X, SP
+				inc SP
+			}
+		}
+
+		fn update_10_characters(){
+			return {
+				update_2_characters()
+				update_2_characters()
+				update_2_characters()
+				update_2_characters()
+				update_2_characters()
+			}
+		}
+
+		update_10_characters()
+		update_10_characters()
+		update_10_characters()
+		update_10_characters()
+
+		; put Sp on next char
+		add SpLo, (1 << 6) - 40
+		adc SpHi, 0
+
+		sub Z, 1
+		lda MAR, loop
+		jnz Z, MAR
+	}
 
 	load_stack_ptr()
+
+	jmp init_end, MAR
+
+	restart_init:
+	mv A, 0
+	sw A, INPUT_BUFFER_READ_PTR, MAR
+	mv A, 1
+	sw A, INPUT_BUFFER_WRITE_PTR, MAR
+	mv A, 13
+	sw A, INPUT_BUFFER_PAGE, MAR
+
+	mv A, 0
+	sw A, CMD_BUFFER_COMMAND_PTR, MAR
+	mv A, 0
+	sw A, CMD_BUFFER_PAGE, MAR
+
+	; prompt X and Y should already be saved from last run
+
+	; first reset all colors
+	clear_screen_colors(background_color)
+
+	; must draw all characters saved on screen state
+	; save ptrs before overriding them
+	lw A, PROMPT_X_PTR, MAR
+	sw A, PROMPT_X_PTR_SAVE, MAR
+	lw A, PROMPT_Y_PTR, MAR
+	sw A, PROMPT_Y_PTR_SAVE, MAR
+
+	; now, draw all chars
+	mv X, 0
+	mv Y, 0
+	mv Z, 30
+
+	; aout value Some(e109) from MAR
+	; aout value Some(e109) from MAR
+	; low to high clk
+	; load 9 into low of PC
+	; reset STEP
+	; high to low clk
+	; opcode_addr: 153a
+	; load f1 into OPCODE_LATCH1
+	; load 1 into OPCODE_LATCH2
+	; aout value Some(e109) from PC
+	; ram read None from 6109
+	; low to high clk
+
+	; store initial screen_state ptr
+	mv A, low_byte(SCREEN_STATE)
+	sw A, STACK_SAVE_ADDR_2, MAR
+	mv A, high_byte(SCREEN_STATE)
+	sw A, STACK_SAVE_ADDR_2+1, MAR
+
+	; load to call routine
+	load_stack_ptr()
+
+	loop2 {
+		; passthrough for function
+		global draw_read_ptr_char_ = draw_read_ptr_char
+		fn update_1_character(){
+			return {
+				; update X ptr
+				sw X, PROMPT_X_PTR, MAR
+				; get character and load into draw_ptr
+
+				; get screen state position
+				lw B, STACK_SAVE_ADDR_2, MAR
+				lw MarHi, STACK_SAVE_ADDR_2+1, MAR
+				mv MarLo, B
+				or MarLo, X
+
+				; get character at position in state and move to 
+				lw A, MAR
+				sw A, CURR_CHAR_DRAW_PTR, MAR
+
+				; call subroutine
+				push X
+				push Y
+				push Z
+
+				jsr(draw_read_ptr_char_)
+
+				pop Z
+				pop Y
+				pop X
+
+				; increase X position
+				add X, 1
+			}
+		}
+
+		fn update_10_characters(){
+			return {
+				update_1_character()
+				update_1_character()
+				update_1_character()
+				update_1_character()
+				update_1_character()
+				update_1_character()
+				update_1_character()
+				update_1_character()
+				update_1_character()
+				update_1_character()
+			}
+		}
+
+		update_10_characters()
+		update_10_characters()
+		update_10_characters()
+		update_10_characters()
+
+		; put screen state ptr on next line
+		lw B, STACK_SAVE_ADDR_2, MAR
+		lw MarHi, STACK_SAVE_ADDR_2+1, MAR
+		mv MarLo, B
+
+		; add MarLo, (1 << 6) - 40
+		add MarLo, 1 << 6
+		adc MarHi, 0
+
+		mv A, MarLo
+		mv B, MarHi
+		sw A, STACK_SAVE_ADDR_2, MAR
+		sw B, STACK_SAVE_ADDR_2+1, MAR
+
+		; reset X, update Y
+		mv X, 0
+		add Y, 1
+		sw Y, PROMPT_Y_PTR, MAR
+
+		; loop
+		sub Z, 1
+		lda MAR, loop2
+		jnz Z, MAR
+	}
+
+
+	; restore back the ptrs
+	lw A, PROMPT_X_PTR_SAVE, MAR
+	sw A, PROMPT_X_PTR, MAR
+	lw A, PROMPT_Y_PTR_SAVE, MAR
+	sw A, PROMPT_Y_PTR, MAR
+	
+	init_end:
 
 	ret(MAR)
 }
@@ -430,6 +647,35 @@ draw_read_ptr_char {
 	; draw head, filled block
 	draw_character(main_color, pCHAR_DATA, CURR_CHAR_DRAW_PTR)
 
+	lw X, PROMPT_X_PTR, MAR
+	lw Y, PROMPT_Y_PTR, MAR
+	lw Z, CURR_CHAR_DRAW_PTR, MAR
+
+	; should be safe to shift 3 times
+	shl Y
+	shl Y
+	shl Y
+
+	; must then shift 3 more times
+	mv SpLo, Y
+	mv SpHi, 0
+
+	add SpLo, SpLo
+	adc SpHi, SpHi
+
+	add SpLo, SpLo
+	adc SpHi, SpHi
+
+	add SpLo, SpLo
+	adc SpHi, SpHi
+
+	or SpLo, X
+	; put in right page
+	or SpHi, high_byte(SCREEN_STATE)
+
+	; save to screen state
+	sw Z, SP
+
 	; get stack pointer back
 	load_stack_ptr()
 
@@ -514,13 +760,47 @@ run_command {
 		jmp MAR
 		return_addr:
 	
-		; at this point all state might be corrupted, must restart from the beginning
-		jmp start_jumptable, MAR
-		; jmp run_end, MAR
+		; at this point all state might be corrupted, try and recover state from beginning
+		mv A, 1
+		sw A, SHOULD_INIT, MAR
+
+		jmp main, MAR
 	}
 
 	run_false {
-		; TODO: other commands?
+		mv MarLo, 0
+		mv MarHi, high_byte(CMD_BUFFER_PAGE)
+		lw A, MAR
+
+		cmp A, 'e'
+		jeq exit_true, MAR
+		jmp exit_false, MAR
+
+		exit_true {
+			; jumps directly to beginning
+			jmp 0x0000, MAR
+		}
+		exit_false {
+			; TODO: other commands?
+
+			mv MarLo, 0
+			mv MarHi, high_byte(CMD_BUFFER_PAGE)
+			lw A, MAR
+
+			cmp A, 'h'
+			jeq halt_true, MAR
+			jmp halt_false, MAR
+
+			halt_true {
+				; just halts
+				halt
+			}
+			halt_false {
+				; TODO: other commands?
+			}
+			halt_end:
+		}
+		exit_end:
 	}
 
 	run_end:
