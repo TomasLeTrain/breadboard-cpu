@@ -12,17 +12,14 @@ jmp start, MAR
 ; prompt input from keyboard
 ; interpret commands and execute them (what format?)
 
-; TODO: have backspace change input buffer write ptr
-; TODO: keep track of command ptr
-
-
-global CMD_BUFFER_PAGE = 0x8800
+global CMD_BUFFER_PAGE = 0x9100
 ; input buffer start
-global INPUT_BUFFER_PAGE = 0x9000
+global INPUT_BUFFER_PAGE = 0x9200
 
+; all var variables defined on 0x9000
 ; input buffer end ptr
 ; non-inclusive
-global INPUT_BUFFER_WRITE_PTR = 0x9100
+global INPUT_BUFFER_WRITE_PTR = 0x9000
 
 ; pointer in buffer from last processed inputs from update_state
 ; inclusive
@@ -32,8 +29,8 @@ global INPUT_BUFFER_READ_PTR = INPUT_BUFFER_WRITE_PTR + 1
 global CMD_BUFFER_COMMAND_PTR = INPUT_BUFFER_READ_PTR + 1
 
 ; variables defining the state
-global PROMPT_X_PTR = 0x9200
-global PROMPT_Y_PTR = PROMPT_X_PTR+1
+global PROMPT_X_PTR = CMD_BUFFER_COMMAND_PTR + 1
+global PROMPT_Y_PTR = PROMPT_X_PTR + 1
 
 global CURR_CHAR_DRAW_PTR = PROMPT_Y_PTR + 1
 

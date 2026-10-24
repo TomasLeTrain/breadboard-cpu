@@ -1,5 +1,5 @@
 ; places all instructions at 0x4000, also easy to remember
-#address 0x4000 ; ensures start is first symbol executed
+#address start_jumptable ; ensures start is first symbol executed
 jmp start, MAR
 
 ; snake program
@@ -36,7 +36,7 @@ let pCHAR_DRAW = 0x9007
 let pHALT_ACTUAL = 0x9008
 
 ; upper byte of queue
-let pQUEUE_BASE = 0xA000
+let pQUEUE_BASE = 0x9200
 
 ; read pointer - lower byte of whole addr
 let pQUEUE_READ = 0x9100
