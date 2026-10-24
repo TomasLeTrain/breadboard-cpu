@@ -219,8 +219,8 @@ update_state {
 				; only enable erase if not at beginning of line
 				lw A, CMD_BUFFER_COMMAND_PTR, MAR
 				cmp A, 0
-				; jump to end if at start of line
-				jeq all_end, MAR
+				; skip everything since no action happens
+				jeq loop_increase, MAR
 
 				; erase cursor at position after current
 				; temporarily increase x
@@ -437,14 +437,60 @@ draw_read_ptr_char {
 	ret(MAR)
 }
 
-; runs command in buffer[command_ptr..write_ptr]
+; runs command in cmd_buffer[0..cmd_ptr)
 run_command {
 	lw Y, CMD_BUFFER_COMMAND_PTR, MAR
 	cmp Y, 0
 	; jump if no command
 	jeq end, MAR
 	; must interpret command by going through all characters!
+	
+	; super simple parser: look at first character and execute based on that
+	
+	mv MarLo, 0
+	mv MarHi, high_byte(CMD_BUFFER_PAGE)
+	lw A, MAR
 
+	cmp A, 'r'
+	jeq run_true, MAR
+	jmp run_false, MAR
+
+	run_true {
+		; eat through characters until a space is found
+	
+		mv Z, 1
+
+		loop {
+			; if Z has reached write pointer then nothing more can be done, go to end since invalid command
+			cmp Z, Y
+			jeq end, MAR
+
+			mv MarLo, Z
+			mv MarHi, high_byte(CMD_BUFFER_PAGE)
+			lw A, MAR
+			cmp A, ' '
+			jeq loop_end, MAR
+
+			add Z, 1
+
+			jmp loop, MAR
+			loop_end:
+		}
+		
+		; point after space
+		add Z, 1
+
+		; now, parse addr from input
+		
+
+		jmp run_end, MAR
+	}
+
+	run_false {
+		; TODO: other commands?
+	}
+
+	run_end:
 	end:
 	ret(MAR)
 }
