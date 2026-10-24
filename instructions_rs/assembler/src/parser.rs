@@ -81,11 +81,17 @@ fn parse_file(file_path: String, source: &mut ParseContext) -> Result<Vec<Statem
 
 /// parse a file
 pub fn parse_source(source_str: &str, source: &mut ParseContext) -> Result<Ast> {
-    let mut program = Ast::new();
-
     let pairs = AssemblyParser::parse(Rule::Program, source_str)
         .map_err(|e| ParseError::from_pest(e, source))?;
 
+    parse_block(pairs, source)
+}
+
+fn parse_block<'a>(
+    pairs: impl Iterator<Item = pest::iterators::Pair<'a, Rule>>,
+    source: &mut ParseContext,
+) -> Result<Ast> {
+    let mut program = Vec::new();
     for pair in pairs.into_iter() {
         match pair.as_rule() {
             Rule::Statement => {
@@ -98,7 +104,13 @@ pub fn parse_source(source_str: &str, source: &mut ParseContext) -> Result<Ast> 
                 }
             }
             Rule::COMMENT | Rule::EOI => (),
-            _ => {}
+            r => Err(ParseError::from_expected(
+                "Block parsing error".to_string(),
+                vec![Rule::Statement, Rule::EOI, Rule::COMMENT],
+                vec![r],
+                &AstSpan::from_span(pair.as_span(), source),
+                source,
+            ))?,
         }
     }
 
@@ -234,7 +246,10 @@ fn parse_variable_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Resu
                 )?));
             }
             Rule::Block => {
-                expr = Ok(VariableExprKind::Block(parse_block(item, source)?));
+                expr = Ok(VariableExprKind::Block(parse_block(
+                    item.into_inner(),
+                    source,
+                )?));
             }
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
@@ -268,7 +283,7 @@ fn parse_return_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result
     let inner = pair.into_inner().next().unwrap();
 
     let return_kind = match inner.as_rule() {
-        Rule::Block => ReturnKind::Block(parse_block(inner, source)?),
+        Rule::Block => ReturnKind::Block(parse_block(inner.into_inner(), source)?),
         Rule::Expr => ReturnKind::Expr(parse_expr(inner.into_inner(), source)?),
         _ => unreachable!(),
     };
@@ -281,7 +296,7 @@ fn parse_return_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result
 
 fn parse_block_statement(pair: Pair<Rule>, source: &mut ParseContext) -> Result<StatementNode> {
     let span = AstSpan::from_span(pair.as_span(), source);
-    let body = parse_block(pair, source)?;
+    let body = parse_block(pair.into_inner(), source)?;
 
     Ok(AstNode::new(
         Statement::new(StatementKind::Block { body }),
@@ -374,7 +389,7 @@ fn parse_function(pair: Pair<Rule>, source: &mut ParseContext) -> Result<Stateme
             }
             Rule::Block => {
                 merge(item.as_span().start(), item.as_span().end());
-                block = Ok(parse_block(item, source)?);
+                block = Ok(parse_block(item.into_inner(), source)?);
             }
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
@@ -532,7 +547,7 @@ fn parse_block_label(pair: Pair<Rule>, source: &mut ParseContext) -> Result<Stat
     for item in pair.into_inner() {
         match item.as_rule() {
             Rule::LabelIdentifier => name = Ok(item.to_string()),
-            Rule::Block => body = Ok(parse_block(item, source)?),
+            Rule::Block => body = Ok(parse_block(item.into_inner(), source)?),
             Rule::COMMENT => (),
             r => Err(ParseError::from_expected(
                 "Block label parsing error",
@@ -551,29 +566,6 @@ fn parse_block_label(pair: Pair<Rule>, source: &mut ParseContext) -> Result<Stat
         }),
         span,
     ))
-}
-
-fn parse_block(pair: Pair<Rule>, source: &mut ParseContext) -> Result<Vec<StatementNode>> {
-    let mut statements = Vec::new();
-    for item in pair.into_inner() {
-        match item.as_rule() {
-            Rule::Statement => {
-                if let Some(statement) = parse_statement(item, source)? {
-                    statements.push(statement);
-                }
-            }
-            Rule::COMMENT => (),
-            r => Err(ParseError::from_expected(
-                "Block parsing error".to_string(),
-                vec![Rule::Statement, Rule::COMMENT],
-                vec![r],
-                &AstSpan::from_span(item.as_span(), source),
-                source,
-            ))?,
-        }
-    }
-
-    Ok(statements)
 }
 
 fn parse_instruction(pair: Pair<Rule>, source: &ParseContext) -> Result<StatementNode> {
