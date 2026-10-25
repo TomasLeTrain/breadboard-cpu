@@ -1,6 +1,9 @@
-; places all instructions at 0x4000, also easy to remember
-#address start_jumptable ; ensures start is first symbol executed
+; jumptable address at 0x4000
+#address start_jumptable
 jmp start, MAR
+
+; actually places instructions at 0x4100
+#address 0x4100
 
 ; snake program
 
@@ -109,10 +112,6 @@ init_state {
 }
 
 start {
-	; initialize stack
-	; TODO: should get moved to prelude since now can get called from other program
-	; lda SP, STACK_START
-
 	jsr(init_state)
 
 	; main loop

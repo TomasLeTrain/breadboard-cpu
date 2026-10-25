@@ -808,7 +808,7 @@ run_command {
 	ret(MAR)
 }
 
-
+; TODO: move to other general place to get reused by any programs
 ; gets characters from stack
 ; puts result addr into stack
 parse_addr {

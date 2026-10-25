@@ -1,10 +1,15 @@
-let terminal_start_jumptable = 0x0004
+; leaves 0x400-ish bytes for prelude
+let terminal_start_jumptable = 0x0400
 let snake_start_jumptable = 0x4000
 
-; TODO: should move stack init before jumping, leave space for that as well
-; jump to some program at first
 #address 0x0 ; ensures start is first symbol executed
-jmp terminal_start_jumptable, MAR
+prelude{
+	; initialize stack
+	lda SP, STACK_START
+
+	; jump to program
+	jmp terminal_start_jumptable, MAR
+}
 
 ; NOTE: includes some variable defs also useful here, better to include at the top
 #include "src/utils.asm"
@@ -21,11 +26,13 @@ snake {
 
 ; current memory layout:
 ; ROM:
-; 0x0000 -> jump instr to jump to jumptable for some program
-; 0x0004 -> terminal jumptable
+; 0x0000-0x03ff -> prelude
+; 0x0400 -> terminal jumptable
+; 0x0500 -> terminal code
 ; 0x3000 - 0x3800 -> char data
 
-; 0x4000 -> snake jumptable and code
+; 0x4000 -> snake jumptable
+; 0x4100 -> snake code
 ; 0x7000 - 0x7800 -> snake char data
 
 ; RAM:
