@@ -312,7 +312,7 @@ impl AddressRegister {
 }
 
 // in order of associated bits (0 is first, 7 is last)
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 pub enum MathIstrTypes {
     SubNoCarry,
     SubCarry,
@@ -391,7 +391,7 @@ impl MathIstrTypes {
 }
 
 // in order of associated bits (0 is first, 7 is last)
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 pub enum OutputFlags {
     Direct,
     Carry,

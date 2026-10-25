@@ -43,3 +43,56 @@ snake {
 ; 0xF000 - 0xFFFF -> 4k - reserved for stack and other system state
 ; 0xF000 - 0xFFE0 - stack
 ; 0xffe2 - stack_save_addr
+
+
+; general instruction counts for terminal + snake programs:
+; sw: 212
+; mv: 205
+; push: 131
+; xor: 1
+; shr: 4
+; cmp: 30
+; jmp: 115
+; adc: 113
+; add: 172
+; lda: 23
+; jeq: 23
+; pop: 143
+; and: 17
+; inc: 280
+; shl: 21
+; sub: 22
+; pusha: 68
+; or: 51
+; jnz: 12
+; lw: 228
+; jc: 4
+; sw_vram: 296
+; halt: 2
+; 2173 instructions - average of 1.93 bytes per instruction
+;
+; total bytes of generated instructions by category:
+; inc: 280
+; or: 105
+; sw_vram: 296
+; sub: 66
+; jmp: 319
+; halt: 2
+; push: 131
+; sw: 589
+; lw: 552
+; jnz: 18
+; shl: 21
+; cmp: 83
+; xor: 3
+; pusha: 204
+; adc: 308
+; add: 478
+; jeq: 69
+; mv: 410
+; pop: 143
+; jc: 12
+; lda: 69
+; shr: 4
+; and: 51
+; 4213 bytes total

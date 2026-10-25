@@ -67,8 +67,8 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
     // has approx 120-ish instructions, need to make extended
     // TODO: for now added vram read is extended, might make simple if some other placements get adjusted
     for istr in move_word_reg_instructions()
-        .into_iter()
-        .chain(vram_read_instructions())
+    // .into_iter()
+    // .chain(vram_read_instructions())
     {
         let istr = Rc::new(RefCell::new(istr));
 
@@ -77,13 +77,13 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
         istr.borrow_mut().set_opcode(Some(istr_opcode));
     }
 
+    // TODO: jmp based on keyboard almost never used, can make extended
     // set of functions that all abstract over addr_reg. SP variants are placed as extended to save
     // in simple spaces
     let addr_reg_iters = lw_template_addr_reg_instructions()
         .into_iter()
         .chain(lw_template_imm16_instructions())
         .chain(sw_instructions())
-        .chain(jnz_reg_instructions())
         .chain(jmp_instructions());
 
     for (istr, addr_reg) in addr_reg_iters {
@@ -98,6 +98,47 @@ pub fn build_all_instructions() -> (Vec<Rc<RefCell<Instruction>>>, IstrSet) {
         };
 
         istr.borrow_mut().set_opcode(Some(istr_opcode));
+    }
+
+    // keyboard instruction is not used often
+    for (istr, addr_reg, reg) in jnz_reg_instructions() {
+        let istr = Rc::new(RefCell::new(istr));
+
+        all_istrs.push(Rc::clone(&istr));
+
+        let istr_opcode = match (addr_reg, reg) {
+            (defs::AddressRegister::Sp, _) | (defs::AddressRegister::Mar, defs::Register::Keyb) => {
+                istr_set.place_extended(Rc::clone(&istr)).unwrap()
+            }
+            (defs::AddressRegister::Mar, _) => istr_set.place_simple(Rc::clone(&istr)).unwrap(),
+        };
+
+        istr.borrow_mut().set_opcode(Some(istr_opcode));
+    }
+
+    for (istr, reg) in vram_read_instructions() {
+        let istr = Rc::new(RefCell::new(istr));
+        all_istrs.push(Rc::clone(&istr));
+
+        let istr_opcode = match reg {
+            // not likely to get used
+            defs::Register::Flags
+            | defs::Register::SpLo
+            | defs::Register::SpHi
+            | defs::Register::MarLo
+            | defs::Register::MarHi => istr_set.place_extended(Rc::clone(&istr)),
+            // more likely to get used
+            _ => istr_set.place_simple(Rc::clone(&istr)),
+        };
+
+        if let Ok(opcode) = istr_opcode {
+            istr.borrow_mut().set_opcode(Some(opcode));
+        } else {
+            std::panic!(
+                "{istr_set}\nfailed to place simple instruction: \"{}\"",
+                istr.borrow().name()
+            );
+        }
     }
 
     // from here on there's enough space for all simple

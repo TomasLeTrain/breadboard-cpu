@@ -9,7 +9,11 @@ mod istr_resolver;
 mod parser;
 mod types;
 
-use std::{collections::HashSet, fs, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    sync::Arc,
+};
 
 use miette::{Context, IntoDiagnostic, Result};
 use opcode_gen::{
@@ -168,6 +172,21 @@ fn parse_source(source_str: &str, mut source: MultiFileSource) -> Result<AsmGenC
         .map_err(|error| error.with_source_code(source.clone()))?;
 
     asm_context.render_pretty(&source);
+
+    // println!("{:#?}", asm_context.istr_counts);
+
+    let mut general_counts: HashMap<String, usize> = HashMap::new();
+
+    for (istr, count) in asm_context.istr_counts.iter() {
+        // println!("{}: {count}", );
+        *general_counts
+            .entry(istr.istr_name().to_string())
+            .or_insert(0) += count;
+    }
+
+    for (istr, count) in general_counts.iter() {
+        println!("{}: {count}", istr);
+    }
 
     // println!("{:#?}", asm_context);
 

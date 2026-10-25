@@ -8,7 +8,7 @@ use crate::instructions::istr_utils::{
 };
 use crate::instructions::register_defs::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
 pub enum InstructionType {
     MoveWordReg {
         dest: Register,
@@ -1027,7 +1027,7 @@ pub fn nop_instruction() -> Instruction {
     )
 }
 
-pub fn vram_read_instructions() -> Vec<Instruction> {
+pub fn vram_read_instructions() -> Vec<(Instruction, Register)> {
     let mut result = Vec::new();
 
     let vram_read_template_odd = vec![
@@ -1092,16 +1092,19 @@ pub fn vram_read_instructions() -> Vec<Instruction> {
             assert!(all_regs_filled(&odd_current));
             assert!(all_regs_filled(&even_current));
 
-            result.push(Instruction::new(
-                InstructionType::VramRead {
-                    dest: *reg,
-                    addr: *addr_reg,
-                },
-                format!("lw_vram {}, {}", reg.name(), addr_reg.name()),
-                InstructionImpl::Vram(VramInstructionTemplate {
-                    active_odd: InstructionTemplate(odd_current),
-                    active_even: InstructionTemplate(even_current),
-                }),
+            result.push((
+                Instruction::new(
+                    InstructionType::VramRead {
+                        dest: *reg,
+                        addr: *addr_reg,
+                    },
+                    format!("lw_vram {}, {}", reg.name(), addr_reg.name()),
+                    InstructionImpl::Vram(VramInstructionTemplate {
+                        active_odd: InstructionTemplate(odd_current),
+                        active_even: InstructionTemplate(even_current),
+                    }),
+                ),
+                *reg,
             ));
         }
     }
@@ -1472,7 +1475,7 @@ pub fn math_reg_instructions() -> Vec<(Instruction, MathIstrTypes)> {
     result
 }
 
-pub fn jnz_reg_instructions() -> Vec<(Instruction, AddressRegister)> {
+pub fn jnz_reg_instructions() -> Vec<(Instruction, AddressRegister, Register)> {
     let mut result = Vec::new();
 
     // jnz reg -> pc = mar if reg != 0 else nop
@@ -1520,6 +1523,7 @@ pub fn jnz_reg_instructions() -> Vec<(Instruction, AddressRegister)> {
                 )
                 .with_overrides(vec![OverrideBehavior::Flag]),
                 *addr_reg,
+                *reg,
             ));
         }
     }

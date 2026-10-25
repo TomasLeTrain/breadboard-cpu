@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::{collections::HashMap, fs::File, io::Read};
 
 use owo_colors::{
     OwoColorize,
@@ -11,7 +11,7 @@ use crate::{
     types::Address,
 };
 use miette::{Context, IntoDiagnostic, Result, miette};
-use opcode_gen::instructions::ArgumentValue;
+use opcode_gen::instructions::{ArgumentValue, InstructionType};
 
 /// simple vector of bools implemented as packed bytes
 #[derive(Debug)]
@@ -96,6 +96,7 @@ pub struct AsmGenContext {
     addr_occupied: BoolVec,
     istr_slices: Vec<AsmSpan>,
     pretty_print: Option<String>,
+    pub istr_counts: HashMap<InstructionType, usize>,
 }
 
 impl AsmGenContext {
@@ -105,6 +106,7 @@ impl AsmGenContext {
             addr_occupied: BoolVec::new(max_addr_size as usize),
             istr_slices: Vec::new(),
             pretty_print: None,
+            istr_counts: HashMap::new(),
         }
     }
 
@@ -307,6 +309,10 @@ pub fn generate_asm(statements: &[StatementNode], ctx: &mut AsmGenContext) -> Re
                     .as_ref()
                     .unwrap()
                     .get_asm_bytes(arg_values);
+
+                let istr_type = ast_instruction.instruction.as_ref().unwrap().istr_type();
+
+                *ctx.istr_counts.entry(istr_type.clone()).or_insert(0) += istr_bytes.len();
 
                 ctx.place_statement(
                     AsmSpanKind::Instruction(statement.span().clone()),
