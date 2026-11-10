@@ -17,13 +17,11 @@ jmp start, MAR
 ; should be from 0x8000 - 0x87A8
 global SCREEN_STATE = 0x8000
 
-global SHOULD_INIT = 0x8800
-
 global CMD_BUFFER_PAGE = 0x9100
 ; input buffer start
 global INPUT_BUFFER_PAGE = 0x9200
 
-; all var variables defined on 0x9000
+; all scratch variables defined on 0x9000
 ; input buffer end ptr
 ; non-inclusive
 global INPUT_BUFFER_WRITE_PTR = 0x9000
@@ -40,7 +38,8 @@ global CMD_BUFFER_COMMAND_PTR = INPUT_BUFFER_READ_PTR + 1
 ; global PROMPT_Y_PTR = PROMPT_X_PTR + 1
 
 ; put outside of state that gets erased to work between other program runs
-global PROMPT_X_PTR = 0xc000 + 1
+global SHOULD_INIT = 0x8800
+global PROMPT_X_PTR = SHOULD_INIT + 1
 global PROMPT_Y_PTR = PROMPT_X_PTR + 1
 
 global CURR_CHAR_DRAW_PTR = PROMPT_Y_PTR + 1
@@ -81,11 +80,7 @@ global background_color = 0b00000000
 global main_color = 0b11000000
 
 ; only gets run on first boot, sets up stack
-; TODO: stack init should get moved to prelude code
 start {
-	; initialize stack
-	lda SP, STACK_START
-
 	mv A, 0
 	sw A, SHOULD_INIT, MAR
 
