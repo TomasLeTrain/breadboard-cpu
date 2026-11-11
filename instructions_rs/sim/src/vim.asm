@@ -38,9 +38,8 @@ global main_color = 0b11000000
 ; X position can be reused for both text and screen
 global CURSOR_POSITION_X = 0x9000
 global TEXT_CURSOR_POSITION_Y = TEXT_CURSOR_POSITION_X + 1
-global SCREEN_CURSOR_POSITION_Y = TEXT_CURSOR_POSITION_Y + 1
 
-global VIM_MODE = SCREEN_CURSOR_POSITION_Y + 1
+global VIM_MODE = TEXT_CURSOR_POSITION_Y + 1
 
 global INPUT_BUFFER_READ_PTR = VIM_MODE + 1
 global INPUT_BUFFER_WRITE_PTR = INPUT_BUFFER_READ_PTR + 1
@@ -107,7 +106,6 @@ init_state {
 	mv A, 0
 	sw A, TEXT_CURSOR_POSITION_X, MAR
 	sw A, TEXT_CURSOR_POSITION_Y, MAR
-	sw A, SCREEN_CURSOR_POSITION_Y, MAR
 
 	mv A, NORMAL_MODE_VAL
 	sw A, VIM_MODE, MAR
@@ -357,18 +355,23 @@ move_cursor {
 
 		; do check bounds:
 		mv A, Z
+		; check for left bound
 		and A, 0b10000000
-		jnz bounds_hit, MAR
+		jnz left_bounds_hit, MAR
+		; check for right bound
+		cmp Z, 39
+		jc 
+
+		; left_bounds_hit:
+		; must check if was left or right bound
+		and Z, 0b01000000
+		jnz left_bound_hit, MAR
 
 		no_bounds_hit:
 		; no bounds hit, can update safely to new value
 		mv X, Z
 		jmp x_bounds_end, MAR
 
-		bounds_hit:
-		; must check if was left or right bound
-		and Z, 0b01000000
-		jnz left_bound_hit, MAR
 		right_bound_hit:
 		; cap x at 39
 		mv X, 39
@@ -414,30 +417,44 @@ move_cursor {
 		; cap y at 29
 		mv X, 29
 
-		jmp bounds_end, MAR
+		; must now figure out the new appropriate value to offset by in next step
+		lw Z, CURSOR_POSITION_Y, MAR
+	
+		; CURSOR_POSITION_Y + Y > 29
+		; (CURSOR_POSITION_Y - 29) + Y > 0
+	
+		; CURSOR_POSITION_Y = 29 - 4 = 25
+		; Y = 6
+
+		; Y must become 2
+		; 25 + 6 = 31 - 29 = 2
+		
+		; Y must be positive, so adding current cursor position gives new offset delta
+		; sub Y, Z
+
+		jmp on_bound_end, MAR
 		up_bound_hit:
 		; cap y at 0
 		mv X, 0
 
 		; must now figure out the new appropriate value to offset by in next step
+		lw Z, CURSOR_POSITION_Y, MAR
+		
+		; Y must be negative, so adding current cursor position gives new offset delta
+		add Y, Z
 
 		; jmp bounds_end, MAR
 		bounds_end:
 
 		; save back resulting X
-		sw X, CURSOR_POSITION_X, MAR
+		sw X, CURSOR_POSITION_Y, MAR
 	}
 	
 	; check if scrolling is neccesary
 	cmp Y, 0
 	jeq cursor_update_end, MAR
-
-
-	; text y must mantain between 0 and 29 -> can use same technique as x
-	; on text y overflow should also change offset
-
-	; screen y must mantain between 0 and 127 -> can check for either overflow by seeing if msb is on (if wraps on the left it turns on, if wraps on the right it turns on), can distinguish left/right overflow by second msb
-	; screen y should equal the offset when left gets hit?
+	
+	; here scrolling must occur, apply same logic for checking bounds
 
 	cursor_update_end:
 
