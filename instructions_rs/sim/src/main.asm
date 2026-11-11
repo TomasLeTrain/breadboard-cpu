@@ -9,7 +9,7 @@ prelude {
 	lda SP, STACK_START
 
 	; jump to program
-	jmp vim_start_jumptable, MAR
+	jmp terminal_start_jumptable, MAR
 	; jmp terminal_start_jumptable, MAR
 }
 

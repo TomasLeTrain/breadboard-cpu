@@ -34,30 +34,18 @@ global TEXT_COLOR_STATE = 0xD000
 global background_color = 0b00000000
 global main_color = 0b11000000
 
-; things to implement:
-;
-; fn put_ascii_at_position(){
-; }
-; fn put_color_at_position(){
-; }
-
-global SCREEN_TEXT_OFFSET = 0
-
-; draws from the saved text state direct to screen
-; used any time scrolling happens
-; fn draw_screen_at_line_offset(){
-; }
-
 ; other state
-global TEXT_CURSOR_POSITION_X = 0x9000
+; X position can be reused for both text and screen
+global CURSOR_POSITION_X = 0x9000
 global TEXT_CURSOR_POSITION_Y = TEXT_CURSOR_POSITION_X + 1
-global SCREEN_CURSOR_POSITION_X = TEXT_CURSOR_POSITION_Y + 1
-global SCREEN_CURSOR_POSITION_Y = SCREEN_CURSOR_POSITION_X + 1
+global SCREEN_CURSOR_POSITION_Y = TEXT_CURSOR_POSITION_Y + 1
 
 global VIM_MODE = SCREEN_CURSOR_POSITION_Y + 1
 
 global INPUT_BUFFER_READ_PTR = VIM_MODE + 1
 global INPUT_BUFFER_WRITE_PTR = INPUT_BUFFER_READ_PTR + 1
+
+global SCREEN_TEXT_OFFSET = INPUT_BUFFER_WRITE_PTR + 1
 
 global INPUT_BUFFER_PAGE = 0x9100
 
@@ -65,15 +53,19 @@ global NORMAL_MODE_VAL: u8 = 0
 global INSERT_MODE_VAL: u8 = 1
 
 fn addToVariable(variable_ptr: Address, increment_value: u8){
-	lw A, variable_ptr, MAR
-	add A, increment_value 
-	sw A, variable_ptr, MAR
+	return {
+		lw A, variable_ptr, MAR
+		add A, increment_value 
+		sw A, variable_ptr, MAR
+	}
 }
 
 fn subtractToVariable(variable_ptr: Address, decrement_value: u8){
-	lw A, variable_ptr, MAR
-	sub A, decrement_value 
-	sw A, variable_ptr, MAR
+	return {
+		lw A, variable_ptr, MAR
+		sub A, decrement_value 
+		sw A, variable_ptr, MAR
+	}
 }
 
 
@@ -115,7 +107,6 @@ init_state {
 	mv A, 0
 	sw A, TEXT_CURSOR_POSITION_X, MAR
 	sw A, TEXT_CURSOR_POSITION_Y, MAR
-	sw A, SCREEN_CURSOR_POSITION_X, MAR
 	sw A, SCREEN_CURSOR_POSITION_Y, MAR
 
 	mv A, NORMAL_MODE_VAL
@@ -261,7 +252,9 @@ general_update {
 
 		; read_ptr = read_ptr + 1
 		addToVariable(INPUT_BUFFER_READ_PTR, 1)
-		
+
+		loop_increase:
+
 		jmp loop, MAR
 		loop_end:
 	}
@@ -270,6 +263,10 @@ general_update {
 }
 
 normal_mode_key_update {
+	; before anything else, remove cursor at current position by redrawing character
+	; then if cursor gets changed by cases it gets redrawn at correct position
+	; TODO: impl
+
 	cmp X, 13
 	jeq enter_case, MAR
 	; backspace key is just going left
@@ -292,42 +289,157 @@ normal_mode_key_update {
 	; jeq insert_case, MAR
 	jmp key_else, MAR
 
-	; before anything else, remove cursor at current position by redrawing character
-	; then if cursor gets changed by cases it gets redrawn at correct position
-	; TODO: impl
-
 	; IF key == enter
 	enter_case {
-		; goes to beginning of new line
-
-		; TODO: handle when going off screen
-		; maybe changing coordinates should be handled by another function that checks bounds and upates screen shift
-
-		; X = 0, Y++
+		; same as down case but resets X
+		; can safely set X = 0 without worrying about bounds
 		mv A, 0
 		sw A, TEXT_CURSOR_POSITION_X, MAR
-		addToVariable(TEXT_CURSOR_POSITION_Y, 1)
 
-		mv A, 0
-		sw A, SCREEN_CURSOR_POSITION_X, MAR
-		addToVariable(SCREEN_CURSOR_POSITION_Y, 1)
+		jmp down_case, MAR
+	}
+
+	left_case {
+		; X--
+		mv X, 255
+		mv Y, 0
+		jsr(move_cursor)
 
 		jmp key_cases_end, MAR
 	}
+	down_case {
+		; Y++
+		mv X, 0
+		mv Y, 1
+		jsr(move_cursor)
 
-		left_case {
-		; TODO: do stuff
+		jmp key_cases_end, MAR
+	}
+	up_case {
+		; Y--
+		mv X, 0
+		mv Y, 255
+		jsr(move_cursor)
+
+		jmp key_cases_end, MAR
+	}
+	right_case {
+		; X++
+		mv X, 1
+		mv Y, 0
+		jsr(move_cursor)
+
 		jmp key_cases_end, MAR
 	}
 
 	; ELSE
 	key_else {
-		; TODO: do stuff
+		; ignore all other characters while in normal mode
 		; jmp key_cases_end, MAR
 	}
+
+	key_cases_end:
 	
 	; in normal mode cursor is just flipping the color, done regardless of any key cases
 	; TODO: impl thick cursor draw
+
+	ret(MAR)
+}
+
+; moves cursor by X, Y (registers) amount, keeping it in bounds and updating the screen text offset if neccesary
+move_cursor {
+	x_update {
+		; text/screen x must be between 0 and 39, can check for left bound by last bit, check for right bound after by comparing to 40
+		lw Z, CURSOR_POSITION_X, MAR
+
+		; move by offset
+		add Z, X
+
+		; do check bounds:
+		mv A, Z
+		and A, 0b10000000
+		jnz bounds_hit, MAR
+
+		no_bounds_hit:
+		; no bounds hit, can update safely to new value
+		mv X, Z
+		jmp x_bounds_end, MAR
+
+		bounds_hit:
+		; must check if was left or right bound
+		and Z, 0b01000000
+		jnz left_bound_hit, MAR
+		right_bound_hit:
+		; cap x at 39
+		mv X, 39
+
+		jmp x_bounds_end, MAR
+		left_bound_hit:
+		; cap x at 0
+		mv X, 0
+		; jmp x_bounds_end, MAR
+		x_bounds_end:
+
+		; save back resulting X
+		sw X, CURSOR_POSITION_X, MAR
+	}
+
+	
+
+	; Y never overwritten here, only X gets updated as the new result
+
+	; first check text overflow, if some, then find out how much and scroll by that amount, also capped
+	text_y_update {
+		lw Z, TEXT_CURSOR_POSITION_Y, MAR
+
+		; move by y offset
+		add Z, Y
+
+		; do check bounds:
+		mv A, Z
+		and A, 0b10000000
+		jnz bounds_hit, MAR
+
+		no_bounds_hit:
+		; no scrolling occurs, update text y with new value and set screen offset to zero
+		mv X, Z
+		mv Y, 0
+		jmp bounds_end, MAR
+
+		bounds_hit:
+		; must check if was left or right bound
+		and Z, 0b01000000
+		jnz up_bound_hit, MAR
+		down_bound_hit:
+		; cap y at 29
+		mv X, 29
+
+		jmp bounds_end, MAR
+		up_bound_hit:
+		; cap y at 0
+		mv X, 0
+
+		; must now figure out the new appropriate value to offset by in next step
+
+		; jmp bounds_end, MAR
+		bounds_end:
+
+		; save back resulting X
+		sw X, CURSOR_POSITION_X, MAR
+	}
+	
+	; check if scrolling is neccesary
+	cmp Y, 0
+	jeq cursor_update_end, MAR
+
+
+	; text y must mantain between 0 and 29 -> can use same technique as x
+	; on text y overflow should also change offset
+
+	; screen y must mantain between 0 and 127 -> can check for either overflow by seeing if msb is on (if wraps on the left it turns on, if wraps on the right it turns on), can distinguish left/right overflow by second msb
+	; screen y should equal the offset when left gets hit?
+
+	cursor_update_end:
 
 	ret(MAR)
 }
