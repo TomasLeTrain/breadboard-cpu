@@ -48,24 +48,6 @@ global CURR_CHAR_DRAW_PTR = PROMPT_Y_PTR + 1
 global PROMPT_X_PTR_SAVE = CURR_CHAR_DRAW_PTR + 1
 global PROMPT_Y_PTR_SAVE = PROMPT_X_PTR_SAVE + 1
 
-; loads MAR with the address in memory corresponding to where the ptr points in the page
-fn load_mar_page_ptr(page_start: Address, ptr: Address){
-	return {
-		; load buffer end pointer into MAR
-		lw MarLo, ptr, MAR
-		mv MarHi, high_byte(page_start)
-	}
-}
-
-; loads SP with the address in memory corresponding to where the ptr points in the page
-fn load_sp_page_ptr(page_start: Address, ptr: Address){
-	return {
-		; load buffer end pointer into MAR
-		lw SpLo, ptr, SP
-		mv SpHi, high_byte(page_start)
-	}
-}
-
 ; TODO: be able to use functions in global vars, would need defining function prototypes/return types?
 ; fn gen_BASE_CHAR_POSITION() {
 ; 	let base_char_position_x = 5
@@ -213,19 +195,6 @@ init_state {
 	mv X, 0
 	mv Y, 0
 	mv Z, 30
-
-	; aout value Some(e109) from MAR
-	; aout value Some(e109) from MAR
-	; low to high clk
-	; load 9 into low of PC
-	; reset STEP
-	; high to low clk
-	; opcode_addr: 153a
-	; load f1 into OPCODE_LATCH1
-	; load 1 into OPCODE_LATCH2
-	; aout value Some(e109) from PC
-	; ram read None from 6109
-	; low to high clk
 
 	; store initial screen_state ptr
 	mv A, low_byte(SCREEN_STATE)

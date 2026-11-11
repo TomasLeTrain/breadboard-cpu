@@ -52,6 +52,8 @@ vim {
 ; 0xF000 - 0xFFFF -> 4k - reserved for stack and other system state
 ; 0xF000 - 0xFFE0 - stack
 ; 0xffe2 - stack_save_addr
+; 0xffe4 - stack_save_addr2
+
 
 
 ; general instruction counts for terminal + snake programs:

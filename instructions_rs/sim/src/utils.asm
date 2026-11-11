@@ -61,5 +61,23 @@ fn ret(addr_reg: AddressRegister) {
 	}
 }
 
+; loads MAR with the address in memory corresponding to where the ptr points in the page
+fn load_mar_page_ptr(page_start: Address, ptr: Address){
+	return {
+		; load buffer end pointer into MAR
+		lw MarLo, ptr, MAR
+		mv MarHi, high_byte(page_start)
+	}
+}
+
+; loads SP with the address in memory corresponding to where the ptr points in the page
+fn load_sp_page_ptr(page_start: Address, ptr: Address){
+	return {
+		; load buffer end pointer into MAR
+		lw SpLo, ptr, SP
+		mv SpHi, high_byte(page_start)
+	}
+}
+
 ; some other common utils
 #include "src/video_utils.asm"
