@@ -37,9 +37,9 @@ global main_color = 0b11000000
 ; other state
 ; X position can be reused for both text and screen
 global CURSOR_POSITION_X = 0x9000
-global TEXT_CURSOR_POSITION_Y = TEXT_CURSOR_POSITION_X + 1
+global SCREEN_CURSOR_POSITION_Y = CURSOR_POSITION_X + 1
 
-global VIM_MODE = TEXT_CURSOR_POSITION_Y + 1
+global VIM_MODE = SCREEN_CURSOR_POSITION_Y + 1
 
 global INPUT_BUFFER_READ_PTR = VIM_MODE + 1
 global INPUT_BUFFER_WRITE_PTR = INPUT_BUFFER_READ_PTR + 1
@@ -50,6 +50,13 @@ global INPUT_BUFFER_PAGE = 0x9100
 
 global NORMAL_MODE_VAL: u8 = 0
 global INSERT_MODE_VAL: u8 = 1
+
+fn setVariable(variable_ptr: Address, value: u8){
+	return {
+		mv A, value
+		sw A, variable_ptr, MAR
+	}
+}
 
 fn addToVariable(variable_ptr: Address, increment_value: u8){
 	return {
@@ -105,7 +112,7 @@ init_state {
 	; other state
 	mv A, 0
 	sw A, TEXT_CURSOR_POSITION_X, MAR
-	sw A, TEXT_CURSOR_POSITION_Y, MAR
+	sw A, SCREEN_CURSOR_POSITION_Y, MAR
 
 	mv A, NORMAL_MODE_VAL
 	sw A, VIM_MODE, MAR
@@ -263,7 +270,7 @@ general_update {
 normal_mode_key_update {
 	; before anything else, remove cursor at current position by redrawing character
 	; then if cursor gets changed by cases it gets redrawn at correct position
-	; TODO: impl
+	jsr(flip_colors_at_cursor)
 
 	cmp X, 13
 	jeq enter_case, MAR
@@ -272,19 +279,15 @@ normal_mode_key_update {
 	jeq left_case, MAR
 	cmp X, 'h'
 	jeq left_case, MAR
-
 	cmp X, 'j'
 	jeq down_case, MAR
-
 	cmp X, 'k'
 	jeq up_case, MAR
-
 	cmp X, 'l'
 	jeq right_case, MAR
+	cmp X, 'i'
+	jeq insert_case, MAR
 
-	; TODO: insert key case
-	; cmp X, 'i'
-	; jeq insert_case, MAR
 	jmp key_else, MAR
 
 	; IF key == enter
@@ -301,33 +304,35 @@ normal_mode_key_update {
 		; X--
 		mv X, 255
 		mv Y, 0
-		jsr(move_cursor)
-
-		jmp key_cases_end, MAR
+		jmp call_move_cursor, MAR
 	}
 	down_case {
 		; Y++
 		mv X, 0
 		mv Y, 1
-		jsr(move_cursor)
-
-		jmp key_cases_end, MAR
+		jmp call_move_cursor, MAR
 	}
 	up_case {
 		; Y--
 		mv X, 0
 		mv Y, 255
-		jsr(move_cursor)
-
-		jmp key_cases_end, MAR
+		jmp call_move_cursor, MAR
 	}
 	right_case {
 		; X++
 		mv X, 1
 		mv Y, 0
-		jsr(move_cursor)
+		jmp call_move_cursor, MAR
+	}
 
-		jmp key_cases_end, MAR
+	call_move_cursor:
+	jsr(move_cursor)
+	jmp key_cases_end, MAR
+
+	insert_case {
+		; switch to insert mode
+		setVariable(VIM_MODE, INSERT_MODE_VAL)
+		; jmp key_cases_end, MAR
 	}
 
 	; ELSE
@@ -339,7 +344,7 @@ normal_mode_key_update {
 	key_cases_end:
 	
 	; in normal mode cursor is just flipping the color, done regardless of any key cases
-	; TODO: impl thick cursor draw
+	jsr(flip_colors_at_cursor)
 
 	ret(MAR)
 }
@@ -347,7 +352,6 @@ normal_mode_key_update {
 ; moves cursor by X, Y (registers) amount, keeping it in bounds and updating the screen text offset if neccesary
 move_cursor {
 	x_update {
-		; text/screen x must be between 0 and 39, can check for left bound by last bit, check for right bound after by comparing to 40
 		lw Z, CURSOR_POSITION_X, MAR
 
 		; move by offset
@@ -358,103 +362,119 @@ move_cursor {
 		; check for left bound
 		and A, 0b10000000
 		jnz left_bounds_hit, MAR
+
 		; check for right bound
 		cmp Z, 39
-		jc 
-
-		; left_bounds_hit:
-		; must check if was left or right bound
-		and Z, 0b01000000
-		jnz left_bound_hit, MAR
-
-		no_bounds_hit:
-		; no bounds hit, can update safely to new value
-		mv X, Z
-		jmp x_bounds_end, MAR
-
+		; jc is equivalent to A <= B, so jumps if Z <= 39 (in bounds)
+		jc no_bounds_hit, MAR
+		; if didn't jump then right bound got hit
 		right_bound_hit:
 		; cap x at 39
 		mv X, 39
 
-		jmp x_bounds_end, MAR
+		jmp bounds_end, MAR
 		left_bound_hit:
 		; cap x at 0
 		mv X, 0
-		; jmp x_bounds_end, MAR
-		x_bounds_end:
+		jmp bounds_end, MAR
+
+		no_bounds_hit:
+		; no bounds hit, can update safely to new value
+		mv X, Z
+		; jmp bounds_end, MAR
+		bounds_end:
 
 		; save back resulting X
 		sw X, CURSOR_POSITION_X, MAR
 	}
 
-	
-
-	; Y never overwritten here, only X gets updated as the new result
-
-	; first check text overflow, if some, then find out how much and scroll by that amount, also capped
 	text_y_update {
-		lw Z, TEXT_CURSOR_POSITION_Y, MAR
+		lw Z, SCREEN_CURSOR_POSITION_Y, MAR
 
-		; move by y offset
+		; move by offset
 		add Z, Y
 
 		; do check bounds:
 		mv A, Z
+		; check for left bound
 		and A, 0b10000000
-		jnz bounds_hit, MAR
-
-		no_bounds_hit:
-		; no scrolling occurs, update text y with new value and set screen offset to zero
-		mv X, Z
-		mv Y, 0
-		jmp bounds_end, MAR
-
-		bounds_hit:
-		; must check if was left or right bound
-		and Z, 0b01000000
 		jnz up_bound_hit, MAR
+
+		; check for right bound
+		cmp Z, 29
+		; jc is equivalent to A <= B, so jumps if Z <= 39 (in bounds)
+		jc no_bounds_hit, MAR
+		; if didn't jump then right bound got hit
 		down_bound_hit:
 		; cap y at 29
 		mv X, 29
 
-		; must now figure out the new appropriate value to offset by in next step
-		lw Z, CURSOR_POSITION_Y, MAR
-	
-		; CURSOR_POSITION_Y + Y > 29
-		; (CURSOR_POSITION_Y - 29) + Y > 0
-	
-		; CURSOR_POSITION_Y = 29 - 4 = 25
-		; Y = 6
+		; taking out 29 gives the # of lines that must be scrolled
+		sub Z, 29
+		mv Y, Z
 
-		; Y must become 2
-		; 25 + 6 = 31 - 29 = 2
-		
-		; Y must be positive, so adding current cursor position gives new offset delta
-		; sub Y, Z
-
-		jmp on_bound_end, MAR
+		jmp bounds_end, MAR
 		up_bound_hit:
 		; cap y at 0
 		mv X, 0
+		; amount to scroll by is the addition of Y + CURSOR_POSITION_Y, which is already in Z
+		mv Y, Z
 
-		; must now figure out the new appropriate value to offset by in next step
-		lw Z, CURSOR_POSITION_Y, MAR
-		
-		; Y must be negative, so adding current cursor position gives new offset delta
-		add Y, Z
-
+		jmp bounds_end, MAR
+		no_bounds_hit:
+		; no scrolling occurs, update text y with new value and set screen offset to zero
+		mv X, Z
+		mv Y, 0
 		; jmp bounds_end, MAR
 		bounds_end:
 
-		; save back resulting X
+		; save back resulting Y offset
 		sw X, CURSOR_POSITION_Y, MAR
 	}
-	
+
 	; check if scrolling is neccesary
 	cmp Y, 0
 	jeq cursor_update_end, MAR
 	
 	; here scrolling must occur, apply same logic for checking bounds
+	scrolling_update {
+		lw Z, SCREEN_TEXT_OFFSET, MAR
+
+		; move by delta
+		add Z, Y
+
+		; do check bounds:
+		mv A, Z
+		; check for left bound
+		and A, 0b10000000
+		jnz up_bound_hit, MAR
+
+		; check for right bound
+		; offset is from 0 to the first line, so 88 + 39 = 127 is location of last line
+		cmp Z, 88
+		; jc is equivalent to A <= B, so jumps if Z <= 88 (in bounds)
+		jc no_bounds_hit, MAR
+		; if didn't jump then right bound got hit
+		down_bound_hit:
+		; cap offset at 88
+		mv X, 88
+
+		jmp bounds_end, MAR
+		up_bound_hit:
+		; cap offset at 0
+		mv X, 0
+
+		jmp bounds_end, MAR
+		no_bounds_hit:
+		; no bounds get hit, change offset without issues
+		mv X, Z
+
+		; jmp bounds_end, MAR
+		bounds_end:
+
+		; save back resulting offset
+		sw X, SCREEN_TEXT_OFFSET, MAR
+	}
 
 	cursor_update_end:
 
@@ -465,11 +485,163 @@ insert_mode_key_update {
 	ret(MAR)
 }
 
+; flips colors only in screen, text state is not modified
+
+flip_colors_at_cursor {
+	; sets up address for pixel at character position (X, Y)
+	fn setup_vram_addr(){
+		return {
+			; must shift in total 9 times to the left (3 for character line, 6 for position in addr)
+			; equal to setting high byte = y and shifting left once 
+			shl Y
+
+			; must write to 8 blocks most likely, loop?
+			; MAR = base_addr + 1
+			lda MAR, BASE_CHAR_POSITION + 1 + (1 << 14)
+
+			; MAR += x
+			add MarLo, X
+			; MAR += y<<8, really should be OR but the carry from last add must be propagated, can compress into one instruction 
+			adc MarHi, Y
+
+			; can save this mar addr to sp, and reuse it for coloring
+			mv SpLo, MarLo
+			mv SpHi, MarHi
+
+			; ; remove last bit for color instad of character
+			and SpHi, 0b00111111
+		}
+	}
+
+	fn line_write(Reg0: Register, Reg1: Register, addrReg: AddressRegister){
+		return {
+			; known offset to get to next line
+			add Reg0, 1<<6
+			adc Reg1, 0
+			sw_vram X, addrReg
+		}
+	}
+
+	fn draw_character(color: u8, character_addr_offset: Address, char_low_addr_ptr: Address){
+		return {
+			setup_vram_addr()
+			; save SP to Y and Z, to save it only for the body below
+			mv Y, SpLo
+			mv Z, SpHi
+
+			; here, sp used to index character_addr
+			; NOTE: must use SP as scratch since mar has important value
+			lw SpLo, char_low_addr_ptr, SP
+			mv SpHi, 0
+
+			; shift left 3 times
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			; add char offset
+			add SpHi, high_byte(character_addr_offset)
+
+			lw X, SP
+			sw_vram X, MAR
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 2
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 3
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 4
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 5
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 6
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 7
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 8
+
+			; restore SP to Y and Z, to save it only for the body below
+			mv SpLo, Y
+			mv SpHi, Z
+
+			mv X, color
+			sw_vram X, SP
+			line_write(SpLo,SpHi,SP) ; 2
+			line_write(SpLo,SpHi,SP) ; 3
+			line_write(SpLo,SpHi,SP) ; 4
+			line_write(SpLo,SpHi,SP) ; 5
+			line_write(SpLo,SpHi,SP) ; 6
+			line_write(SpLo,SpHi,SP) ; 7
+			line_write(SpLo,SpHi,SP) ; 8
+		}
+	}
+
+	; save stack ptr since it gets used here
+	save_stack_ptr()
+
+	; load coordinate of character
+	lw X, CURSOR_POSITION_X, MAR
+	lw Y, SCREEN_CURSOR_POSITION_Y, MAR
+ 
+	; draw head, filled block
+	draw_character(main_color, pCHAR_DATA, CURR_CHAR_DRAW_PTR)
+
+	lw X, PROMPT_X_PTR, MAR
+	lw Y, PROMPT_Y_PTR, MAR
+	lw Z, CURR_CHAR_DRAW_PTR, MAR
+
+	; should be safe to shift 3 times
+	shl Y
+	shl Y
+	shl Y
+
+	; must then shift 3 more times
+	mv SpLo, Y
+	mv SpHi, 0
+
+	add SpLo, SpLo
+	adc SpHi, SpHi
+
+	add SpLo, SpLo
+	adc SpHi, SpHi
+
+	add SpLo, SpLo
+	adc SpHi, SpHi
+
+	or SpLo, X
+	; put in right page
+	or SpHi, high_byte(SCREEN_STATE)
+
+	; save to screen state
+	sw Z, SP
+
+	; get stack pointer back
+	load_stack_ptr()
+
+	ret(MAR)
+}
+
 
 ; TODO: 
 ; put_character(character, color) -> puts at text/color cursor position, draws to screen
 
 ; screen specific routines:
 ; redraw_at_cursor() -> redraws normally at cursor position - used before cursor changes to new position to restore screen state
-; draw_thick_cursor() -> inverts color at position
 ; draw_thin_cursor() -> redraws character at position but with thin bar on the left
+
+
+; char data spans 0x3000 - 0x3800
+global pCHAR_DATA = 0x7000
+#address pCHAR_DATA
+#data_file "../../vga_display_v1/ascii_chars.out"

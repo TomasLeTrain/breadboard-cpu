@@ -139,3 +139,55 @@ fn not_eq_flag() {
     assert_eq!(final_state.x.state(), Some(1));
     assert_eq!(final_state.get_flag(Flags::Eq), Some(false));
 }
+
+#[test]
+fn jc_flag() {
+    let source = "; testing jc behavior
+        less_than_test {
+            mv A, 15
+            cmp A, 13
+            jc carry_on, MAR
+            carry_off:
+            mv X, 1
+            jmp end, MAR
+            carry_on:
+            mv X, 2
+            end:
+        }
+        equal_test {
+            mv A, 15
+            cmp A, 15
+            jc carry_jmp, MAR
+            carry_off:
+            mv Y, 1
+            jmp end, MAR
+            carry_jmp:
+            mv Y, 2
+            end:
+        }
+        more_than_test {
+            mv A, 15
+            cmp A, 17
+            jc carry_jmp, MAR
+            carry_off:
+            mv Z, 1
+            jmp end, MAR
+            carry_jmp:
+            mv Z, 2
+            end:
+        }\n";
+
+    let final_state = run_program(source.into()).unwrap();
+
+    // println!(
+    //     "x y z: {:?}, {:?}, {:?}",
+    //     final_state.x.state(),
+    //     final_state.y.state(),
+    //     final_state.z.state()
+    // );
+
+    // jc jumps when A <= B
+    assert_eq!(final_state.x.state(), Some(1));
+    assert_eq!(final_state.y.state(), Some(2));
+    assert_eq!(final_state.z.state(), Some(2));
+}
