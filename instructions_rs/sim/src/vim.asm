@@ -39,8 +39,11 @@ global main_color = 0b11000000
 global CURSOR_POSITION_X = 0x9000
 global CURSOR_POSITION_Y = CURSOR_POSITION_X + 1
 
+; implicitly defined as CURSOR_POSITION_Y + offset, but easier if updated once
+global TEXT_CURSOR_POSITION_Y = CURSOR_POSITION_Y + 1
+
 ; when on, colors at cursor position flip on screen
-global CURSOR_VISUAL_FLIPPED = CURSOR_POSITION_Y + 1
+global CURSOR_VISUAL_FLIPPED = TEXT_CURSOR_POSITION_Y + 1
 
 global VIM_MODE = CURSOR_VISUAL_FLIPPED + 1
 
@@ -48,6 +51,9 @@ global INPUT_BUFFER_READ_PTR = VIM_MODE + 1
 global INPUT_BUFFER_WRITE_PTR = INPUT_BUFFER_READ_PTR + 1
 
 global SCREEN_TEXT_OFFSET = INPUT_BUFFER_WRITE_PTR + 1
+
+global CURR_CHAR_DRAW_PTR = SCREEN_TEXT_OFFSET + 1
+global CURR_COLOR_DRAW_PTR = CURR_CHAR_DRAW_PTR + 1
 
 global INPUT_BUFFER_PAGE = 0x9100
 
@@ -116,6 +122,7 @@ init_state {
 	mv A, 3
 	sw A, CURSOR_POSITION_X, MAR
 	sw A, CURSOR_POSITION_Y, MAR
+	sw A, TEXT_CURSOR_POSITION_Y, MAR
 
 	mv A, NORMAL_MODE_VAL
 	sw A, VIM_MODE, MAR
@@ -227,9 +234,7 @@ general_update {
 		; X = buffer[read_ptr]
 		lw X, MAR
 
-		; zero is no character, just skip
-		cmp X, 0
-		jeq loop_increase, MAR
+		; zero is handled by the respective mode
 
 		; proces based on mode
 		lw A, VIM_MODE, MAR
@@ -277,8 +282,12 @@ normal_mode_key_update {
 	; save X before calling, it holds the holden
 	push X
 	setVariable(CURSOR_VISUAL_FLIPPED, 0)
-	jsr(flip_colors_at_cursor)
+	jsr(draw_block_at_cursor)
 	pop X
+
+	; no new character, skip all cases
+	cmp X, 0
+	jeq key_cases_end, MAR
 
 	cmp X, 13
 	jeq enter_case, MAR
@@ -352,7 +361,7 @@ normal_mode_key_update {
 	
 	; in normal mode cursor is just flipping the color, done regardless of any key cases
 	setVariable(CURSOR_VISUAL_FLIPPED, 1)
-	jsr(flip_colors_at_cursor)
+	jsr(draw_block_at_cursor)
 
 	ret(MAR)
 }
@@ -456,11 +465,9 @@ move_cursor {
 		; move by delta
 		add Z, Y
 
-		; do check bounds:
-		mv A, Z
 		; check for left bound
-		and A, 0b10000000
-		jnz up_bound_hit, MAR
+		cmp 128, Z
+		jc up_bound_hit, MAR
 
 		; check for right bound
 		; offset is from 0 to the first line, so 88 + 39 = 127 is location of last line
@@ -491,15 +498,17 @@ move_cursor {
 
 	cursor_update_end:
 
-	ret(MAR)
-}
+	; update value of text cursor y
+	lw X, CURSOR_POSITION_Y, MAR
+	lw Y, SCREEN_TEXT_OFFSET, MAR
+	add X, Y
+	sw X, TEXT_CURSOR_POSITION_Y, MAR
 
-insert_mode_key_update {
 	ret(MAR)
 }
 
 ; turns a position into an addr without the page
-; leaves result in stack
+; leaves result addr as [X,Y] : [Lo, Hi]
 position_to_addr {
 	; should be safe to shift 3 times
 	shl Y
@@ -531,7 +540,7 @@ position_to_addr {
 get_cursor_color {
 	;get color at position
 	lw X, CURSOR_POSITION_X, MAR
-	lw Y, CURSOR_POSITION_Y, MAR
+	lw Y, TEXT_CURSOR_POSITION_Y, MAR
 	
 	jsr(position_to_addr)
 
@@ -539,7 +548,7 @@ get_cursor_color {
 	mv MarHi, Y
 
 	; put in correct page
-	or MarHi, high_byte(TEXT_COLOR_STATE)
+	add MarHi, high_byte(TEXT_COLOR_STATE)
 
 	; fetch current color
 	lw X, MAR
@@ -547,7 +556,7 @@ get_cursor_color {
 	ret(MAR)
 }
 
-flip_colors_at_cursor {
+draw_block_at_cursor {
 	jsr(get_cursor_color)
 	; now x has current color
 	; check if must flip or not
@@ -573,7 +582,6 @@ flip_colors_at_cursor {
 	shl Y
 	shl Y
 	or X, Y
-	; mv X, 0b00001111
 
 	; jmp flipped_end, MAR
 	flipped_end:
@@ -582,7 +590,7 @@ flip_colors_at_cursor {
 	mv Z, X
 	;get color at position
 	lw X, CURSOR_POSITION_X, MAR
-	lw Y, CURSOR_POSITION_Y, MAR
+	lw Y, TEXT_CURSOR_POSITION_Y, MAR
 	jsr(draw_color)
 
 	ret(MAR)
@@ -633,6 +641,434 @@ draw_color {
 
 	ret(MAR)
 }
+
+insert_mode_key_update {
+	; re-draw normally at whichever previous position
+
+	; draw current position normal
+	push X
+	jsr(cursor_draw_normal)
+	pop X
+
+	; copy character into Z
+	mv Z, X
+
+	; no new character, skip all cases
+	cmp X, 0
+	jeq cursor_draw_begin, MAR
+
+	cmp X, 13
+	jeq enter_case, MAR
+	; TODO: handle backspace
+	cmp X, 8
+	jeq bs_case, MAR
+	cmp X, 'q'
+	jeq escape_case, MAR
+	jmp key_else, MAR
+
+	; IF key == enter
+	escape_case {
+		; switch to normal mode
+		setVariable(VIM_MODE, NORMAL_MODE_VAL)
+
+		; while escaping cursor moves to the left by one
+		; X--
+		mv X, 255
+		mv Y, 0
+		jsr(move_cursor)
+
+		; skip drawing cursor
+		jmp cursor_draw_end, MAR
+	}
+
+	enter_case {
+		; can safely set X = 0 without worrying about bounds
+		mv A, 0
+		sw A, CURSOR_POSITION_X, MAR
+
+		; Y++
+		mv X, 0
+		mv Y, 1
+		jsr(move_cursor)
+		jmp key_cases_end, MAR
+	}
+
+	bs_case {
+		; X--
+		mv X, 255
+		mv Y, 0
+		jsr(move_cursor)
+
+		; reset character at current cursor position and move cursor to the left
+		lw X, CURSOR_POSITION_X, MAR
+		lw Y, TEXT_CURSOR_POSITION_Y, MAR
+		jsr(position_to_addr)
+		mv MarLo, X
+		mv MarHi, Y
+
+		; put in page for color
+		add MarHi, high_byte(TEXT_COLOR_STATE)
+		; TODO: what color to use here?
+		; let debug_color = 0b11001001
+		let debug_color = main_color
+		mv A, debug_color
+		sw A, MAR
+		; also set color value for draw routine
+		sw A, CURR_COLOR_DRAW_PTR, MAR
+
+		mv MarLo, X
+		mv MarHi, Y
+
+		; put in page for text
+		add MarHi, high_byte(TEXT_ASCII_STATE)
+		; store character
+		let empty_character = 0
+		mv A, empty_character
+		sw A, MAR
+		; also set char value for draw routine
+		sw A, CURR_CHAR_DRAW_PTR, MAR
+
+		; now draw character at cursor position before changing cursor
+		; NOTE: screen coordinates here
+		lw X, CURSOR_POSITION_X, MAR
+		lw Y, CURSOR_POSITION_Y, MAR
+		jsr(draw_character_at_xy)
+
+		jmp key_cases_end, MAR
+	}
+
+	; ELSE
+	key_else {
+		lw X, CURSOR_POSITION_X, MAR
+		lw Y, TEXT_CURSOR_POSITION_Y, MAR
+		jsr(position_to_addr)
+		mv MarLo, X
+		mv MarHi, Y
+
+		; put in page for color
+		add MarHi, high_byte(TEXT_COLOR_STATE)
+		; TODO: what color to use here?
+		; let debug_color = 0b11001001
+		let debug_color = main_color
+		mv A, debug_color
+		sw A, MAR
+		; also set color value for draw routine
+		sw A, CURR_COLOR_DRAW_PTR, MAR
+
+		mv MarLo, X
+		mv MarHi, Y
+
+		; put in page for text
+		add MarHi, high_byte(TEXT_ASCII_STATE)
+		; store character
+		sw Z, MAR
+		; also set char value for draw routine
+		sw Z, CURR_CHAR_DRAW_PTR, MAR
+
+		; now draw character at cursor position before changing cursor
+		; NOTE: screen coordinates here
+		lw X, CURSOR_POSITION_X, MAR
+		lw Y, CURSOR_POSITION_Y, MAR
+		jsr(draw_character_at_xy)
+	
+		; move character to the right
+		; X++
+		mv X, 1
+		mv Y, 0
+		jsr(move_cursor)
+		; jmp key_cases_end, MAR
+	}
+
+	key_cases_end:
+
+	cursor_draw_begin:
+	lw X, CURSOR_POSITION_X, MAR
+	lw Y, TEXT_CURSOR_POSITION_Y, MAR
+	jsr(position_to_addr)
+
+	mv MarLo, X
+	mv MarHi, Y
+	add MarHi, high_byte(TEXT_COLOR_STATE)
+	lw A, MAR
+	sw A, CURR_COLOR_DRAW_PTR, MAR
+
+	mv MarLo, X
+	mv MarHi, Y
+	add MarHi, high_byte(TEXT_ASCII_STATE)
+	lw A, MAR
+	sw A, CURR_CHAR_DRAW_PTR, MAR
+		
+	; draw thin cursor at position
+	lw X, CURSOR_POSITION_X, MAR
+	lw Y, CURSOR_POSITION_Y, MAR
+	jsr(draw_character_with_cursor_at_xy)
+	cursor_draw_end:
+
+	ret(MAR)
+}
+
+cursor_draw_normal {
+	lw X, CURSOR_POSITION_X, MAR
+	lw Y, TEXT_CURSOR_POSITION_Y, MAR
+	jsr(position_to_addr)
+
+	mv MarLo, X
+	mv MarHi, Y
+	add MarHi, high_byte(TEXT_COLOR_STATE)
+	lw A, MAR
+	sw A, CURR_COLOR_DRAW_PTR, MAR
+
+	mv MarLo, X
+	mv MarHi, Y
+	add MarHi, high_byte(TEXT_ASCII_STATE)
+	lw A, MAR
+	sw A, CURR_CHAR_DRAW_PTR, MAR
+		
+	; draw thin cursor at position
+	lw X, CURSOR_POSITION_X, MAR
+	lw Y, CURSOR_POSITION_Y, MAR
+	jsr(draw_character_at_xy)
+	ret(MAR)
+}
+
+; draws character at passed in screen X, Y coordinate
+; character and color must be set at ptrs: CURR_CHAR_DRAW_PTR, CURR_COLOR_DRAW_PTR
+draw_character_at_xy {
+	; sets up address for pixel at character position (X, Y)
+	fn setup_vram_addr(){
+		return {
+			; must shift in total 9 times to the left (3 for character line, 6 for position in addr)
+			; equal to setting high byte = y and shifting left once 
+			shl Y
+
+			; must write to 8 blocks most likely, loop?
+			; MAR = base_addr + 1
+			; lda MAR, BASE_CHAR_POSITION + 1 + (1 << 14)
+			lda MAR, 1 + (1 << 14)
+
+			; MAR += x
+			add MarLo, X
+			; MAR += y<<8, really should be OR but the carry from last add must be propagated, can compress into one instruction 
+			adc MarHi, Y
+
+			; can save this mar addr to sp, and reuse it for coloring
+			mv SpLo, MarLo
+			mv SpHi, MarHi
+
+			; ; remove last bit for color instad of character
+			and SpHi, 0b00111111
+		}
+	}
+
+	fn line_write(Reg0: Register, Reg1: Register, addrReg: AddressRegister){
+		return {
+			; known offset to get to next line
+			add Reg0, 1<<6
+			adc Reg1, 0
+			sw_vram X, addrReg
+		}
+	}
+
+	fn draw_character(character_addr_offset: Address, char_low_addr_ptr: Address, color_ptr: Address){
+		return {
+			setup_vram_addr()
+			; save SP to Y and Z, to save it only for the body below
+			mv Y, SpLo
+			mv Z, SpHi
+
+			; here, sp used to index character_addr
+			; NOTE: must use SP as scratch since mar has important value
+			lw SpLo, char_low_addr_ptr, SP
+			mv SpHi, 0
+
+			; shift left 3 times
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			; add char offset
+			add SpHi, high_byte(character_addr_offset)
+
+			lw X, SP
+			sw_vram X, MAR
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 2
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 3
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 4
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 5
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 6
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 7
+			inc SP
+			lw X, SP
+			line_write(MarLo,MarHi,MAR) ; 8
+
+			; restore SP to Y and Z, to save it only for the body below
+			mv SpLo, Y
+			mv SpHi, Z
+
+			lw X, color_ptr, MAR
+			sw_vram X, SP
+			line_write(SpLo, SpHi, SP) ; 2
+			line_write(SpLo, SpHi, SP) ; 3
+			line_write(SpLo, SpHi, SP) ; 4
+			line_write(SpLo, SpHi, SP) ; 5
+			line_write(SpLo, SpHi, SP) ; 6
+			line_write(SpLo, SpHi, SP) ; 7
+			line_write(SpLo, SpHi, SP) ; 8
+		}
+	}
+
+	; save stack ptr since it gets used here
+	save_stack_ptr()
+
+	; draw head, filled block
+	draw_character(pCHAR_DATA, CURR_CHAR_DRAW_PTR, CURR_COLOR_DRAW_PTR)
+
+	; get stack pointer back
+	load_stack_ptr()
+
+	ret(MAR)
+}
+
+; draws character at passed in screen X, Y coordinate
+; character and color must be set at ptrs: CURR_CHAR_DRAW_PTR, CURR_COLOR_DRAW_PTR
+draw_character_with_cursor_at_xy {
+	; sets up address for pixel at character position (X, Y)
+	fn setup_vram_addr(){
+		return {
+			; must shift in total 9 times to the left (3 for character line, 6 for position in addr)
+			; equal to setting high byte = y and shifting left once 
+			shl Y
+
+			; must write to 8 blocks most likely, loop?
+			; MAR = base_addr + 1
+			; lda MAR, BASE_CHAR_POSITION + 1 + (1 << 14)
+			lda MAR, 1 + (1 << 14)
+
+			; MAR += x
+			add MarLo, X
+			; MAR += y<<8, really should be OR but the carry from last add must be propagated, can compress into one instruction 
+			adc MarHi, Y
+
+			; can save this mar addr to sp, and reuse it for coloring
+			mv SpLo, MarLo
+			mv SpHi, MarHi
+
+			; ; remove last bit for color instad of character
+			and SpHi, 0b00111111
+		}
+	}
+
+	fn line_write(Reg0: Register, Reg1: Register, addrReg: AddressRegister){
+		return {
+			; known offset to get to next line
+			add Reg0, 1<<6
+			adc Reg1, 0
+			sw_vram X, addrReg
+		}
+	}
+
+	fn draw_character(character_addr_offset: Address, char_low_addr_ptr: Address, color_ptr: Address){
+		return {
+			setup_vram_addr()
+			; save SP to Y and Z, to save it only for the body below
+			mv Y, SpLo
+			mv Z, SpHi
+
+			; here, sp used to index character_addr
+			; NOTE: must use SP as scratch since mar has important value
+			lw SpLo, char_low_addr_ptr, SP
+			mv SpHi, 0
+
+			; shift left 3 times
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			add SpLo, SpLo
+			adc SpHi, SpHi
+
+			; add char offset
+			add SpHi, high_byte(character_addr_offset)
+
+			lw X, SP
+			or X, 0b10000000
+			sw_vram X, MAR
+			inc SP
+			lw X, SP
+			or X, 0b10000000
+			line_write(MarLo,MarHi,MAR) ; 2
+			inc SP
+			lw X, SP
+			or X, 0b10000000
+			line_write(MarLo,MarHi,MAR) ; 3
+			inc SP
+			lw X, SP
+			or X, 0b10000000
+			line_write(MarLo,MarHi,MAR) ; 4
+			inc SP
+			lw X, SP
+			or X, 0b10000000
+			line_write(MarLo,MarHi,MAR) ; 5
+			inc SP
+			lw X, SP
+			or X, 0b10000000
+			line_write(MarLo,MarHi,MAR) ; 6
+			inc SP
+			lw X, SP
+			or X, 0b10000000
+			line_write(MarLo,MarHi,MAR) ; 7
+			inc SP
+			lw X, SP
+			or X, 0b10000000
+			line_write(MarLo,MarHi,MAR) ; 8
+
+			; restore SP to Y and Z, to save it only for the body below
+			mv SpLo, Y
+			mv SpHi, Z
+
+			lw X, color_ptr, MAR
+			sw_vram X, SP
+			line_write(SpLo, SpHi, SP) ; 2
+			line_write(SpLo, SpHi, SP) ; 3
+			line_write(SpLo, SpHi, SP) ; 4
+			line_write(SpLo, SpHi, SP) ; 5
+			line_write(SpLo, SpHi, SP) ; 6
+			line_write(SpLo, SpHi, SP) ; 7
+			line_write(SpLo, SpHi, SP) ; 8
+		}
+	}
+
+	; save stack ptr since it gets used here
+	save_stack_ptr()
+
+	; draw head, filled block
+	draw_character(pCHAR_DATA, CURR_CHAR_DRAW_PTR, CURR_COLOR_DRAW_PTR)
+
+	; get stack pointer back
+	load_stack_ptr()
+
+	ret(MAR)
+}
+
 
 ; TODO: 
 ; put_character(character, color) -> puts at text/color cursor position, draws to screen
